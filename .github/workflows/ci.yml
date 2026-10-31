@@ -11,6 +11,6 @@ jobs:
         with: { deno-version: v2.x }
       - run: cd tests/sql && npm ci && node run.mjs
       - run: deno test tests/moderation/moderation_test.ts
-      - run: deno check supabase/functions/*/index.ts
+      - run: cd supabase/functions && deno check */index.ts
       - run: cd apps/web && npm ci && npm run build
         env: { VITE_SUPABASE_URL: "https://example.supabase.co", VITE_SUPABASE_PUBLISHABLE_KEY: "ci" }
