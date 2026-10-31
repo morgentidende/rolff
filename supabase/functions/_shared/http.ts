@@ -11,9 +11,18 @@ export const json = (body: unknown, status = 200) =>
 export async function authed(req: Request): Promise<{ uid: string; admin: SupabaseClient; user: SupabaseClient } | Response> {
   const url = Deno.env.get("SUPABASE_URL")!;
   const auth = req.headers.get("authorization") ?? "";
-  const user = createClient(url, Deno.env.get("SUPABASE_ANON_KEY")!, { global: { headers: { authorization: auth } } });
-  const { data, error } = await user.auth.getUser();
+  const jwt = auth.replace(/^Bearer\s+/i, "");
+  if (!jwt) return json({ error: "unauthenticated" }, 401);
+  const admin = createClient(url, serverKey(), { auth: { persistSession: false } });
+  const { data, error } = await admin.auth.getUser(jwt);
   if (error || !data.user) return json({ error: "unauthenticated" }, 401);
-  const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
+  const user = createClient(url, publicKey(), { auth: { persistSession: false }, global: { headers: { authorization: `Bearer ${jwt}` } } });
   return { uid: data.user.id, admin, user };
 }
+
+function firstKey(jsonVar: string): string | undefined {
+  try { const o = JSON.parse(Deno.env.get(jsonVar) ?? ""); return o?.default ?? Object.values(o ?? {})[0] as string; } catch { return undefined; }
+}
+// Supports both legacy (anon/service_role) and new (publishable/secret) key env vars.
+const serverKey = () => Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || firstKey("SUPABASE_SECRET_KEYS")!;
+const publicKey = () => Deno.env.get("SUPABASE_ANON_KEY") || firstKey("SUPABASE_PUBLISHABLE_KEYS")!;

@@ -16,11 +16,6 @@ await db.exec(`
 `);
 const mig = fs.readdirSync('../../supabase/migrations').sort();
 for (const f of mig) await db.exec(fs.readFileSync('../../supabase/migrations/' + f, 'utf8'));
-await db.exec(`grant select, insert, update, delete on all tables in schema public to authenticated, service_role;`);
-// Re-apply revokes after the blanket grant (mimics Supabase default grants + our revokes)
-await db.exec(`revoke all on public.messages, public.message_deliveries, public.invitations, public.invitation_consents,
-  public.moderation_approvals, public.moderation_attempts, public.notification_jobs from authenticated;
-  revoke insert, update, delete on public.conversations, public.memberships from authenticated;`);
 
 let pass = 0, fail = 0;
 async function t(name, fn) { try { await fn(); pass++; console.log('ok   ', name); } catch (e) { fail++; console.log('FAIL ', name, '-', e.message); } }
