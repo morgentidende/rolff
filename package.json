@@ -1,0 +1,11 @@
+{
+  "name": "rolff",
+  "private": true,
+  "workspaces": ["apps/*"],
+  "scripts": {
+    "test:sql": "cd tests/sql && node run.mjs",
+    "test:moderation-unit": "deno test tests/moderation/moderation_test.ts",
+    "test:corpus": "deno run --allow-net=generativelanguage.googleapis.com,api.openai.com --allow-read --allow-write=tests/moderation --allow-env tests/moderation/run_corpus.ts",
+    "build:web": "npm --workspace @rolff/web run build"
+  }
+}

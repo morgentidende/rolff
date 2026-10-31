@@ -1,0 +1,7 @@
+# Minimal config for `supabase functions deploy`.
+[functions.send-message]
+verify_jwt = true
+[functions.invitation]
+verify_jwt = true
+[functions.receive-now]
+verify_jwt = true
