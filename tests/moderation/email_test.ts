@@ -28,3 +28,11 @@ Deno.test("godkendelsesmail: ingen navne, e-mails eller beskedindhold", async ()
   const p = memberInviteMail({ inviterEmail: "a@x.test", link: "https://example.test/#invite=abc", expires: new Date().toISOString(), role: "writer" });
   if (!p.html.includes("læse og skrive") || !p.text.includes("#invite=abc")) throw new Error("bad member mail");
 });
+
+Deno.test("feedbackmail: escaping, kategori-whitelist, afsender", async () => {
+  const { feedbackMail } = await import("../../supabase/functions/_shared/email.ts");
+  const m = feedbackMail({ category: "x\r\nBcc: evil@x.test", body: "<script>alert(1)</script> & \"hej\"", senderEmail: "a@x.test" });
+  if (m.subject !== "Rolff feedback: Andet" || /[\r\n]/.test(m.subject)) throw new Error("subject");
+  if (m.html.includes("<script>") || !m.html.includes("&lt;script&gt;")) throw new Error("not escaped");
+  if (!m.html.includes("a@x.test") || !m.text.includes("a@x.test")) throw new Error("sender missing");
+});

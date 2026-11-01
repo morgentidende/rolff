@@ -271,12 +271,15 @@ await t('Skriver kan skrive efter enstemmig godkendelse', async () => {
 await t('Læser kan ikke invitere', async () => rejects(as(L, `select * from create_member_invitation($1,'z@test.invalid','reader')`, [ec]), /forbidden/));
 // Feedback
 await t('Feedback: kan indsende egen, ingen kan læse', async () => {
-  await as(A, `insert into feedback(category, body) values ('idea','Mere kontrast')`);
+  await as(A, `select submit_feedback('idea','Mere kontrast')`);
   await rejects(as(A, `select * from feedback`), /permission|denied/);
   await rejects(as(C, `select * from feedback`), /permission|denied/);
   assert.equal((await svc(`select count(*)::int n from feedback where user_id=$1`, [A]))[0].n, 1);
 });
-await t('Feedback: kan ikke indsende i andres navn', async () => rejects(as(A, `insert into feedback(user_id, body) values ($1,'x')`, [B]), /permission|denied|policy/));
-await t('Feedback: ugyldig kategori afvises', async () => rejects(as(A, `insert into feedback(category, body) values ('spam','x')`), /check|violat/));
+await t('Feedback: direkte indsættelse afvises', async () => rejects(as(A, `insert into feedback(user_id, body) values ($1,'x')`, [B]), /permission|denied|policy/));
+await t('Feedback: ugyldig kategori afvises', async () => rejects(as(A, `select submit_feedback('spam','x')`), /check|violat/));
+await t('Feedback: for lang tekst afvises', async () => rejects(as(A, `select submit_feedback('other',repeat('x',2001))`), /check|violat/));
+await t('Feedback: max 5 pr. døgn', async () => { for (let k = 0; k < 4; k++) await as(A, `select submit_feedback('other','ok')`); await rejects(as(A, `select submit_feedback('other','sjette')`), /rate_limited/); });
+await t('Feedback: anonym kan ikke indsende', async () => rejects(db.transaction(async (tx) => { await tx.exec(`set local role anon`); return tx.query(`select submit_feedback('other','x')`); }), /permission|denied/));
 console.log(`\n${pass} bestået, ${fail} fejlet`);
 process.exit(fail ? 1 : 0);

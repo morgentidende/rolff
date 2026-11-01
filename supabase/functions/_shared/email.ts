@@ -67,7 +67,20 @@ ${button(p.link, "Åbn invitationen")}
   return { subject, html, text };
 }
 
-export async function sendMail(to: string, m: { subject: string; html: string; text: string }): Promise<boolean> {
+const CATS: Record<string, string> = { idea: "Idé", problem: "Problem", other: "Andet" };
+/** Feedback to the team. Category is whitelisted; text and sender are escaped. Never conversation content. */
+export function feedbackMail(p: { category: string; body: string; senderEmail: string }) {
+  const cat = CATS[p.category] ?? "Andet";
+  const subject = `Rolff feedback: ${cat}`;
+  const html = shell(subject, `<p style="margin:0 0 6px;font-size:13px;color:#7a807e">Kategori</p><p style="margin:0 0 16px"><strong>${esc(cat)}</strong></p>
+<p style="margin:0 0 6px;font-size:13px;color:#7a807e">Fra</p><p style="margin:0 0 16px">${esc(p.senderEmail)}</p>
+<p style="margin:0 0 6px;font-size:13px;color:#7a807e">Feedback</p><div style="margin:0;padding:14px 16px;background:#f6f4ef;border-radius:10px;white-space:pre-wrap;word-break:break-word">${esc(p.body)}</div>
+<p style="margin:18px 0 0;font-size:13px;color:#7a807e">Svar på denne mail for at skrive direkte til afsenderen.</p>`);
+  const text = `Rolff feedback\n\nKategori: ${cat}\nFra: ${p.senderEmail}\n\n${p.body}\n`;
+  return { subject, html, text };
+}
+
+export async function sendMail(to: string, m: { subject: string; html: string; text: string; reply_to?: string }): Promise<boolean> {
   const url = Deno.env.get("MAILER_URL"), secret = Deno.env.get("MAILER_SECRET");
   if (!url || !secret) return false;
   try {
