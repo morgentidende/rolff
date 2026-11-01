@@ -214,5 +214,69 @@ await t('Farve er privat pr. bruger', async () => {
 await t('Ugyldig farve afvises', async () => rejects(as(A, `select set_conversation_color($1,'#fff')`, [em.conversation_id]), /check|violat/));
 await t('Ikke-medlem kan ikke sætte farve', async () => rejects(as(C, `select set_conversation_color($1,'red')`, [em.conversation_id]), /not_member/));
 await t('Titel returneres ikke længere', async () => assert.equal('title' in (await as(A, `select * from list_my_conversations() limit 1`))[0], false));
+
+// Extra members (reader/writer) by e-mail with unanimous consent
+const [L, W, D] = (await db.query(`insert into auth.users(email) values ('advokat@test.invalid'),('raadgiver@test.invalid'),('afvist@test.invalid') returning id`)).rows.map(r => r.id);
+const ec = em.conversation_id;
+await sendAs(A, 'Besked fra før advokaten kom med', 'pre-extra-1');
+let li;
+await t('Forælder inviterer læser; kræver modpartens godkendelse', async () => {
+  li = (await as(A, `select * from create_member_invitation($1,'advokat@test.invalid','reader')`, [ec]))[0];
+  assert.equal(li.complete, false); assert.equal(li.token, null);
+  const p = (await as(X, `select * from list_pending_invitations($1)`, [ec]))[0];
+  assert.equal(p.invitee_email, 'advokat@test.invalid'); assert.equal(p.consents, 1); assert.equal(p.required, 2); assert.equal(p.i_consented, false);
+  assert.deepEqual((await svc(`select email from pending_approver_emails($1)`, [li.invitation_id])).map(r => r.email), ['maya@test.invalid']);
+});
+await t('Ikke-godkendt person ser intet og kan ikke komme ind', async () => {
+  await rejects(as(L, `select * from get_messages($1)`, [ec]), /not_member/);
+  assert.equal((await as(L, `select count(*)::int n from list_pending_invitations($1)`, [ec]))[0].n, 0);
+  assert.equal((await as(L, `select count(*)::int n from list_my_conversations()`))[0].n, 0);
+  await rejects(as(L, `select consent_member_invitation($1)`, [li.invitation_id]), /not_found/);
+});
+await t('Tredjepart kan ikke invitere eller godkende sig selv', async () => {
+  await rejects(as(C, `select * from create_member_invitation($1,'x@test.invalid','reader')`, [ec]), /forbidden/);
+  await rejects(as(C, `select consent_member_invitation($1)`, [li.invitation_id]), /not_found/);
+  await rejects(as(C, `insert into invitation_consents values ($1,$2,1,'reader')`, [li.invitation_id, C]), /permission|denied|policy/);
+  await rejects(as(C, `select pending_approver_emails($1)`, [li.invitation_id]), /permission|denied/);
+});
+await t('Kun skrive/læse-roller kan inviteres som ekstra', async () => rejects(as(A, `select * from create_member_invitation($1,'y@test.invalid','parent')`, [ec]), /bad_role/));
+let tok;
+await t('Enstemmig godkendelse udsteder token; læser kommer ind', async () => {
+  const r = (await as(X, `select * from consent_member_invitation($1)`, [li.invitation_id]))[0];
+  assert.equal(r.complete, true); assert.match(r.token, /^[0-9a-f]{48}$/); assert.equal(r.invitee_email, 'advokat@test.invalid'); tok = r.token;
+  await rejects(as(C, `select accept_invitation($1)`, [tok]), /invalid_invitation/);
+  await as(L, `select accept_invitation($1)`, [tok]);
+});
+await t('Ny deltager ser ingen historik fra før', async () => assert.equal((await as(L, `select count(*)::int n from get_messages($1)`, [ec]))[0].n, 0));
+await t('Læser kan aldrig skrive (server)', async () => {
+  await rejects(svc(`select * from prepare_send($1,$2,'hej')`, [L, ec]), /read_only/);
+  await rejects(as(L, `insert into messages(conversation_id,sender_id,body) values ($1,$2,'hej')`, [ec, L]), /permission|denied|policy/);
+});
+await t('Læser ser nye beskeder', async () => { await sendAs(A, 'Ny besked efter advokaten', 'post-extra-1'); const r = await as(L, `select body from get_messages($1)`, [ec]); assert.ok(r.every(x => x.body !== 'Besked fra før advokaten kom med')); });
+await t('Nu kræves også læserens godkendelse; ét afslag stopper', async () => {
+  const w = (await as(A, `select * from create_member_invitation($1,'afvist@test.invalid','writer')`, [ec]))[0];
+  await as(X, `select * from consent_member_invitation($1)`, [w.invitation_id]);
+  assert.equal((await as(A, `select required from list_pending_invitations($1)`, [ec]))[0].required, 3);
+  await as(L, `select decline_invitation($1)`, [w.invitation_id]);
+  assert.equal((await as(A, `select count(*)::int n from list_pending_invitations($1)`, [ec]))[0].n, 0);
+  await rejects(as(L, `select * from consent_member_invitation($1)`, [w.invitation_id]), /not_found/);
+});
+await t('Skriver kan skrive efter enstemmig godkendelse', async () => {
+  const w = (await as(A, `select * from create_member_invitation($1,'raadgiver@test.invalid','writer')`, [ec]))[0];
+  await as(X, `select * from consent_member_invitation($1)`, [w.invitation_id]);
+  const r = (await as(L, `select * from consent_member_invitation($1)`, [w.invitation_id]))[0];
+  await as(W, `select accept_invitation($1)`, [r.token]);
+  assert.ok(Array.isArray(await svc(`select * from prepare_send($1,$2,'hej')`, [W, ec])));
+});
+await t('Læser kan ikke invitere', async () => rejects(as(L, `select * from create_member_invitation($1,'z@test.invalid','reader')`, [ec]), /forbidden/));
+// Feedback
+await t('Feedback: kan indsende egen, ingen kan læse', async () => {
+  await as(A, `insert into feedback(category, body) values ('idea','Mere kontrast')`);
+  await rejects(as(A, `select * from feedback`), /permission|denied/);
+  await rejects(as(C, `select * from feedback`), /permission|denied/);
+  assert.equal((await svc(`select count(*)::int n from feedback where user_id=$1`, [A]))[0].n, 1);
+});
+await t('Feedback: kan ikke indsende i andres navn', async () => rejects(as(A, `insert into feedback(user_id, body) values ($1,'x')`, [B]), /permission|denied|policy/));
+await t('Feedback: ugyldig kategori afvises', async () => rejects(as(A, `insert into feedback(category, body) values ('spam','x')`), /check|violat/));
 console.log(`\n${pass} bestået, ${fail} fejlet`);
 process.exit(fail ? 1 : 0);
