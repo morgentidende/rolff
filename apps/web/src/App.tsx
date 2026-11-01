@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { callFn, supabase } from "./supabase";
 import { detectLang, strings, type Lang } from "./i18n";
+import { passwordsMatch, pwText, toggleLabel } from "./pw";
 
 type Conv = { id: string; title: string | null; role: string; members: number };
 type Msg = { id: string; sender_id: string; sender_name: string | null; body: string; created_at: string; mine: boolean };
@@ -68,11 +69,13 @@ export function App() {
 function Auth({ lang, peek }: { lang: Lang; peek?: Peek | null }) {
   const t = strings[lang];
   const [mode, setMode] = useState<"login" | "signup">("login");
-  const [email, setEmail] = useState(""); const [pw, setPw] = useState(""); const [name, setName] = useState("");
+  const [email, setEmail] = useState(""); const [pw, setPw] = useState(""); const [pw2, setPw2] = useState(""); const [name, setName] = useState("");
   useEffect(() => { if (peek) { setMode("signup"); setEmail(peek.invitee_email); setName(peek.invitee_name ?? ""); } }, [peek]); const [ai, setAi] = useState(false);
   const [err, setErr] = useState(""); const [busy, setBusy] = useState(false);
   const submit = async (e: React.FormEvent) => {
-    e.preventDefault(); setErr(""); setBusy(true);
+    e.preventDefault(); setErr("");
+    if (mode === "signup" && !passwordsMatch(pw, pw2)) { setErr(pwText[lang].mismatch); return; }
+    setBusy(true);
     const r = mode === "login" ? await supabase.auth.signInWithPassword({ email, password: pw })
       : await supabase.auth.signUp({ email, password: pw, options: { data: { display_name: name } } });
     setBusy(false);
@@ -87,14 +90,35 @@ function Auth({ lang, peek }: { lang: Lang; peek?: Peek | null }) {
       <form onSubmit={submit}>
         {mode === "signup" && <><label htmlFor="n">{t.name}</label><input id="n" required maxLength={60} value={name} onChange={(e) => setName(e.target.value)} /></>}
         <label htmlFor="e">{t.email}</label><input id="e" type="email" required autoComplete="email" readOnly={!!peek} value={email} onChange={(e) => setEmail(e.target.value)} />
-        <label htmlFor="p">{t.password}</label><input id="p" type="password" required minLength={mode === "signup" ? 8 : 1} autoComplete={mode === "login" ? "current-password" : "new-password"} value={pw} onChange={(e) => setPw(e.target.value)} />
+        <label htmlFor="p">{t.password}</label>
+        <PasswordInput id="p" lang={lang} value={pw} onChange={setPw} minLength={mode === "signup" ? 8 : 1} autoComplete={mode === "login" ? "current-password" : "new-password"} />
+        {mode === "signup" && <><label htmlFor="p2">{pwText[lang].repeat}</label>
+          <PasswordInput id="p2" lang={lang} value={pw2} onChange={(v) => { setPw2(v); setErr(""); }} minLength={8} autoComplete="new-password" invalid={pw2.length > 0 && !passwordsMatch(pw, pw2)} describedBy="pwerr" /></>}
         {mode === "signup" && <p><label style={{ display: "flex", gap: 8 }}><input type="checkbox" style={{ width: 24, minHeight: 24 }} checked={ai} onChange={(e) => setAi(e.target.checked)} required />{t.ai} {t.aiAccept}</label></p>}
-        {err && <p className="err" role="alert">{err}</p>}
+        {err ? <p className="err" id="pwerr" role="alert">{err}</p>
+          : mode === "signup" && pw2.length > 0 && !passwordsMatch(pw, pw2) ? <p className="err" id="pwerr" aria-live="polite">{pwText[lang].mismatch}</p> : null}
         <div className="row" style={{ marginTop: 12 }}>
           <button type="submit" disabled={busy}>{mode === "login" ? t.login : t.signup}</button>
-          <button type="button" className="ghost" onClick={() => setMode(mode === "login" ? "signup" : "login")}>{mode === "login" ? t.signup : t.login}</button>
+          <button type="button" className="ghost" onClick={() => { setMode(mode === "login" ? "signup" : "login"); setPw2(""); setErr(""); }}>{mode === "login" ? t.signup : t.login}</button>
         </div>
       </form>
+    </div>
+  );
+}
+
+function PasswordInput(p: { id: string; lang: Lang; value: string; onChange: (v: string) => void; minLength: number; autoComplete: string; invalid?: boolean; describedBy?: string }) {
+  const [show, setShow] = useState(false);
+  const label = toggleLabel(p.lang, show);
+  return (
+    <div className="pw">
+      <input id={p.id} name={p.id === "p" ? "password" : "password-repeat"} type={show ? "text" : "password"} required minLength={p.minLength} autoComplete={p.autoComplete}
+        autoCapitalize="none" autoCorrect="off" spellCheck={false} value={p.value} onChange={(e) => p.onChange(e.target.value)}
+        aria-invalid={p.invalid || undefined} aria-describedby={p.invalid ? p.describedBy : undefined} />
+      <button type="button" className="eye" aria-label={label} title={label} aria-pressed={show} aria-controls={p.id} onClick={() => setShow(!show)}>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true" focusable="false">
+          <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" /><circle cx="12" cy="12" r="3" />{show && <line x1="3" y1="3" x2="21" y2="21" />}
+        </svg>
+      </button>
     </div>
   );
 }

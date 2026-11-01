@@ -17,3 +17,6 @@ label{display:block;margin:6px 0 2px;color:var(--muted);font-size:14px}
 .meta{font-size:12px;color:var(--muted)}mark{background:var(--warn-b);color:#000;border-radius:3px}
 .list button{width:100%;text-align:left;margin:4px 0;background:var(--card);color:var(--text);border-color:var(--border)}
 code{font-size:15px;word-break:break-all}
+.pw{position:relative}.pw input{padding-right:52px}
+.pw button.eye{position:absolute;right:2px;top:50%;transform:translateY(-50%);min-height:44px;min-width:44px;padding:0;background:transparent;border:0;color:var(--text);display:flex;align-items:center;justify-content:center}
+.pw button.eye:focus-visible{outline:2px solid var(--accent);border-radius:8px}
