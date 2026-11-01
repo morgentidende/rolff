@@ -18,23 +18,23 @@ function shell(title: string, inner: string) {
 </table></td></tr></table></body></html>`;
 }
 
-export function inviteMail(p: { inviter: string; invitee: string; link: string; expires: string }) {
-  const subject = `${p.inviter} inviterer dig til Rolff`;
-  const html = shell(subject, `<p style="margin:0 0 14px">Hej ${esc(p.invitee)},</p>
-<p style="margin:0 0 14px"><strong>${esc(p.inviter)}</strong> har inviteret dig til en fælles samtale i Rolff – en rolig chat, hvor beskeder bliver tjekket for tonen, før de sendes.</p>
+export function inviteMail(p: { inviterEmail: string; link: string; expires: string }) {
+  const subject = `${p.inviterEmail} har inviteret dig til Rolff`;
+  const html = shell(subject, `<p style="margin:0 0 14px">Hej,</p>
+<p style="margin:0 0 14px"><strong>${esc(p.inviterEmail)}</strong> har inviteret dig til en fælles samtale i Rolff – en rolig chat, hvor beskeder bliver tjekket for tonen, før de sendes.</p>
 <p style="margin:0 0 22px">Tryk på knappen for at vælge en adgangskode og komme ind i samtalen.</p>
 <table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="#016C72" style="border-radius:10px;background:#016C72"><a href="${esc(p.link)}" style="display:inline-block;padding:14px 26px;color:#ffffff;text-decoration:none;font-weight:600;font-size:16px">Åbn invitationen</a></td></tr></table>
 <p style="margin:22px 0 0;font-size:13px;color:#7a807e">Linket virker én gang og udløber ${esc(fmt(p.expires))}. Kun denne e-mailadresse kan bruge det. Kender du ikke afsenderen, kan du bare slette mailen.</p>`);
-  const text = `Hej ${p.invitee},\n\n${p.inviter} har inviteret dig til en fælles samtale i Rolff.\n\nÅbn invitationen: ${p.link}\n\nLinket virker én gang og udløber ${fmt(p.expires)}. Kun denne e-mailadresse kan bruge det.\n\nRolff (testversion) – skriv kun opdigtede beskeder.`;
+  const text = `Hej,\n\n${p.inviterEmail} har inviteret dig til en fælles samtale i Rolff.\n\nÅbn invitationen: ${p.link}\n\nLinket virker én gang og udløber ${fmt(p.expires)}. Kun denne e-mailadresse kan bruge det.\n\nRolff (testversion) – skriv kun opdigtede beskeder.`;
   return { subject, html, text };
 }
 
-export function copyMail(p: { inviter: string; invitee: string; inviteeEmail: string; expires: string }) {
-  const subject = `Kopi: Din invitation til ${p.invitee} er sendt`;
-  const html = shell(subject, `<p style="margin:0 0 14px">Hej ${esc(p.inviter)},</p>
-<p style="margin:0 0 14px">Din invitation til <strong>${esc(p.invitee)}</strong> (${esc(p.inviteeEmail)}) er sendt. Når invitationen er taget imod, finder I samtalen i Rolff.</p>
+export function copyMail(p: { inviteeEmail: string; expires: string }) {
+  const subject = `Kopi: Din invitation til ${p.inviteeEmail} er sendt`;
+  const html = shell(subject, `<p style="margin:0 0 14px">Hej,</p>
+<p style="margin:0 0 14px">Din invitation til <strong>${esc(p.inviteeEmail)}</strong> er sendt. Når invitationen er taget imod, finder I samtalen i Rolff.</p>
 <p style="margin:0;font-size:13px;color:#7a807e">Af sikkerhedshensyn er linket kun med i modtagerens mail. Invitationen udløber ${esc(fmt(p.expires))}.</p>`);
-  const text = `Hej ${p.inviter},\n\nDin invitation til ${p.invitee} (${p.inviteeEmail}) er sendt. Linket er kun med i modtagerens mail. Udløber ${fmt(p.expires)}.\n\nRolff (testversion)`;
+  const text = `Hej,\n\nDin invitation til ${p.inviteeEmail} er sendt. Linket er kun med i modtagerens mail. Udløber ${fmt(p.expires)}.\n\nRolff (testversion)`;
   return { subject, html, text };
 }
 

@@ -150,7 +150,7 @@ await db.query(`update auth.users set email='a@test.invalid' where id=$1`, [A]);
 await db.query(`update auth.users set email='maya@test.invalid' where id=$1`, [X]);
 let em;
 await t('E-mailinvitation opretter ny samtale med kun inviterende', async () => {
-  em = (await as(A, `select * from create_email_invitation('Maya','Maya@Test.invalid')`))[0];
+  em = (await as(A, `select * from create_email_invitation('Maya@Test.invalid')`))[0];
   assert.equal((await db.query(`select count(*)::int n from memberships where conversation_id=$1`, [em.conversation_id])).rows[0].n, 1);
 });
 await t('Peek virker anonymt med gyldigt token, intet med ugyldigt', async () => {
@@ -162,6 +162,28 @@ await t('Peek virker anonymt med gyldigt token, intet med ugyldigt', async () =>
 await t('Ikke-inviteret konto kan ikke acceptere', async () => rejects(as(B, `select accept_invitation($1)`, [em.token]), /invalid_invitation/));
 await t('Inviteret konto accepterer', async () => assert.equal((await as(X, `select accept_invitation($1) c`, [em.token]))[0].c, em.conversation_id));
 await t('Link er engangs', async () => rejects(as(X, `select accept_invitation($1)`, [em.token]), /invalid_invitation/));
-await t('Kan ikke invitere sig selv', async () => rejects(as(A, `select * from create_email_invitation('A','a@test.invalid')`), /bad_email/));
+await t('Kan ikke invitere sig selv', async () => rejects(as(A, `select * from create_email_invitation('a@test.invalid')`), /bad_email/));
+// Private aliases
+const others = async (u, cid) => (await as(u, `select others from list_my_conversations() where id=$1`, [cid]))[0].others;
+await t('Invitation har ingen modtagernavn', async () => {
+  assert.equal((await db.query(`select count(*)::int n from information_schema.columns where table_name='invitations' and column_name='invitee_name'`)).rows[0].n, 0);
+  const p = await db.transaction(async tx => { await tx.exec('set local role anon'); return (await tx.query(`select * from peek_invitation('x')`)).fields.map(f => f.name).sort(); });
+  assert.deepEqual(p, ['expires_at', 'invitee_email', 'inviter_email']);
+});
+await t('Modpart vises som e-mail som standard', async () => { const o = await others(A, em.conversation_id); assert.equal(o[0].email, 'maya@test.invalid'); assert.equal(o[0].alias, null); });
+await t('Kaldenavn er privat for ejeren', async () => {
+  await as(A, `select set_contact_alias($1,'Skat')`, [X]);
+  assert.equal((await others(A, em.conversation_id))[0].alias, 'Skat');
+  const ox = await others(X, em.conversation_id); assert.equal(ox[0].email, 'a@test.invalid'); assert.equal(ox[0].alias, null);
+  assert.equal((await as(X, `select count(*)::int n from contact_aliases`))[0].n, 0);
+  assert.equal((await as(A, `select count(*)::int n from contact_aliases`))[0].n, 1);
+});
+await t('Direkte skrivning i alias-tabellen afvises', async () => rejects(as(X, `insert into contact_aliases values ($1,$2,'x')`, [X, A]), /permission|denied/));
+await t('Kan ikke give kaldenavn til fremmed', async () => rejects(as(X, `select set_contact_alias($1,'x')`, [C]), /not_found/));
+await t('Tomt kaldenavn nulstiller til e-mail', async () => { await as(A, `select set_contact_alias($1,'  ')`, [X]); assert.equal((await others(A, em.conversation_id))[0].alias, null); });
+await t('Beskeder viser e-mail som afsendernavn', async () => {
+  const r = await as(B, `select sender_name from get_messages($1) where not mine`, [conv]);
+  assert.ok(r.length > 0); for (const x of r) assert.equal(x.sender_name, 'a@test.invalid');
+});
 console.log(`\n${pass} bestået, ${fail} fejlet`);
 process.exit(fail ? 1 : 0);
