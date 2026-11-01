@@ -9,7 +9,7 @@ const db = new PGlite({ extensions: { pgcrypto } });
 await db.exec(`
   create role anon nologin; create role authenticated nologin; create role service_role nologin bypassrls;
   create schema auth; create schema extensions;
-  create table auth.users(id uuid primary key default gen_random_uuid(), raw_user_meta_data jsonb default '{}');
+  create table auth.users(id uuid primary key default gen_random_uuid(), email text, raw_user_meta_data jsonb default '{}');
   create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.sub', true),'')::uuid $$;
   grant usage on schema auth, public, extensions to anon, authenticated, service_role;
   grant execute on function auth.uid() to anon, authenticated, service_role;
@@ -145,5 +145,23 @@ await t('Rate limit efter 10 forsøg/minut', async () => {
   for (let i = 0; i < 10; i++) await svc(`select record_attempt($1,$2,'allow',null)`, [A, conv]);
   await rejects(svc(`select * from prepare_send($1,$2,'hej')`, [A, conv]), /rate_limited/);
 });
+// E-mail invitations
+await db.query(`update auth.users set email='a@test.invalid' where id=$1`, [A]);
+await db.query(`update auth.users set email='maya@test.invalid' where id=$1`, [X]);
+let em;
+await t('E-mailinvitation opretter ny samtale med kun inviterende', async () => {
+  em = (await as(A, `select * from create_email_invitation('Maya','Maya@Test.invalid')`))[0];
+  assert.equal((await db.query(`select count(*)::int n from memberships where conversation_id=$1`, [em.conversation_id])).rows[0].n, 1);
+});
+await t('Peek virker anonymt med gyldigt token, intet med ugyldigt', async () => {
+  const ok = await db.transaction(async tx => { await tx.exec('set local role anon'); return (await tx.query(`select * from peek_invitation($1)`, [em.token])).rows; });
+  assert.equal(ok[0].invitee_email, 'maya@test.invalid');
+  const no = await db.transaction(async tx => { await tx.exec('set local role anon'); return (await tx.query(`select * from peek_invitation('x')`)).rows; });
+  assert.equal(no.length, 0);
+});
+await t('Ikke-inviteret konto kan ikke acceptere', async () => rejects(as(B, `select accept_invitation($1)`, [em.token]), /invalid_invitation/));
+await t('Inviteret konto accepterer', async () => assert.equal((await as(X, `select accept_invitation($1) c`, [em.token]))[0].c, em.conversation_id));
+await t('Link er engangs', async () => rejects(as(X, `select accept_invitation($1)`, [em.token]), /invalid_invitation/));
+await t('Kan ikke invitere sig selv', async () => rejects(as(A, `select * from create_email_invitation('A','a@test.invalid')`), /bad_email/));
 console.log(`\n${pass} bestået, ${fail} fejlet`);
 process.exit(fail ? 1 : 0);

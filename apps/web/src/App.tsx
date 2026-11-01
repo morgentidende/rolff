@@ -9,7 +9,18 @@ type Msg = { id: string; sender_id: string; sender_name: string | null; body: st
 const MAX = 480;
 const count = (s: string) => [...s].length;
 
+type Peek = { inviter_name: string | null; invitee_name: string | null; invitee_email: string; expires_at: string };
+// Invite link: #invite=TOKEN. Kept in sessionStorage until accepted, then removed from URL.
+function readInviteToken(): string | null {
+  const m = location.hash.match(/invite=([0-9a-f]{16,128})/);
+  if (m) { sessionStorage.setItem("invite", m[1]); history.replaceState(null, "", location.pathname + location.search); }
+  return sessionStorage.getItem("invite");
+}
+
 export function App() {
+  const [inviteToken, setInviteToken] = useState<string | null>(() => readInviteToken());
+  const [peek, setPeek] = useState<Peek | null | undefined>(undefined);
+  const [inviteMsg, setInviteMsg] = useState("");
   const [lang, setLang] = useState<Lang>(detectLang());
   const [theme, setTheme] = useState(localStorage.getItem("theme") || "system");
   const [session, setSession] = useState<Session | null>(null);
@@ -27,6 +38,18 @@ export function App() {
     const { data } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
     return () => data.subscription.unsubscribe();
   }, []);
+  useEffect(() => {
+    if (!inviteToken) return;
+    supabase.rpc("peek_invitation", { p_token: inviteToken }).then(({ data }) => setPeek(((data as Peek[]) ?? [])[0] ?? null));
+  }, [inviteToken]);
+  useEffect(() => {
+    if (!session || !inviteToken) return;
+    callFn("invitation", { action: "accept", token: inviteToken }).then((r) => {
+      sessionStorage.removeItem("invite"); setInviteToken(null);
+      setInviteMsg(r.status === 200 ? (lang === "da" ? "Du er nu med i samtalen." : "You have joined the conversation.")
+        : (lang === "da" ? "Invitationen kunne ikke bruges. Den kan være udløbet, brugt eller sendt til en anden e-mail." : "The invitation could not be used. It may be expired, used, or meant for another email."));
+    });
+  }, [session, inviteToken]);
   return (
     <div className="wrap">
       <div className="row"><strong style={{ fontSize: 22 }}>Rolff</strong><span className="spacer" />
@@ -36,15 +59,17 @@ export function App() {
         {session && <button className="ghost" onClick={() => { setConv(null); supabase.auth.signOut(); }}>{t.logout}</button>}
       </div>
       <div className="notice" role="note">{t.testNotice}</div>
-      {!session ? <Auth lang={lang} /> : view === "settings" ? <ReceiveSettings lang={lang} /> : conv ? <Chat lang={lang} conv={conv} back={() => setConv(null)} /> : <Home lang={lang} open={setConv} />}
+      {inviteMsg && <div className="notice" role="status">{inviteMsg}</div>}
+      {!session ? <Auth lang={lang} peek={inviteToken ? peek : undefined} /> : view === "settings" ? <ReceiveSettings lang={lang} /> : conv ? <Chat lang={lang} conv={conv} back={() => setConv(null)} /> : <Home lang={lang} open={setConv} />}
     </div>
   );
 }
 
-function Auth({ lang }: { lang: Lang }) {
+function Auth({ lang, peek }: { lang: Lang; peek?: Peek | null }) {
   const t = strings[lang];
   const [mode, setMode] = useState<"login" | "signup">("login");
-  const [email, setEmail] = useState(""); const [pw, setPw] = useState(""); const [name, setName] = useState(""); const [ai, setAi] = useState(false);
+  const [email, setEmail] = useState(""); const [pw, setPw] = useState(""); const [name, setName] = useState("");
+  useEffect(() => { if (peek) { setMode("signup"); setEmail(peek.invitee_email); setName(peek.invitee_name ?? ""); } }, [peek]); const [ai, setAi] = useState(false);
   const [err, setErr] = useState(""); const [busy, setBusy] = useState(false);
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setErr(""); setBusy(true);
@@ -55,11 +80,14 @@ function Auth({ lang }: { lang: Lang }) {
   };
   return (
     <div className="card">
-      <h1>Rolff</h1><p>{t.tagline}</p><p>{t.intro}</p>
+      <h1>Rolff</h1>
+      {peek ? <div className="notice"><strong>{lang === "da" ? `${peek.inviter_name ?? "En forælder"} har inviteret dig.` : `${peek.inviter_name ?? "A parent"} invited you.`}</strong> {lang === "da" ? "Vælg en adgangskode for at komme ind i samtalen. Har du allerede en konto, så log ind." : "Choose a password to join. Already have an account? Log in."}</div>
+        : peek === null ? <div className="notice" role="alert">{lang === "da" ? "Invitationen er ugyldig, udløbet eller allerede brugt." : "The invitation is invalid, expired or already used."}</div> : null}
+      <p>{t.tagline}</p><p>{t.intro}</p>
       <form onSubmit={submit}>
         {mode === "signup" && <><label htmlFor="n">{t.name}</label><input id="n" required maxLength={60} value={name} onChange={(e) => setName(e.target.value)} /></>}
-        <label htmlFor="e">{t.email}</label><input id="e" type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-        <label htmlFor="p">{t.password}</label><input id="p" type="password" required minLength={8} autoComplete={mode === "login" ? "current-password" : "new-password"} value={pw} onChange={(e) => setPw(e.target.value)} />
+        <label htmlFor="e">{t.email}</label><input id="e" type="email" required autoComplete="email" readOnly={!!peek} value={email} onChange={(e) => setEmail(e.target.value)} />
+        <label htmlFor="p">{t.password}</label><input id="p" type="password" required minLength={mode === "signup" ? 8 : 1} autoComplete={mode === "login" ? "current-password" : "new-password"} value={pw} onChange={(e) => setPw(e.target.value)} />
         {mode === "signup" && <p><label style={{ display: "flex", gap: 8 }}><input type="checkbox" style={{ width: 24, minHeight: 24 }} checked={ai} onChange={(e) => setAi(e.target.checked)} required />{t.ai} {t.aiAccept}</label></p>}
         {err && <p className="err" role="alert">{err}</p>}
         <div className="row" style={{ marginTop: 12 }}>
@@ -89,8 +117,32 @@ function Home({ lang, open }: { lang: Lang; open: (c: Conv) => void }) {
         {convs.map((c) => <button key={c.id} onClick={() => open(c)}>{c.title || "Samtale"} <span className="meta">· {c.members} {t.members.toLowerCase()}</span></button>)}
       </div>
       <div className="card"><h2>{t.newConv}</h2><div className="row"><input aria-label={t.title} placeholder={t.title} value={title} onChange={(e) => setTitle(e.target.value)} style={{ flex: 1 }} /><button onClick={create}>{t.create}</button></div></div>
+      <InviteByEmail lang={lang} done={load} />
       <div className="card"><h2>{t.join}</h2><div className="row"><input aria-label={t.code} placeholder={t.code} value={code} onChange={(e) => setCode(e.target.value)} style={{ flex: 1 }} /><button onClick={join} disabled={!code.trim()}>OK</button></div>{err && <p className="err" role="alert">{err}</p>}</div>
     </>
+  );
+}
+
+function InviteByEmail({ lang, done }: { lang: Lang; done: () => void }) {
+  const da = lang === "da";
+  const [name, setName] = useState(""); const [email, setEmail] = useState(""); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault(); setBusy(true); setMsg(null);
+    let r; try { r = await callFn("invite-email", { name, email }); } catch { r = { status: 0, data: null as any }; }
+    setBusy(false);
+    if (r.status === 200) { setMsg({ ok: true, text: da ? `Invitationen er sendt til ${email}. Du får en kopi på mail.` : `Invitation sent to ${email}. You will get a copy by email.` }); setName(""); setEmail(""); done(); }
+    else setMsg({ ok: false, text: r.data?.error === "rate_limited" ? (da ? "Du har sendt mange invitationer i dag. Prøv igen i morgen." : "Too many invitations today.")
+      : r.data?.error === "bad_input" ? (da ? "Tjek navn og e-mail." : "Check name and email.") : (da ? "Mailen kunne ikke sendes. Prøv igen senere." : "The email could not be sent. Try again later.") });
+  };
+  return (
+    <form className="card" onSubmit={submit}>
+      <h2>{da ? "Inviter via e-mail" : "Invite by email"}</h2>
+      <p className="meta">{da ? "Der oprettes en ny samtale mellem jer to. Den inviterede ser kun beskeder fra efter, hun eller han er kommet med." : "A new conversation is created for the two of you. The invitee only sees messages from after joining."}</p>
+      <label htmlFor="in">{da ? "Navn" : "Name"}</label><input id="in" required maxLength={60} value={name} onChange={(e) => setName(e.target.value)} />
+      <label htmlFor="ie">{da ? "E-mail" : "Email"}</label><input id="ie" type="email" required maxLength={254} value={email} onChange={(e) => setEmail(e.target.value)} />
+      <div className="row" style={{ marginTop: 12 }}><span className="spacer" /><button type="submit" disabled={busy}>{busy ? (da ? "Sender…" : "Sending…") : (da ? "Send invitation" : "Send invitation")}</button></div>
+      {msg && <p className={msg.ok ? "meta" : "err"} role={msg.ok ? "status" : "alert"}>{msg.text}</p>}
+    </form>
   );
 }
 
