@@ -4,6 +4,7 @@ import type { Session } from "@supabase/supabase-js";
 import { callFn, supabase } from "./supabase";
 import { detectLang, strings, type Lang } from "./i18n";
 import { passwordsMatch, pwText, toggleLabel } from "./pw";
+import { exportFileName, findHits, toCsv, type Row } from "./exportUtil";
 
 type Other = { user_id: string; email: string; alias: string | null };
 type Conv = { id: string; role: string; members: number; others: Other[]; color: string | null };
@@ -21,6 +22,9 @@ function readInviteToken(): string | null {
   return sessionStorage.getItem("invite");
 }
 
+type Sheet = null | "lang" | "theme" | "times" | "faq" | "feedback" | "invite" | "export" | "addMember";
+export type MenuItem = { label: string; run: () => void; danger?: boolean };
+
 export function App() {
   const [inviteToken, setInviteToken] = useState<string | null>(() => readInviteToken());
   const [peek, setPeek] = useState<Peek | null | undefined>(undefined);
@@ -29,13 +33,14 @@ export function App() {
   const [theme, setTheme] = useState(localStorage.getItem("theme") || "system");
   const [session, setSession] = useState<Session | null>(null);
   const [conv, setConv] = useState<Conv | null>(null);
-  const [view, setView] = useState<"home" | "settings">("home");
-  const t = strings[lang];
+  const [sheet, setSheet] = useState<Sheet>(null);
+  const [homeKey, setHomeKey] = useState(0);
+  const t = strings[lang]; const da = lang === "da";
   useEffect(() => { localStorage.setItem("lang", lang); document.documentElement.lang = lang; }, [lang]);
   useEffect(() => {
     localStorage.setItem("theme", theme);
-    const dark = theme === "dark" || (theme === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
-    document.documentElement.dataset.theme = dark ? "dark" : "light";
+    const apply = () => { const dark = theme === "dark" || (theme === "system" && matchMedia("(prefers-color-scheme: dark)").matches); document.documentElement.dataset.theme = dark ? "dark" : "light"; };
+    apply(); const mq = matchMedia("(prefers-color-scheme: dark)"); mq.addEventListener("change", apply); return () => mq.removeEventListener("change", apply);
   }, [theme]);
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -51,22 +56,116 @@ export function App() {
     callFn("invitation", { action: "accept", token: inviteToken }).then((r) => {
       sessionStorage.removeItem("invite"); setInviteToken(null);
       if (r.status === 200) supabase.rpc("list_my_conversations").then(({ data }) => { const c = ((data as Conv[]) ?? []).find((x) => x.id === r.data?.data); if (c) setConv(c); });
-      setInviteMsg(r.status === 200 ? (lang === "da" ? "Du er nu med i samtalen." : "You have joined the conversation.")
-        : (lang === "da" ? "Invitationen kunne ikke bruges. Den kan være udløbet, brugt eller sendt til en anden e-mail." : "The invitation could not be used. It may be expired, used, or meant for another email."));
+      setInviteMsg(r.status === 200 ? (da ? "Du er nu med i samtalen." : "You have joined the conversation.")
+        : (da ? "Invitationen kunne ikke bruges. Den kan være udløbet, brugt eller sendt til en anden e-mail." : "The invitation could not be used. It may be expired, used, or meant for another email."));
     });
   }, [session, inviteToken]);
+  const menu: MenuItem[] = [
+    { label: t.lang, run: () => setSheet("lang") },
+    { label: t.theme, run: () => setSheet("theme") },
+    { label: t.windows, run: () => setSheet("times") },
+    { label: "FAQ", run: () => setSheet("faq") },
+    { label: "Feedback", run: () => setSheet("feedback") },
+    { label: da ? "Inviter person" : "Invite person", run: () => setSheet("invite") },
+    { label: t.logout, run: () => { setConv(null); setSheet(null); supabase.auth.signOut(); }, danger: true },
+  ];
+  const close = () => setSheet(null);
   return (
     <div className="wrap">
-      <div className="row"><img src="./favicon.svg" alt="" width={32} height={32} style={{ borderRadius: 8 }} /><strong style={{ fontSize: 22 }}>Rolff</strong><span className="spacer" />
-        <select aria-label={t.lang} style={{ width: "auto" }} value={lang} onChange={(e) => setLang(e.target.value as Lang)}><option value="da">Dansk</option><option value="en">English</option></select>
-        <select aria-label={t.theme} style={{ width: "auto" }} value={theme} onChange={(e) => setTheme(e.target.value)}><option value="system">{t.system}</option><option value="light">{t.light}</option><option value="dark">{t.dark}</option></select>
-        {session && <button className="ghost" onClick={() => setView(view === "settings" ? "home" : "settings")}>{view === "settings" ? t.back : t.settings}</button>}
-        {session && <button className="ghost" onClick={() => { setConv(null); supabase.auth.signOut(); }}>{t.logout}</button>}
-      </div>
+      {!(session && conv) && <header className="topbar"><img src="./favicon.svg" alt="" width={30} height={30} style={{ borderRadius: 8 }} /><strong className="brand">Rolff</strong><span className="spacer" />
+        {session ? <Menu lang={lang} items={menu} /> : <>
+          <select aria-label={t.lang} className="compact" value={lang} onChange={(e) => setLang(e.target.value as Lang)}><option value="da">Dansk</option><option value="en">English</option></select>
+          <select aria-label={t.theme} className="compact" value={theme} onChange={(e) => setTheme(e.target.value)}><option value="system">{t.system}</option><option value="light">{t.light}</option><option value="dark">{t.dark}</option></select></>}
+      </header>}
       <div className="notice" role="note">{t.testNotice}</div>
       {inviteMsg && <div className="notice" role="status">{inviteMsg}</div>}
-      {!session ? <Auth lang={lang} peek={inviteToken ? peek : undefined} /> : view === "settings" ? <ReceiveSettings lang={lang} /> : conv ? <Chat lang={lang} conv={conv} back={() => setConv(null)} /> : <Home lang={lang} open={setConv} />}
+      {!session ? <Auth lang={lang} peek={inviteToken ? peek : undefined} />
+        : conv ? <Chat lang={lang} conv={conv} back={() => setConv(null)} menu={menu} />
+        : <Home key={homeKey} lang={lang} open={setConv} invite={() => setSheet("invite")} />}
+      {sheet === "lang" && <SheetView title={t.lang} close={close} lang={lang}><Choice name="lang" value={lang} set={(v) => setLang(v as Lang)} opts={[["da", "Dansk"], ["en", "English"]]} /></SheetView>}
+      {sheet === "theme" && <SheetView title={t.theme} close={close} lang={lang}><Choice name="theme" value={theme} set={setTheme} opts={[["dark", t.dark], ["light", t.light], ["system", t.system]]} /></SheetView>}
+      {sheet === "times" && <SheetView title={t.windows} close={close} lang={lang}><ReceiveSettings lang={lang} /></SheetView>}
+      {sheet === "faq" && <SheetView title="FAQ" close={close} lang={lang}><Faq lang={lang} /></SheetView>}
+      {sheet === "feedback" && <SheetView title="Feedback" close={close} lang={lang}><FeedbackForm lang={lang} /></SheetView>}
+      {sheet === "invite" && <SheetView title={da ? "Inviter person" : "Invite person"} close={close} lang={lang}><InviteByEmail lang={lang} done={() => setHomeKey(homeKey + 1)} /></SheetView>}
     </div>
+  );
+}
+
+function Menu({ lang, items }: { lang: Lang; items: MenuItem[] }) {
+  const [open, setOpen] = useState(false); const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const off = (e: Event) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("pointerdown", off); document.addEventListener("keydown", esc);
+    ref.current?.querySelector<HTMLButtonElement>("[role=menuitem]")?.focus();
+    return () => { document.removeEventListener("pointerdown", off); document.removeEventListener("keydown", esc); };
+  }, [open]);
+  return (
+    <div className="menuwrap" ref={ref}>
+      <button type="button" className="icon" aria-label={lang === "da" ? "Menu" : "Menu"} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><circle cx="12" cy="5" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="12" cy="19" r="2" /></svg>
+      </button>
+      {open && <div className="menu" role="menu">{items.map((it) => <button key={it.label} type="button" role="menuitem" className={it.danger ? "danger" : ""} onClick={() => { setOpen(false); it.run(); }}>{it.label}</button>)}</div>}
+    </div>
+  );
+}
+
+function SheetView({ title, close, lang, children }: { title: string; close: () => void; lang: Lang; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => { const esc = (e: KeyboardEvent) => { if (e.key === "Escape") close(); }; document.addEventListener("keydown", esc); ref.current?.focus(); return () => document.removeEventListener("keydown", esc); }, [close]);
+  return (
+    <div className="overlay" onPointerDown={(e) => { if (e.target === e.currentTarget) close(); }}>
+      <div className="sheet" role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} ref={ref}>
+        <div className="sheethead"><h2>{title}</h2><button type="button" className="icon" aria-label={lang === "da" ? "Luk" : "Close"} onClick={close}>✕</button></div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Choice({ name, value, set, opts }: { name: string; value: string; set: (v: string) => void; opts: [string, string][] }) {
+  return <div className="choices" role="radiogroup">{opts.map(([v, l]) => <label key={v} className="choice"><input type="radio" name={name} checked={value === v} onChange={() => set(v)} /><span>{l}</span></label>)}</div>;
+}
+
+function Faq({ lang }: { lang: Lang }) {
+  const da = lang === "da";
+  const qa: [string, string][] = da ? [
+    ["Kan den anden se, om jeg har læst en besked eller er online?", "Nej. Rolff har ingen læsekvitteringer, ingen online-status og ingen “skriver…”-indikator."],
+    ["Hvad gør AI-tonetjekket?", "Før en besked sendes, vurderer en AI-tjeneste tonen. Kan beskeden opfattes som sårende, bliver den ikke sendt, og du kan rette den. Beskeden og op til 10 nyere beskeder sendes til tjenesten."],
+    ["Hvad er modtagetider?", "Du kan vælge, hvornår på ugen nye beskeder når frem til dig. Beskeder, der kommer uden for dine tider, venter, til næste modtagetid – eller til du selv trykker “Modtag beskeder nu”."],
+    ["Hvordan kommer man ind i en samtale?", "Kun via invitation på e-mail. Ekstra deltagere (fx advokat eller sagsbehandler) får først adgang, når alle i samtalen har godkendt, og de ser ingen beskeder fra før, de kom med."],
+    ["Er det her den rigtige app?", "Nej, det er et testmiljø. Skriv kun opdigtede beskeder. AI-tjekket kører på en gratis testtjeneste."],
+  ] : [
+    ["Can the other person see if I read a message or am online?", "No. Rolff has no read receipts, no online status and no typing indicator."],
+    ["What does the AI tone check do?", "Before a message is sent, an AI service assesses its tone. If it may come across as hurtful, it is not sent and you can edit it. The message and up to 10 recent messages are sent to the service."],
+    ["What are receive times?", "You choose when during the week new messages reach you. Messages arriving outside your times wait until the next receive time – or until you tap “Receive messages now”."],
+    ["How do people join a conversation?", "Only by e-mail invitation. Extra participants (e.g. a lawyer or caseworker) only get access when everyone in the conversation has approved, and they see no messages from before they joined."],
+    ["Is this the real app?", "No, this is a test environment. Write made-up messages only. The AI check runs on a free test service."],
+  ];
+  return <div className="faq">{qa.map(([q, a]) => <details key={q}><summary>{q}</summary><p>{a}</p></details>)}</div>;
+}
+
+function FeedbackForm({ lang }: { lang: Lang }) {
+  const da = lang === "da";
+  const [cat, setCat] = useState("idea"); const [body, setBody] = useState(""); const [state, setState] = useState<"" | "busy" | "ok" | "err">("");
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault(); setState("busy");
+    const { error } = await supabase.from("feedback").insert({ category: cat, body: body.trim() });
+    if (error) setState("err"); else { setState("ok"); setBody(""); }
+  };
+  return (
+    <form onSubmit={submit}>
+      <p className="meta">{da ? "Skriv ikke beskeder fra samtaler her. Kun udviklerne kan læse din feedback." : "Do not paste conversation messages here. Only the developers can read your feedback."}</p>
+      <label htmlFor="fc">{da ? "Kategori (valgfri)" : "Category (optional)"}</label>
+      <select id="fc" value={cat} onChange={(e) => setCat(e.target.value)}><option value="idea">{da ? "Idé" : "Idea"}</option><option value="problem">{da ? "Problem" : "Problem"}</option><option value="other">{da ? "Andet" : "Other"}</option></select>
+      <label htmlFor="fb">{da ? "Din feedback" : "Your feedback"}</label>
+      <textarea id="fb" rows={5} maxLength={2000} required value={body} onChange={(e) => { setBody(e.target.value); setState(""); }} />
+      <div className="row end"><button type="submit" disabled={state === "busy" || !body.trim()}>{da ? "Send feedback" : "Send feedback"}</button></div>
+      {state === "ok" && <p className="meta" role="status">{da ? "Tak! Din feedback er gemt." : "Thanks! Your feedback was saved."}</p>}
+      {state === "err" && <p className="err" role="alert">{da ? "Feedback kunne ikke gemmes." : "Could not save feedback."}</p>}
+    </form>
   );
 }
 
@@ -144,23 +243,20 @@ function ColorDot({ lang, conv, label, changed }: { lang: Lang; conv: Conv; labe
   );
 }
 
-function Home({ lang, open }: { lang: Lang; open: (c: Conv) => void }) {
+function Home({ lang, open, invite }: { lang: Lang; open: (c: Conv) => void; invite: () => void }) {
   const t = strings[lang]; const da = lang === "da";
-  const [convs, setConvs] = useState<Conv[]>([]);
+  const [convs, setConvs] = useState<Conv[] | null>(null);
   const load = useCallback(async () => { const { data } = await supabase.rpc("list_my_conversations"); setConvs((data as Conv[]) ?? []); }, []);
   useEffect(() => { load(); }, [load]);
   return (
-    <>
-      <div className="card list"><h2>{t.conversations}</h2>
-        {convs.length === 0 && <p className="meta">{da ? "Ingen samtaler endnu. Inviter din modpart herunder." : "No conversations yet. Invite the other parent below."}</p>}
-        {convs.map((c) => { const label = convLabel(c, da); return (
-          <div key={c.id} className="convrow">
-            <ColorDot lang={lang} conv={c} label={label} changed={(col) => setConvs(convs.map((x) => x.id === c.id ? { ...x, color: col } : x))} />
-            <button className="convbtn" onClick={() => open(c)}>{label}{c.others.length === 0 && <span className="meta"> · {da ? "venter på accept" : "awaiting acceptance"}</span>}</button>
-          </div>); })}
-      </div>
-      <InviteByEmail lang={lang} done={load} />
-    </>
+    <div className="card list"><h2>{t.conversations}</h2>
+      {convs?.length === 0 && <p className="meta">{da ? "Ingen samtaler endnu. " : "No conversations yet. "}<button type="button" className="linkbtn" onClick={invite}>{da ? "Inviter en person" : "Invite someone"}</button></p>}
+      {(convs ?? []).map((c) => { const label = convLabel(c, da); return (
+        <div key={c.id} className="convrow">
+          <ColorDot lang={lang} conv={c} label={label} changed={(col) => setConvs((convs ?? []).map((x) => x.id === c.id ? { ...x, color: col } : x))} />
+          <button className="convbtn" onClick={() => open(c)}>{label}{c.others.length === 0 && <span className="meta"> · {da ? "venter på accept" : "awaiting acceptance"}</span>}</button>
+        </div>); })}
+    </div>
   );
 }
 
@@ -176,11 +272,10 @@ function InviteByEmail({ lang, done }: { lang: Lang; done: () => void }) {
       : r.data?.error === "bad_input" ? (da ? "Tjek e-mailadressen." : "Check the email address.") : (da ? "Mailen kunne ikke sendes. Prøv igen senere." : "The email could not be sent. Try again later.") });
   };
   return (
-    <form className="card" onSubmit={submit}>
-      <h2>{da ? "Inviter via e-mail" : "Invite by email"}</h2>
+    <form onSubmit={submit}>
       <p className="meta">{da ? "Der oprettes en ny samtale mellem jer to. Den inviterede ser kun beskeder fra efter, hun eller han er kommet med." : "A new conversation is created for the two of you. The invitee only sees messages from after joining."}</p>
       <label htmlFor="ie">{da ? "E-mail" : "Email"}</label><input id="ie" type="email" required maxLength={254} value={email} onChange={(e) => setEmail(e.target.value)} />
-      <div className="row" style={{ marginTop: 12 }}><span className="spacer" /><button type="submit" disabled={busy}>{busy ? (da ? "Sender…" : "Sending…") : (da ? "Send invitation" : "Send invitation")}</button></div>
+      <div className="row end"><button type="submit" disabled={busy}>{busy ? (da ? "Sender…" : "Sending…") : "Send invitation"}</button></div>
       {msg && <p className={msg.ok ? "meta" : "err"} role={msg.ok ? "status" : "alert"}>{msg.text}</p>}
     </form>
   );
@@ -216,26 +311,43 @@ function AliasEdit({ lang, other, saved }: { lang: Lang; other: Other; saved: (a
     </form>);
 }
 
-function Chat({ lang, conv, back }: { lang: Lang; conv: Conv; back: () => void }) {
+type Pending = { id: string; role: string; invitee_email: string | null; consents: number; required: number; i_consented: boolean; mine: boolean };
+
+function markAll(text: string, q: string, current: boolean): (string | React.ReactElement)[] | string {
+  const n = q.trim(); if (!n) return text;
+  const lo = text.toLocaleLowerCase(), nl = n.toLocaleLowerCase(); const out: (string | React.ReactElement)[] = []; let i = 0, k = 0;
+  for (let j = lo.indexOf(nl); j >= 0; j = lo.indexOf(nl, i)) { out.push(text.slice(i, j), <mark key={k++} className={current ? "cur" : ""}>{text.slice(j, j + n.length)}</mark>); i = j + n.length; }
+  out.push(text.slice(i)); return out;
+}
+
+const Icon = ({ d }: { d: React.ReactNode }) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">{d}</svg>;
+
+function Chat({ lang, conv, back, menu }: { lang: Lang; conv: Conv; back: () => void; menu: MenuItem[] }) {
   const [others, setOthers] = useState<Other[]>(conv.others ?? []); const [color, setColor] = useState<string | null>(conv.color);
-  const t = strings[lang];
+  const t = strings[lang]; const da = lang === "da";
   const draftKey = `draft:${conv.id}`;
   const [msgs, setMsgs] = useState<Msg[]>([]); const [pending, setPending] = useState(0);
+  const [invs, setInvs] = useState<Pending[]>([]);
   const [text, setText] = useState(localStorage.getItem(draftKey) ?? "");
   const [status, setStatus] = useState<{ kind: string; spans?: string[]; blockedText?: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  const endRef = useRef<HTMLDivElement>(null);
+  const [sheet, setSheet] = useState<Sheet>(null);
+  const [q, setQ] = useState<string | null>(null); const [cur, setCur] = useState(0);
+  const endRef = useRef<HTMLDivElement>(null); const listRef = useRef<HTMLDivElement>(null);
   const load = useCallback(async () => {
     const { data } = await supabase.rpc("get_messages", { conv: conv.id }); if (data) setMsgs(data as Msg[]);
     const p = await supabase.rpc("my_pending_count"); setPending((p.data as number) ?? 0);
+    const i = await supabase.rpc("list_pending_invitations", { conv: conv.id }); setInvs((i.data as Pending[]) ?? []);
   }, [conv.id]);
   useEffect(() => { load(); const i = setInterval(load, 8000); return () => clearInterval(i); }, [load]);
-  useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [msgs.length]);
+  useEffect(() => { if (q === null) endRef.current?.scrollIntoView({ block: "end" }); }, [msgs.length]);
   useEffect(() => { localStorage.setItem(draftKey, text); }, [text, draftKey]);
+  const hits = q ? findHits(msgs.map((m) => m.body), q) : [];
+  const curIdx = hits.length ? hits[Math.min(cur, hits.length - 1)] : -1;
+  useEffect(() => { if (curIdx >= 0) listRef.current?.querySelector(`[data-i="${curIdx}"]`)?.scrollIntoView({ block: "center" }); }, [curIdx, q]);
   const send = async () => {
     if (!text.trim() || count(text) > MAX) return;
     setBusy(true); setStatus(null);
-    // Same key across retries of the same text -> no duplicates on network retry / reload.
     const keyStore = `idem:${conv.id}`; let saved = JSON.parse(localStorage.getItem(keyStore) || "null");
     if (!saved || saved.text !== text) { saved = { text, key: crypto.randomUUID() }; localStorage.setItem(keyStore, JSON.stringify(saved)); }
     let r; try { r = await callFn("send-message", { conversation_id: conv.id, body: text, idempotency_key: saved.key }); } catch { r = { status: 0, data: null }; }
@@ -247,25 +359,104 @@ function Chat({ lang, conv, back }: { lang: Lang; conv: Conv; back: () => void }
     else setStatus({ kind: "techError" });
   };
   const receiveNow = async () => { await callFn("receive-now", {}); load(); };
+  const answer = async (id: string, action: "consent" | "decline") => { await callFn("invite-email", { action, invitation_id: id }); load(); };
   const n = count(text);
+  const label = others.length ? others.map(labelOf).join(", ") : "?";
+  const roleTxt = (r: string) => r === "reader" ? (da ? "kun læse" : "read only") : (da ? "læse og skrive" : "read and write");
   return (
     <>
-      <div className="row"><button className="ghost" onClick={back} aria-label={t.back}>←</button><ColorDot lang={lang} conv={{ ...conv, color }} label={others.length ? others.map(labelOf).join(", ") : "?"} changed={setColor} /><div role="heading" aria-level={2} style={{ margin: 0, overflowWrap: "anywhere", fontSize: 20, fontWeight: 700, flex: 1, minWidth: 0 }}>{others.length ? others.map((o) => <AliasEdit key={o.user_id} lang={lang} other={o} saved={(a) => { setOthers(others.map((x) => x.user_id === o.user_id ? { ...x, alias: a } : x)); load(); }} />) : convLabel(conv, lang === "da")}</div>
-</div>
+      <header className="topbar chat">
+        <button className="icon" onClick={back} aria-label={t.back}><Icon d={<path d="M15 18l-6-6 6-6" />} /></button>
+        <ColorDot lang={lang} conv={{ ...conv, color }} label={label} changed={setColor} />
+        <div role="heading" aria-level={2} className="chattitle">{others.length ? others.map((o) => <AliasEdit key={o.user_id} lang={lang} other={o} saved={(a) => { setOthers(others.map((x) => x.user_id === o.user_id ? { ...x, alias: a } : x)); load(); }} />) : convLabel(conv, da)}</div>
+        <button className="icon" aria-label={da ? "Søg i samtalen" : "Search conversation"} aria-pressed={q !== null} onClick={() => { setQ(q === null ? "" : null); setCur(0); }}><Icon d={<><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></>} /></button>
+        {conv.role === "parent" && <button className="icon" aria-label={da ? "Tilføj person" : "Add person"} onClick={() => setSheet("addMember")}><Icon d={<><circle cx="9" cy="8" r="4" /><path d="M2 21c0-4 3-6 7-6s7 2 7 6" /><path d="M19 8v6M16 11h6" /></>} /></button>}
+        <Menu lang={lang} items={[{ label: da ? "Eksportér samtale" : "Export conversation", run: () => setSheet("export") }, ...menu]} />
+      </header>
+      {q !== null && <div className="searchbar" role="search">
+        <input type="search" autoFocus aria-label={da ? "Søg i viste beskeder" : "Search visible messages"} placeholder={da ? "Søg i viste beskeder" : "Search visible messages"} value={q} onChange={(e) => { setQ(e.target.value); setCur(0); }}
+          onKeyDown={(e) => { if (e.key === "Enter" && hits.length) setCur((cur + (e.shiftKey ? hits.length - 1 : 1)) % hits.length); }} />
+        <span className="meta count" aria-live="polite">{q.trim() ? (hits.length ? `${Math.min(cur, hits.length - 1) + 1}/${hits.length}` : "0/0") : ""}</span>
+        <button className="icon" aria-label={da ? "Forrige" : "Previous"} disabled={!hits.length} onClick={() => setCur((cur + hits.length - 1) % hits.length)}><Icon d={<path d="M6 15l6-6 6 6" />} /></button>
+        <button className="icon" aria-label={da ? "Næste" : "Next"} disabled={!hits.length} onClick={() => setCur((cur + 1) % hits.length)}><Icon d={<path d="M6 9l6 6 6-6" />} /></button>
+        <button className="icon" aria-label={da ? "Luk søgning" : "Close search"} onClick={() => setQ(null)}>✕</button>
+      </div>}
+      {invs.map((iv) => <div key={iv.id} className="notice invite-pending" role="status">
+        <div><strong>{iv.invitee_email}</strong> · {roleTxt(iv.role)}</div>
+        <div className="meta">{da ? `Afventer godkendelse: ${iv.consents} af ${iv.required} har godkendt. Ét afslag stopper invitationen.` : `Awaiting approval: ${iv.consents} of ${iv.required} approved. One rejection stops it.`}</div>
+        {!iv.i_consented ? <div className="row end"><button className="ghost" onClick={() => answer(iv.id, "decline")}>{da ? "Afvis" : "Reject"}</button><button onClick={() => answer(iv.id, "consent")}>{da ? "Godkend" : "Approve"}</button></div>
+          : iv.mine ? <div className="row end"><button className="ghost" onClick={() => answer(iv.id, "decline")}>{da ? "Træk tilbage" : "Withdraw"}</button></div> : null}
+      </div>)}
       {pending > 0 && <div className="notice row"><span>{t.pending(pending)}</span><span className="spacer" /><button onClick={receiveNow}>{t.receiveNow}</button></div>}
-      <div className="card msgs" aria-live="polite">
+      <div className="card msgs" aria-live="polite" ref={listRef}>
         {msgs.length === 0 && <p className="meta">{t.empty}</p>}
-        {msgs.map((m) => <div key={m.id} className={`msg ${m.mine ? "mine" : "theirs"}`}><div className="meta">{m.mine ? t.you : m.sender_name} · {new Date(m.created_at).toLocaleString(lang, { dateStyle: "short", timeStyle: "short" })}</div>{m.body}</div>)}
+        {msgs.map((m, i) => <div key={m.id} data-i={i} className={`msg ${m.mine ? "mine" : "theirs"}${i === curIdx ? " hit" : ""}`}><div className="meta">{m.mine ? t.you : m.sender_name} · {new Date(m.created_at).toLocaleString(lang, { dateStyle: "short", timeStyle: "short" })}</div>{q ? markAll(m.body, q, i === curIdx) : m.body}</div>)}
         <div ref={endRef} />
       </div>
       {status?.kind === "blocked" && <div className="notice" role="alert"><p style={{ margin: 0 }}>{t.blocked}</p>{status.spans!.length > 0 && <p className="meta" style={{ marginBottom: 0 }}>{t.flagged}: {highlight(status.blockedText!, status.spans!)}</p>}</div>}
       {status && status.kind !== "blocked" && <div className={status.kind === "accepted" ? "notice" : "err"} role="status">{(t as any)[status.kind]}</div>}
       {conv.role !== "reader" ? (
-        <div className="card">
+        <div className="card composer">
           <textarea aria-label={t.write} placeholder={t.write} rows={3} value={text} onChange={(e) => setText(e.target.value)} />
           <div className="row"><span className="meta" style={{ color: n > MAX ? "crimson" : undefined }}>{n}/{MAX}</span><span className="spacer" /><button onClick={send} disabled={busy || !text.trim() || n > MAX}>{busy ? t.sending : t.send}</button></div>
         </div>) : <p className="meta">{t.readOnly}</p>}
+      {sheet === "export" && <SheetView title={da ? "Eksportér samtale" : "Export conversation"} close={() => setSheet(null)} lang={lang}><ExportPanel lang={lang} msgs={msgs} /></SheetView>}
+      {sheet === "addMember" && <SheetView title={da ? "Tilføj person" : "Add person"} close={() => setSheet(null)} lang={lang}><AddMember lang={lang} conv={conv.id} done={load} /></SheetView>}
     </>
+  );
+}
+
+function AddMember({ lang, conv, done }: { lang: Lang; conv: string; done: () => void }) {
+  const da = lang === "da";
+  const [email, setEmail] = useState(""); const [role, setRole] = useState("reader"); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault(); setBusy(true); setMsg(null);
+    let r; try { r = await callFn("invite-email", { action: "member", conversation_id: conv, email, role }); } catch { r = { status: 0, data: null as any }; }
+    setBusy(false);
+    if (r.status === 200) { setMsg({ ok: true, text: r.data?.data?.status === "sent" ? (da ? `Invitationen er sendt til ${email}.` : `Invitation sent to ${email}.`) : (da ? "Anmodningen er sendt. De øvrige i samtalen skal godkende, før personen inviteres." : "Request sent. The others must approve before the person is invited.") }); setEmail(""); done(); }
+    else setMsg({ ok: false, text: r.data?.error === "rate_limited" ? (da ? "Du har sendt mange invitationer i dag." : "Too many invitations today.") : r.data?.error === "bad_input" ? (da ? "Tjek e-mailadressen. Personen må ikke allerede være med." : "Check the email. The person must not already be a member.") : (da ? "Invitationen kunne ikke oprettes." : "The invitation could not be created.") });
+  };
+  return (
+    <form onSubmit={submit}>
+      <p className="meta">{da ? "Fx advokat eller sagsbehandler. Personen får først adgang, når alle i samtalen har godkendt. Ét afslag stopper det. Personen ser ingen beskeder fra før." : "E.g. a lawyer or caseworker. Access only after everyone approves. One rejection stops it. No earlier history is shown."}</p>
+      <label htmlFor="me">{da ? "E-mail" : "Email"}</label><input id="me" type="email" required maxLength={254} value={email} onChange={(e) => setEmail(e.target.value)} />
+      <label>{da ? "Rolle" : "Role"}</label>
+      <Choice name="role" value={role} set={setRole} opts={[["reader", da ? "Kun læse" : "Read only"], ["writer", da ? "Læse og skrive" : "Read and write"]]} />
+      <div className="row end"><button type="submit" disabled={busy}>{busy ? (da ? "Sender…" : "Sending…") : (da ? "Send til godkendelse" : "Send for approval")}</button></div>
+      {msg && <p className={msg.ok ? "meta" : "err"} role={msg.ok ? "status" : "alert"}>{msg.text}</p>}
+    </form>
+  );
+}
+
+function download(name: string, blob: Blob) {
+  const u = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 1000);
+}
+
+function ExportPanel({ lang, msgs }: { lang: Lang; msgs: Msg[] }) {
+  const da = lang === "da"; const [busy, setBusy] = useState(false);
+  const build = async () => {
+    const { data } = await supabase.auth.getUser(); const me = data.user?.email ?? "";
+    const rows: Row[] = msgs.map((m) => ({ sender: m.mine ? me : (m.sender_name ?? ""), time: new Date(m.created_at).toLocaleString(lang === "da" ? "da-DK" : "en-GB", { dateStyle: "short", timeStyle: "short" }), text: m.body }));
+    return { me, rows, at: new Date().toLocaleString(lang === "da" ? "da-DK" : "en-GB", { dateStyle: "long", timeStyle: "short" }) };
+  };
+  const csv = async () => { const { me, rows, at } = await build(); download(exportFileName("csv"), new Blob([toCsv(rows, me, at, lang)], { type: "text/csv;charset=utf-8" })); };
+  const pdf = async () => {
+    setBusy(true);
+    const { me, rows, at } = await build(); const { jsPDF } = await import("jspdf");
+    const doc = new jsPDF({ unit: "pt", format: "a4" }); const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 48; let y = M;
+    const line = (txt: string, size: number, bold = false, gap = 4) => { doc.setFont("helvetica", bold ? "bold" : "normal"); doc.setFontSize(size);
+      for (const l of doc.splitTextToSize(txt, W - 2 * M) as string[]) { if (y > H - M) { doc.addPage(); y = M; } doc.text(l, M, y); y += size * 1.3; } y += gap; };
+    line(da ? "Rolff – eksporteret samtale" : "Rolff – exported conversation", 16, true);
+    line(da ? `Eksporteret af ${me} den ${at}` : `Exported by ${me} on ${at}`, 10, false, 2);
+    line(da ? "Indeholder kun beskeder, du selv har adgang til. Testmiljø – opdigtede beskeder." : "Contains only messages you have access to. Test environment – made-up messages.", 9, false, 14);
+    for (const r of rows) { line(`${r.sender} · ${r.time}`, 9, true, 0); line(r.text, 11, false, 10); }
+    doc.save(exportFileName("pdf")); setBusy(false);
+  };
+  return (
+    <div>
+      <p className="meta">{da ? `Eksporten indeholder de ${msgs.length} beskeder, du kan se nu: dine egne og dem, der er leveret til dig. Filen laves på din enhed.` : `The export contains the ${msgs.length} messages you can see now: your own and those delivered to you. The file is created on your device.`}</p>
+      <div className="row end"><button className="ghost" onClick={csv} disabled={!msgs.length}>CSV</button><button onClick={pdf} disabled={busy || !msgs.length}>PDF</button></div>
+    </div>
   );
 }
 
@@ -290,19 +481,25 @@ function ReceiveSettings({ lang }: { lang: Lang }) {
     if (ws.length) await supabase.from("receive_windows").insert(ws.map((w) => ({ ...w, user_id: uid })));
     setMsg(t.saved);
   };
+  const upd = (i: number, p: Partial<W>) => { setWs(ws.map((x, j) => j === i ? { ...x, ...p } : x)); setMsg(""); };
   const tzs = TZS.includes(tz) ? TZS : [tz, ...TZS];
   return (
-    <div className="card"><h2>{t.windows}</h2>
-      <label style={{ display: "flex", gap: 8, alignItems: "center" }}><input type="checkbox" style={{ width: 24, minHeight: 24 }} checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />{t.windowsOn}</label>
+    <div className="times">
+      <label className="switch"><input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /><span>{t.windowsOn}</span></label>
       <label htmlFor="tz">{t.tz}</label><select id="tz" value={tz} onChange={(e) => setTz(e.target.value)}>{tzs.map((z) => <option key={z}>{z}</option>)}</select>
-      {ws.map((w, i) => (
-        <div className="row" key={i} style={{ marginTop: 8 }}>
-          <select aria-label="Dag" style={{ width: 90 }} value={w.weekday} onChange={(e) => setWs(ws.map((x, j) => j === i ? { ...x, weekday: +e.target.value } : x))}>{t.days.map((d, k) => <option key={k} value={k + 1}>{d}</option>)}</select>
-          <label>{t.from}</label><input type="time" style={{ width: 120 }} value={toHM(w.start_minute)} onChange={(e) => setWs(ws.map((x, j) => j === i ? { ...x, start_minute: fromHM(e.target.value) } : x))} />
-          <label>{t.to}</label><input type="time" style={{ width: 120 }} value={toHM(w.end_minute)} onChange={(e) => setWs(ws.map((x, j) => j === i ? { ...x, end_minute: fromHM(e.target.value) } : x))} />
-          <button className="ghost" onClick={() => setWs(ws.filter((_, j) => j !== i))}>{t.remove}</button>
-        </div>))}
-      <div className="row" style={{ marginTop: 12 }}><button className="ghost" onClick={() => setWs([...ws, { weekday: 1, start_minute: 17 * 60, end_minute: 20 * 60 }])}>{t.add}</button><span className="spacer" /><span className="meta">{msg}</span><button onClick={save}>{t.save}</button></div>
+      <div className="wlist">
+        {ws.map((w, i) => (
+          <div className="wrow" key={i}>
+            <select aria-label={lang === "da" ? "Dag" : "Day"} value={w.weekday} onChange={(e) => upd(i, { weekday: +e.target.value })}>{t.days.map((d, k) => <option key={k} value={k + 1}>{d}</option>)}</select>
+            <input type="time" aria-label={t.from} value={toHM(w.start_minute)} onChange={(e) => upd(i, { start_minute: fromHM(e.target.value) })} />
+            <span className="dash" aria-hidden="true">–</span>
+            <input type="time" aria-label={t.to} value={toHM(w.end_minute)} onChange={(e) => upd(i, { end_minute: fromHM(e.target.value) })} />
+            <button type="button" className="icon rm" aria-label={`${t.remove} ${t.days[w.weekday - 1]} ${toHM(w.start_minute)}–${toHM(w.end_minute)}`} onClick={() => { setWs(ws.filter((_, j) => j !== i)); setMsg(""); }}>
+              <Icon d={<><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M6 6l1 14h10l1-14" /></>} />
+            </button>
+          </div>))}
+      </div>
+      <div className="row"><button className="ghost" onClick={() => setWs([...ws, { weekday: 1, start_minute: 17 * 60, end_minute: 20 * 60 }])}>+ {t.add}</button><span className="spacer" /><span className="meta" role="status">{msg}</span><button onClick={save}>{t.save}</button></div>
     </div>
   );
 }

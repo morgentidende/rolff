@@ -38,6 +38,34 @@ export function copyMail(p: { inviteeEmail: string; expires: string }) {
   return { subject, html, text };
 }
 
+
+const roleDa = (r: string) => r === "reader" ? "kun læse" : "læse og skrive";
+const button = (link: string, label: string) => `<table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="#016C72" style="border-radius:10px;background:#016C72"><a href="${esc(link)}" style="display:inline-block;padding:14px 26px;color:#ffffff;text-decoration:none;font-weight:600;font-size:16px">${esc(label)}</a></td></tr></table>`;
+
+/** To existing members: someone asks to add a participant. No names, no message content. */
+export function approvalMail(p: { role: string; appUrl: string }) {
+  const subject = "Rolff: Godkend eller afvis en ny deltager";
+  const html = shell(subject, `<p style="margin:0 0 14px">Hej,</p>
+<p style="margin:0 0 14px">Et medlem af en af dine samtaler i Rolff vil gerne tilføje en ny deltager, som skal kunne <strong>${roleDa(p.role)}</strong>.</p>
+<p style="margin:0 0 22px">Den nye deltager får først adgang, når alle i samtalen har godkendt. Ét afslag stopper invitationen. Deltageren ser ingen beskeder fra før, hun eller han kom med.</p>
+${button(p.appUrl, "Åbn Rolff for at svare")}
+<p style="margin:22px 0 0;font-size:13px;color:#7a807e">Log ind og åbn samtalen for at se, hvem det drejer sig om, og for at godkende eller afvise.</p>`);
+  const text = `Hej,\n\nEt medlem af en af dine samtaler i Rolff vil gerne tilføje en ny deltager (${roleDa(p.role)}). Deltageren får først adgang, når alle har godkendt. Ét afslag stopper invitationen.\n\nÅbn Rolff for at svare: ${p.appUrl}\n\nRolff (testversion)`;
+  return { subject, html, text };
+}
+
+/** To the extra participant after unanimous approval. */
+export function memberInviteMail(p: { inviterEmail: string; link: string; expires: string; role: string }) {
+  const subject = `${p.inviterEmail} har inviteret dig til at ${roleDa(p.role)} med i Rolff`;
+  const html = shell(subject, `<p style="margin:0 0 14px">Hej,</p>
+<p style="margin:0 0 14px"><strong>${esc(p.inviterEmail)}</strong> har inviteret dig til at <strong>${roleDa(p.role)}</strong> med i en samtale i Rolff. Alle i samtalen har godkendt invitationen.</p>
+<p style="margin:0 0 22px">Du ser kun beskeder fra efter, du er kommet med.</p>
+${button(p.link, "Åbn invitationen")}
+<p style="margin:22px 0 0;font-size:13px;color:#7a807e">Linket virker én gang og udløber ${esc(fmt(p.expires))}. Kun denne e-mailadresse kan bruge det. Kender du ikke afsenderen, kan du bare slette mailen.</p>`);
+  const text = `Hej,\n\n${p.inviterEmail} har inviteret dig til at ${roleDa(p.role)} med i en samtale i Rolff.\n\nÅbn invitationen: ${p.link}\n\nLinket virker én gang og udløber ${fmt(p.expires)}. Kun denne e-mailadresse kan bruge det.\n\nRolff (testversion) – skriv kun opdigtede beskeder.`;
+  return { subject, html, text };
+}
+
 export async function sendMail(to: string, m: { subject: string; html: string; text: string }): Promise<boolean> {
   const url = Deno.env.get("MAILER_URL"), secret = Deno.env.get("MAILER_SECRET");
   if (!url || !secret) return false;

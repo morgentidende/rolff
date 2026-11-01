@@ -19,3 +19,12 @@ Deno.test("ingen modtagernavn/kaldenavn i mails; afsender vises som e-mail", () 
   const i = inviteMail({ inviterEmail: "a@x.test", link: "https://example.test/#invite=abc", expires: exp });
   assert(i.subject.startsWith("a@x.test har inviteret dig")); assert(i.html.startsWith("<!doctype") && i.html.includes("Hej,"));
 });
+
+Deno.test("godkendelsesmail: ingen navne, e-mails eller beskedindhold", async () => {
+  const { approvalMail, memberInviteMail } = await import("../../supabase/functions/_shared/email.ts");
+  const m = approvalMail({ role: "reader", appUrl: "https://example.test/" });
+  for (const part of [m.subject, m.html, m.text]) { if (/@/.test(part.replace(/rolff-128|example\.test/g, ""))) throw new Error("email leaked"); }
+  if (!m.text.includes("kun læse")) throw new Error("role missing");
+  const p = memberInviteMail({ inviterEmail: "a@x.test", link: "https://example.test/#invite=abc", expires: new Date().toISOString(), role: "writer" });
+  if (!p.html.includes("læse og skrive") || !p.text.includes("#invite=abc")) throw new Error("bad member mail");
+});
