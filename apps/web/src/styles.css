@@ -22,3 +22,11 @@ code{font-size:15px;word-break:break-all}
 .pw button.eye:focus-visible{outline:2px solid var(--accent);border-radius:8px}
 button.pencil{min-height:44px;min-width:44px;padding:0 8px;border:0;vertical-align:middle}
 .alias-form{width:100%}
+.c-teal{--cc:#016C72}.c-blue{--cc:#1D4ED8}.c-violet{--cc:#6D28D9}.c-rose{--cc:#BE185D}.c-red{--cc:#B91C1C}.c-amber{--cc:#92400E}.c-green{--cc:#15803D}.c-slate{--cc:#475569}
+.convrow{display:flex;align-items:center;gap:10px;margin:4px 0;position:relative}
+.convrow .convbtn{flex:1;min-width:0;text-align:left;background:var(--card);color:var(--text);border-color:var(--border);overflow-wrap:anywhere}
+.dotwrap{position:relative;display:inline-flex}
+button.dot{width:44px;height:44px;min-height:44px;padding:0;border-radius:50%;border:2px solid var(--card);background:var(--cc);color:#fff;font-weight:700;font-size:18px;box-shadow:0 0 0 1px var(--border)}
+.palette{position:absolute;z-index:5;top:50px;left:0;display:grid;grid-template-columns:repeat(4,44px);gap:8px;padding:10px;background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 4px 16px rgba(0,0,0,.15)}
+button.swatch{width:44px;height:44px;min-height:44px;padding:0;border-radius:50%;background:var(--cc);border:2px solid var(--card);color:#fff;font-weight:700;box-shadow:0 0 0 1px var(--border)}
+button.swatch[aria-pressed=true]{box-shadow:0 0 0 3px var(--text)}

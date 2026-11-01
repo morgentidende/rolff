@@ -9,7 +9,7 @@ const B = await login(process.env.B_EMAIL, process.env.B_PW); ok("login B", true
 const bad = await createClient(U, PK, { auth: { persistSession: false } }).auth.signInWithPassword({ email: process.env.A_EMAIL, password: "forkert-kode-123" });
 const bad2 = await createClient(U, PK, { auth: { persistSession: false } }).auth.signInWithPassword({ email: "findes.ikke@rolff-test.invalid", password: "forkert-kode-123" });
 ok("forkert login afvises, samme fejl for ukendt konto", !!bad.error && !!bad2.error && bad.error.message === bad2.error.message, `(${bad.error?.message})`);
-const conv = (await A.rpc("list_my_conversations")).data.find(c => c.title?.startsWith("Testsamtale"));
+const conv = (await A.rpc("list_my_conversations")).data.find(c => c.others?.some(o => o.email === process.env.B_EMAIL));
 ok("A ser testsamtalen", !!conv);
 const uid = s => crypto.randomUUID();
 let r = await fn(A, "send-message", { conversation_id: conv.id, body: "Kan du hente kl. 16 i stedet for 15 på fredag?", idempotency_key: "e2e-" + uid() });

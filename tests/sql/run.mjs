@@ -185,5 +185,34 @@ await t('Beskeder viser e-mail som afsendernavn', async () => {
   const r = await as(B, `select sender_name from get_messages($1) where not mine`, [conv]);
   assert.ok(r.length > 0); for (const x of r) assert.equal(x.sender_name, 'a@test.invalid');
 });
+// Isolation: a third user (C) cannot read, send or add themselves
+await t('Tredjeperson kan ikke læse beskeder', async () => rejects(as(C, `select * from get_messages($1)`, [em.conversation_id]), /not_member/));
+await t('Tredjeperson ser ingen tabeldata', async () => {
+  for (const tb of ['messages', 'invitations', 'message_deliveries'])
+    try { assert.equal((await as(C, `select count(*)::int n from ${tb}`))[0].n, 0); } catch (e) { assert.match(String(e), /permission|denied/); }
+  assert.equal((await as(C, `select count(*)::int n from memberships where conversation_id=$1`, [em.conversation_id]))[0].n, 0);
+  assert.equal((await as(C, `select count(*)::int n from conversations where id=$1`, [em.conversation_id]))[0].n, 0);
+});
+await t('Tredjeperson kan ikke tilføje sig selv', async () => rejects(as(C, `insert into memberships(conversation_id,user_id,role) values ($1,$2,'parent')`, [em.conversation_id, C]), /permission|denied|policy/));
+await t('Tredjeperson kan ikke sende (server afviser)', async () => rejects(svc(`select * from prepare_send($1,$2,'hej')`, [C, em.conversation_id]), /not_member/));
+await t('Klient kan ikke kalde send-pipelinen direkte', async () => rejects(as(C, `select * from prepare_send($1,$2,'hej')`, [C, em.conversation_id]), /permission|denied/));
+await t('Tredjeperson ser ikke samtalen i listen', async () => assert.equal((await as(C, `select count(*)::int n from list_my_conversations() where id=$1`, [em.conversation_id]))[0].n, 0));
+await t('Ingen brugersøgning: profiler og auth er lukket', async () => {
+  assert.equal((await as(C, `select count(*)::int n from profiles where user_id <> $1`, [C]))[0].n, 0);
+  await rejects(as(C, `select count(*) from auth.users`), /permission|denied/);
+});
+await t('To første medlemmer kan skrive med det samme efter accept', async () => {
+  const r = await svc(`select * from prepare_send($1,$2,'hej')`, [X, em.conversation_id]); assert.ok(Array.isArray(r));
+});
+// Private colour
+await t('Farve er privat pr. bruger', async () => {
+  await as(A, `select set_conversation_color($1,'rose')`, [em.conversation_id]);
+  assert.equal((await as(A, `select color from list_my_conversations() where id=$1`, [em.conversation_id]))[0].color, 'rose');
+  assert.equal((await as(X, `select color from list_my_conversations() where id=$1`, [em.conversation_id]))[0].color, null);
+  assert.equal((await as(X, `select count(*)::int n from conversation_prefs`))[0].n, 0);
+});
+await t('Ugyldig farve afvises', async () => rejects(as(A, `select set_conversation_color($1,'#fff')`, [em.conversation_id]), /check|violat/));
+await t('Ikke-medlem kan ikke sætte farve', async () => rejects(as(C, `select set_conversation_color($1,'red')`, [em.conversation_id]), /not_member/));
+await t('Titel returneres ikke længere', async () => assert.equal('title' in (await as(A, `select * from list_my_conversations() limit 1`))[0], false));
 console.log(`\n${pass} bestået, ${fail} fejlet`);
 process.exit(fail ? 1 : 0);

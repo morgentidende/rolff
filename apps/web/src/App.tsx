@@ -6,9 +6,9 @@ import { detectLang, strings, type Lang } from "./i18n";
 import { passwordsMatch, pwText, toggleLabel } from "./pw";
 
 type Other = { user_id: string; email: string; alias: string | null };
-type Conv = { id: string; title: string | null; role: string; members: number; others: Other[] };
+type Conv = { id: string; role: string; members: number; others: Other[]; color: string | null };
 const labelOf = (o: Other) => o.alias || o.email;
-const convLabel = (c: Conv, da: boolean) => c.others?.length ? c.others.map(labelOf).join(", ") : c.title || (da ? "Samtale (venter på modpart)" : "Conversation (waiting)");
+const convLabel = (c: Conv, da: boolean) => c.others?.length ? c.others.map(labelOf).join(", ") : (da ? "Venter på modpart" : "Waiting for the other parent");
 type Msg = { id: string; sender_id: string; sender_name: string | null; body: string; created_at: string; mine: boolean };
 const MAX = 480;
 const count = (s: string) => [...s].length;
@@ -50,6 +50,7 @@ export function App() {
     if (!session || !inviteToken) return;
     callFn("invitation", { action: "accept", token: inviteToken }).then((r) => {
       sessionStorage.removeItem("invite"); setInviteToken(null);
+      if (r.status === 200) supabase.rpc("list_my_conversations").then(({ data }) => { const c = ((data as Conv[]) ?? []).find((x) => x.id === r.data?.data); if (c) setConv(c); });
       setInviteMsg(r.status === 200 ? (lang === "da" ? "Du er nu med i samtalen." : "You have joined the conversation.")
         : (lang === "da" ? "Invitationen kunne ikke bruges. Den kan være udløbet, brugt eller sendt til en anden e-mail." : "The invitation could not be used. It may be expired, used, or meant for another email."));
     });
@@ -125,26 +126,40 @@ function PasswordInput(p: { id: string; lang: Lang; value: string; onChange: (v:
   );
 }
 
+const COLORS = ["teal", "blue", "violet", "rose", "red", "amber", "green", "slate"] as const;
+const COLOR_NAMES: Record<string, [string, string]> = { teal: ["Petrol", "Teal"], blue: ["Blå", "Blue"], violet: ["Lilla", "Violet"], rose: ["Rosa", "Rose"], red: ["Rød", "Red"], amber: ["Rav", "Amber"], green: ["Grøn", "Green"], slate: ["Grå", "Slate"] };
+
+function ColorDot({ lang, conv, label, changed }: { lang: Lang; conv: Conv; label: string; changed: (c: string) => void }) {
+  const da = lang === "da"; const [open, setOpen] = useState(false); const color = conv.color || "teal";
+  const pick = async (c: string) => { const { error } = await supabase.rpc("set_conversation_color", { conv: conv.id, p_color: c }); if (!error) { changed(c); setOpen(false); } };
+  return (
+    <span className="dotwrap">
+      <button type="button" className={`dot c-${color}`} aria-label={da ? `Vælg farve for samtalen med ${label}` : `Choose colour for conversation with ${label}`} aria-expanded={open} onClick={(e) => { e.stopPropagation(); setOpen(!open); }}>
+        <span aria-hidden="true">{(label.trim()[0] || "?").toUpperCase()}</span>
+      </button>
+      {open && <span className="palette" role="group" aria-label={da ? "Farver (kun synlige for dig)" : "Colours (only visible to you)"}>
+        {COLORS.map((c) => <button key={c} type="button" className={`swatch c-${c}`} aria-label={COLOR_NAMES[c][da ? 0 : 1]} aria-pressed={c === color} onClick={(e) => { e.stopPropagation(); pick(c); }}>{c === color ? "✓" : ""}</button>)}
+      </span>}
+    </span>
+  );
+}
+
 function Home({ lang, open }: { lang: Lang; open: (c: Conv) => void }) {
-  const t = strings[lang];
-  const [convs, setConvs] = useState<Conv[]>([]); const [title, setTitle] = useState(""); const [code, setCode] = useState(""); const [err, setErr] = useState("");
+  const t = strings[lang]; const da = lang === "da";
+  const [convs, setConvs] = useState<Conv[]>([]);
   const load = useCallback(async () => { const { data } = await supabase.rpc("list_my_conversations"); setConvs((data as Conv[]) ?? []); }, []);
   useEffect(() => { load(); }, [load]);
-  const create = async () => { const { error } = await supabase.rpc("create_conversation", { p_title: title }); if (!error) { setTitle(""); load(); } };
-  const join = async () => {
-    setErr("");
-    const r = await callFn("invitation", { action: "accept", token: code.trim() });
-    if (r.status !== 200) setErr(r.data?.error === "consent_missing" ? "Afventer samtykke / awaiting consent" : t.invalidInvite); else { setCode(""); load(); }
-  };
   return (
     <>
       <div className="card list"><h2>{t.conversations}</h2>
-        {convs.length === 0 && <p className="meta">—</p>}
-        {convs.map((c) => <button key={c.id} onClick={() => open(c)}>{convLabel(c, lang === "da")} <span className="meta">· {c.members} {t.members.toLowerCase()}</span></button>)}
+        {convs.length === 0 && <p className="meta">{da ? "Ingen samtaler endnu. Inviter din modpart herunder." : "No conversations yet. Invite the other parent below."}</p>}
+        {convs.map((c) => { const label = convLabel(c, da); return (
+          <div key={c.id} className="convrow">
+            <ColorDot lang={lang} conv={c} label={label} changed={(col) => setConvs(convs.map((x) => x.id === c.id ? { ...x, color: col } : x))} />
+            <button className="convbtn" onClick={() => open(c)}>{label}{c.others.length === 0 && <span className="meta"> · {da ? "venter på accept" : "awaiting acceptance"}</span>}</button>
+          </div>); })}
       </div>
-      <div className="card"><h2>{t.newConv}</h2><div className="row"><input aria-label={t.title} placeholder={t.title} value={title} onChange={(e) => setTitle(e.target.value)} style={{ flex: 1 }} /><button onClick={create}>{t.create}</button></div></div>
       <InviteByEmail lang={lang} done={load} />
-      <div className="card"><h2>{t.join}</h2><div className="row"><input aria-label={t.code} placeholder={t.code} value={code} onChange={(e) => setCode(e.target.value)} style={{ flex: 1 }} /><button onClick={join} disabled={!code.trim()}>OK</button></div>{err && <p className="err" role="alert">{err}</p>}</div>
     </>
   );
 }
@@ -202,13 +217,13 @@ function AliasEdit({ lang, other, saved }: { lang: Lang; other: Other; saved: (a
 }
 
 function Chat({ lang, conv, back }: { lang: Lang; conv: Conv; back: () => void }) {
-  const [others, setOthers] = useState<Other[]>(conv.others ?? []);
+  const [others, setOthers] = useState<Other[]>(conv.others ?? []); const [color, setColor] = useState<string | null>(conv.color);
   const t = strings[lang];
   const draftKey = `draft:${conv.id}`;
   const [msgs, setMsgs] = useState<Msg[]>([]); const [pending, setPending] = useState(0);
   const [text, setText] = useState(localStorage.getItem(draftKey) ?? "");
   const [status, setStatus] = useState<{ kind: string; spans?: string[]; blockedText?: string } | null>(null);
-  const [busy, setBusy] = useState(false); const [invite, setInvite] = useState<{ token: string; expires_at: string } | null>(null);
+  const [busy, setBusy] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
   const load = useCallback(async () => {
     const { data } = await supabase.rpc("get_messages", { conv: conv.id }); if (data) setMsgs(data as Msg[]);
@@ -231,14 +246,12 @@ function Chat({ lang, conv, back }: { lang: Lang; conv: Conv; back: () => void }
     else if (r.status === 429) setStatus({ kind: "rateLimited" });
     else setStatus({ kind: "techError" });
   };
-  const makeInvite = async () => { const r = await callFn("invitation", { action: "create", conversation_id: conv.id, role: "parent" }); if (r.status === 200) setInvite(r.data.data); };
   const receiveNow = async () => { await callFn("receive-now", {}); load(); };
   const n = count(text);
   return (
     <>
-      <div className="row"><button className="ghost" onClick={back}>← {t.back}</button><div role="heading" aria-level={2} style={{ margin: 0, overflowWrap: "anywhere", fontSize: 20, fontWeight: 700, flex: 1, minWidth: 0 }}>{others.length ? others.map((o) => <AliasEdit key={o.user_id} lang={lang} other={o} saved={(a) => { setOthers(others.map((x) => x.user_id === o.user_id ? { ...x, alias: a } : x)); load(); }} />) : convLabel(conv, lang === "da")}</div><span className="spacer" />
-        {conv.role === "parent" && conv.members < 2 && <button className="ghost" onClick={makeInvite}>{t.invite}</button>}</div>
-      {invite && <div className="card"><p>{t.inviteHint} {new Date(invite.expires_at).toLocaleString(lang)}.</p><code>{invite.token}</code><div><button className="ghost" onClick={() => navigator.clipboard.writeText(invite.token)}>{t.copy}</button></div></div>}
+      <div className="row"><button className="ghost" onClick={back}>← {t.back}</button><ColorDot lang={lang} conv={{ ...conv, color }} label={others.length ? others.map(labelOf).join(", ") : "?"} changed={setColor} /><div role="heading" aria-level={2} style={{ margin: 0, overflowWrap: "anywhere", fontSize: 20, fontWeight: 700, flex: 1, minWidth: 0 }}>{others.length ? others.map((o) => <AliasEdit key={o.user_id} lang={lang} other={o} saved={(a) => { setOthers(others.map((x) => x.user_id === o.user_id ? { ...x, alias: a } : x)); load(); }} />) : convLabel(conv, lang === "da")}</div><span className="spacer" />
+</div>
       {pending > 0 && <div className="notice row"><span>{t.pending(pending)}</span><span className="spacer" /><button onClick={receiveNow}>{t.receiveNow}</button></div>}
       <div className="card msgs" aria-live="polite">
         {msgs.length === 0 && <p className="meta">{t.empty}</p>}
