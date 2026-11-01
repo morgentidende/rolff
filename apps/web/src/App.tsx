@@ -464,7 +464,12 @@ function ExportPanel({ lang, msgs }: { lang: Lang; msgs: Msg[] }) {
 const TZS = ["Europe/Copenhagen", "Europe/London", "Europe/Berlin", "Europe/Stockholm", "Europe/Oslo", "America/New_York", "UTC"];
 type W = { weekday: number; start_minute: number; end_minute: number };
 const toHM = (m: number) => `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
-const fromHM = (s: string) => { const [h, m] = s.split(":").map(Number); return h * 60 + m; };
+// Always 24-hour "HH:MM" regardless of device locale (native time inputs can show a clipped AM/PM).
+const STEPS = Array.from({ length: 96 }, (_, k) => k * 15);
+function TimeSelect({ label, value, set, end }: { label: string; value: number; set: (v: number) => void; end?: boolean }) {
+  const opts = [...new Set([...STEPS.filter((m) => !end || m > 0), ...(end ? [1440] : []), value])].sort((a, b) => a - b);
+  return <select aria-label={label} className="tsel" value={value} onChange={(e) => set(+e.target.value)}>{opts.map((m) => <option key={m} value={m}>{m === 1440 ? "24:00" : toHM(m)}</option>)}</select>;
+}
 
 function ReceiveSettings({ lang }: { lang: Lang }) {
   const t = strings[lang];
@@ -492,9 +497,9 @@ function ReceiveSettings({ lang }: { lang: Lang }) {
         {ws.map((w, i) => (
           <div className="wrow" key={i}>
             <select aria-label={lang === "da" ? "Dag" : "Day"} value={w.weekday} onChange={(e) => upd(i, { weekday: +e.target.value })}>{t.days.map((d, k) => <option key={k} value={k + 1}>{d}</option>)}</select>
-            <input type="time" aria-label={t.from} value={toHM(w.start_minute)} onChange={(e) => upd(i, { start_minute: fromHM(e.target.value) })} />
+            <TimeSelect label={t.from} value={w.start_minute} set={(v) => upd(i, { start_minute: v })} />
             <span className="dash" aria-hidden="true">–</span>
-            <input type="time" aria-label={t.to} value={toHM(w.end_minute)} onChange={(e) => upd(i, { end_minute: fromHM(e.target.value) })} />
+            <TimeSelect label={t.to} value={w.end_minute} set={(v) => upd(i, { end_minute: v })} end />
             <button type="button" className="icon rm" aria-label={`${t.remove} ${t.days[w.weekday - 1]} ${toHM(w.start_minute)}–${toHM(w.end_minute)}`} onClick={() => { setWs(ws.filter((_, j) => j !== i)); setMsg(""); }}>
               <Icon d={<><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M6 6l1 14h10l1-14" /></>} />
             </button>
