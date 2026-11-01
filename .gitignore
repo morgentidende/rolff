@@ -5,3 +5,4 @@ dist/
 !.env.example
 .secrets/
 *.log
+apps/web/public/api/config.php

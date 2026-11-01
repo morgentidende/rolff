@@ -5,3 +5,5 @@ verify_jwt = true
 verify_jwt = true
 [functions.receive-now]
 verify_jwt = true
+[functions.invite-email]
+verify_jwt = true

@@ -43,3 +43,9 @@ GEMINI_API_KEY=... npm run test:corpus     # kun syntetiske data
 4. `apps/web/.env` med URL + publishable key; `npm run build:web`; host `apps/web/dist` statisk.
 
 Se `docs/moderation-results.md` for observerede moderationsresultater.
+
+## Testkonto og e-mailinvitationer
+- Testkontoen til Nicolai har en bevidst svag adgangskode **kun til denne test**. Den er sat direkte i databasen (Supabase kræver ellers mindst 6 tegn) og må aldrig bruges i produktion. Adgangskoder ligger kun uden for repoet.
+- Invitation via e-mail: Edge Function `invite-email` opretter en ny samtale og en invitation bundet til modtagerens e-mail (72 t, engangs). Modtageren får en mail med link (`#invite=TOKEN`), den inviterende en kopi uden link.
+- Mail sendes via `apps/web/public/api/mail.php` på Hostinger-sitet (PHP `mail()`, gratis i den eksisterende hostingplan), beskyttet af en delt hemmelighed (`MAILER_SECRET`). `config.php` genereres ved deploy og committes aldrig. Supabase' indbyggede SMTP bruges ikke.
+- Live-test: `scripts/e2e-invite.mjs` (to trin; se kommentaren i filen).
