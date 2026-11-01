@@ -10,7 +10,7 @@ jobs:
       - uses: denoland/setup-deno@v2
         with: { deno-version: v2.x }
       - run: cd tests/sql && npm ci && node run.mjs
-      - run: deno test tests/moderation/moderation_test.ts tests/web/pw_test.ts
+      - run: deno test tests/moderation/moderation_test.ts tests/web/pw_test.ts tests/moderation/email_test.ts
       - run: cd supabase/functions && deno check */index.ts
       - run: cd apps/web && npm ci && npm run build
         env: { VITE_SUPABASE_URL: "https://example.supabase.co", VITE_SUPABASE_PUBLISHABLE_KEY: "ci" }

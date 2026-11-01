@@ -53,7 +53,7 @@ export function App() {
   }, [session, inviteToken]);
   return (
     <div className="wrap">
-      <div className="row"><strong style={{ fontSize: 22 }}>Rolff</strong><span className="spacer" />
+      <div className="row"><img src="./favicon.svg" alt="" width={32} height={32} style={{ borderRadius: 8 }} /><strong style={{ fontSize: 22 }}>Rolff</strong><span className="spacer" />
         <select aria-label={t.lang} style={{ width: "auto" }} value={lang} onChange={(e) => setLang(e.target.value as Lang)}><option value="da">Dansk</option><option value="en">English</option></select>
         <select aria-label={t.theme} style={{ width: "auto" }} value={theme} onChange={(e) => setTheme(e.target.value)}><option value="system">{t.system}</option><option value="light">{t.light}</option><option value="dark">{t.dark}</option></select>
         {session && <button className="ghost" onClick={() => setView(view === "settings" ? "home" : "settings")}>{view === "settings" ? t.back : t.settings}</button>}
@@ -83,7 +83,7 @@ function Auth({ lang, peek }: { lang: Lang; peek?: Peek | null }) {
   };
   return (
     <div className="card">
-      <h1>Rolff</h1>
+      <div style={{ textAlign: "center" }}><img src="./icons/rolff-192.png" alt="Rolff logo" width={96} height={96} style={{ borderRadius: 22 }} /><h1 style={{ marginTop: 8 }}>Rolff</h1></div>
       {peek ? <div className="notice"><strong>{lang === "da" ? `${peek.inviter_name ?? "En forælder"} har inviteret dig.` : `${peek.inviter_name ?? "A parent"} invited you.`}</strong> {lang === "da" ? "Vælg en adgangskode for at komme ind i samtalen. Har du allerede en konto, så log ind." : "Choose a password to join. Already have an account? Log in."}</div>
         : peek === null ? <div className="notice" role="alert">{lang === "da" ? "Invitationen er ugyldig, udløbet eller allerede brugt." : "The invitation is invalid, expired or already used."}</div> : null}
       <p>{t.tagline}</p><p>{t.intro}</p>
