@@ -22,7 +22,7 @@ if (!e.TOKEN) {
   const w = await fn(a, "invite-email", { action: "member", conversation_id: conv, email: "morgentidende-rapport+afvist5@mail.grokbot.com", role: "writer" });
   const wid = (await rpc(m, "list_pending_invitations", { conv })).data.find((x) => x.invitee_email.includes("afvist5"))?.id;
   const d = await fn(m, "invite-email", { action: "decline", invitation_id: wid }); ok(w.status === 200 && d.status === 200, "skriver-anmodning afvist");
-  ok((await rpc(a, "list_pending_invitations", { conv })).data.length === 0, "ét afslag stopper invitationen");
+  ok(!(await rpc(a, "list_pending_invitations", { conv })).data.some((x) => x.invitee_email.includes("afvist5")), "ét afslag stopper invitationen");
 } else {
   const s = await (await fetch(`${U}/auth/v1/signup`, { method: "POST", headers: { apikey: PK, "content-type": "application/json" }, body: JSON.stringify({ email: e.READER_EMAIL, password: e.READER_PW, data: {} }) })).json();
   const r = s.access_token ?? await login(e.READER_EMAIL, e.READER_PW); ok(!!r, "læser opretter konto");

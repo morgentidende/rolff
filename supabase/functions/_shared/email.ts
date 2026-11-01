@@ -56,13 +56,14 @@ ${button(p.appUrl, "Åbn Rolff for at svare")}
 
 /** To the extra participant after unanimous approval. */
 export function memberInviteMail(p: { inviterEmail: string; link: string; expires: string; role: string }) {
-  const subject = `${p.inviterEmail} har inviteret dig til at ${roleDa(p.role)} med i Rolff`;
+  const verb = p.role === "reader" ? "læse med" : "deltage";
+  const subject = `${p.inviterEmail} har inviteret dig til at ${verb} i en samtale i Rolff`;
   const html = shell(subject, `<p style="margin:0 0 14px">Hej,</p>
-<p style="margin:0 0 14px"><strong>${esc(p.inviterEmail)}</strong> har inviteret dig til at <strong>${roleDa(p.role)}</strong> med i en samtale i Rolff. Alle i samtalen har godkendt invitationen.</p>
+<p style="margin:0 0 14px"><strong>${esc(p.inviterEmail)}</strong> har inviteret dig til at <strong>${verb}</strong> i en samtale i Rolff (adgang: ${roleDa(p.role)}). Alle i samtalen har godkendt invitationen.</p>
 <p style="margin:0 0 22px">Du ser kun beskeder fra efter, du er kommet med.</p>
 ${button(p.link, "Åbn invitationen")}
 <p style="margin:22px 0 0;font-size:13px;color:#7a807e">Linket virker én gang og udløber ${esc(fmt(p.expires))}. Kun denne e-mailadresse kan bruge det. Kender du ikke afsenderen, kan du bare slette mailen.</p>`);
-  const text = `Hej,\n\n${p.inviterEmail} har inviteret dig til at ${roleDa(p.role)} med i en samtale i Rolff.\n\nÅbn invitationen: ${p.link}\n\nLinket virker én gang og udløber ${fmt(p.expires)}. Kun denne e-mailadresse kan bruge det.\n\nRolff (testversion) – skriv kun opdigtede beskeder.`;
+  const text = `Hej,\n\n${p.inviterEmail} har inviteret dig til at ${verb} i en samtale i Rolff (adgang: ${roleDa(p.role)}).\n\nÅbn invitationen: ${p.link}\n\nLinket virker én gang og udløber ${fmt(p.expires)}. Kun denne e-mailadresse kan bruge det.\n\nRolff (testversion) – skriv kun opdigtede beskeder.`;
   return { subject, html, text };
 }
 
