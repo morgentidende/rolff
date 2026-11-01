@@ -250,7 +250,7 @@ function Chat({ lang, conv, back }: { lang: Lang; conv: Conv; back: () => void }
   const n = count(text);
   return (
     <>
-      <div className="row"><button className="ghost" onClick={back}>← {t.back}</button><ColorDot lang={lang} conv={{ ...conv, color }} label={others.length ? others.map(labelOf).join(", ") : "?"} changed={setColor} /><div role="heading" aria-level={2} style={{ margin: 0, overflowWrap: "anywhere", fontSize: 20, fontWeight: 700, flex: 1, minWidth: 0 }}>{others.length ? others.map((o) => <AliasEdit key={o.user_id} lang={lang} other={o} saved={(a) => { setOthers(others.map((x) => x.user_id === o.user_id ? { ...x, alias: a } : x)); load(); }} />) : convLabel(conv, lang === "da")}</div><span className="spacer" />
+      <div className="row"><button className="ghost" onClick={back} aria-label={t.back}>←</button><ColorDot lang={lang} conv={{ ...conv, color }} label={others.length ? others.map(labelOf).join(", ") : "?"} changed={setColor} /><div role="heading" aria-level={2} style={{ margin: 0, overflowWrap: "anywhere", fontSize: 20, fontWeight: 700, flex: 1, minWidth: 0 }}>{others.length ? others.map((o) => <AliasEdit key={o.user_id} lang={lang} other={o} saved={(a) => { setOthers(others.map((x) => x.user_id === o.user_id ? { ...x, alias: a } : x)); load(); }} />) : convLabel(conv, lang === "da")}</div>
 </div>
       {pending > 0 && <div className="notice row"><span>{t.pending(pending)}</span><span className="spacer" /><button onClick={receiveNow}>{t.receiveNow}</button></div>}
       <div className="card msgs" aria-live="polite">
