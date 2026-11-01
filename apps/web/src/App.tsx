@@ -383,7 +383,8 @@ function Chat({ lang, conv, back, menu }: { lang: Lang; conv: Conv; back: () => 
       </div>}
       {invs.map((iv) => <div key={iv.id} className="notice invite-pending" role="status">
         <div><strong>{iv.invitee_email}</strong> · {roleTxt(iv.role)}</div>
-        <div className="meta">{da ? `Afventer godkendelse: ${iv.consents} af ${iv.required} har godkendt. Ét afslag stopper invitationen.` : `Awaiting approval: ${iv.consents} of ${iv.required} approved. One rejection stops it.`}</div>
+        <div className="meta">{iv.consents >= iv.required ? (da ? "Alle har godkendt. Invitationen er sendt og venter på, at personen tager imod." : "Everyone approved. The invitation was sent and awaits acceptance.")
+          : da ? `Afventer godkendelse: ${iv.consents} af ${iv.required} har godkendt. Ét afslag stopper invitationen.` : `Awaiting approval: ${iv.consents} of ${iv.required} approved. One rejection stops it.`}</div>
         {!iv.i_consented ? <div className="row end"><button className="ghost" onClick={() => answer(iv.id, "decline")}>{da ? "Afvis" : "Reject"}</button><button onClick={() => answer(iv.id, "consent")}>{da ? "Godkend" : "Approve"}</button></div>
           : iv.mine ? <div className="row end"><button className="ghost" onClick={() => answer(iv.id, "decline")}>{da ? "Træk tilbage" : "Withdraw"}</button></div> : null}
       </div>)}
