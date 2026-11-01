@@ -7,3 +7,5 @@ verify_jwt = true
 verify_jwt = true
 [functions.invite-email]
 verify_jwt = true
+[functions.feedback]
+verify_jwt = true

@@ -149,21 +149,22 @@ function Faq({ lang }: { lang: Lang }) {
 
 function FeedbackForm({ lang }: { lang: Lang }) {
   const da = lang === "da";
-  const [cat, setCat] = useState("idea"); const [body, setBody] = useState(""); const [state, setState] = useState<"" | "busy" | "ok" | "err">("");
+  const [cat, setCat] = useState("idea"); const [body, setBody] = useState(""); const [state, setState] = useState<"" | "busy" | "ok" | "err" | "limit">("");
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setState("busy");
-    const { error } = await supabase.from("feedback").insert({ category: cat, body: body.trim() });
-    if (error) setState("err"); else { setState("ok"); setBody(""); }
+    let r; try { r = await callFn("feedback", { category: cat, body: body.trim() }); } catch { r = { status: 0, data: null as any }; }
+    if (r.status === 200) { setState("ok"); setBody(""); } else setState(r.status === 429 ? "limit" : "err");
   };
   return (
     <form onSubmit={submit}>
-      <p className="meta">{da ? "Skriv ikke beskeder fra samtaler her. Kun udviklerne kan læse din feedback." : "Do not paste conversation messages here. Only the developers can read your feedback."}</p>
+      <p className="meta">{da ? "Skriv ikke beskeder fra samtaler her. Feedback sendes til udviklerne sammen med din e-mail, så vi kan svare dig." : "Do not paste conversation messages here. Feedback is sent to the developers with your email so we can reply."}</p>
       <label htmlFor="fc">{da ? "Kategori (valgfri)" : "Category (optional)"}</label>
       <select id="fc" value={cat} onChange={(e) => setCat(e.target.value)}><option value="idea">{da ? "Idé" : "Idea"}</option><option value="problem">{da ? "Problem" : "Problem"}</option><option value="other">{da ? "Andet" : "Other"}</option></select>
       <label htmlFor="fb">{da ? "Din feedback" : "Your feedback"}</label>
       <textarea id="fb" rows={5} maxLength={2000} required value={body} onChange={(e) => { setBody(e.target.value); setState(""); }} />
       <div className="row end"><button type="submit" disabled={state === "busy" || !body.trim()}>{da ? "Send feedback" : "Send feedback"}</button></div>
-      {state === "ok" && <p className="meta" role="status">{da ? "Tak! Din feedback er gemt." : "Thanks! Your feedback was saved."}</p>}
+      {state === "ok" && <p className="meta" role="status">{da ? "Tak! Din feedback er sendt til udviklerne." : "Thanks! Your feedback was sent to the developers."}</p>}
+      {state === "limit" && <p className="err" role="alert">{da ? "Du har sendt meget feedback i dag. Prøv igen i morgen." : "Too much feedback today. Try again tomorrow."}</p>}
       {state === "err" && <p className="err" role="alert">{da ? "Feedback kunne ikke gemmes." : "Could not save feedback."}</p>}
     </form>
   );
