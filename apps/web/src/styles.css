@@ -70,3 +70,4 @@ button.icon:focus-visible,button:focus-visible{outline:2px solid var(--accent);o
 .wrow select.tsel{text-align:center;text-align-last:center;font-variant-numeric:tabular-nums;padding:8px 2px}
 button.danger{background:#c0392b;color:#fff;border-color:#c0392b}button.danger:disabled{opacity:.5}
 #inactivity,#delete{margin:18px 0 6px;font-size:1rem}
+.words{list-style:none;padding:0;margin:8px 0}.words li{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid color-mix(in srgb,currentColor 12%,transparent)}

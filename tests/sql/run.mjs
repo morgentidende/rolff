@@ -341,5 +341,22 @@ await t('Inaktivitet: advarsel, så sletning efter frist; fravalg respekteres; l
   await as(R, `select touch_seen()`);
   s = await svc(`select * from inactivity_sweep()`); assert.ok(!s.some(x => x.user_id === R));
 });
+
+// Blokerede ord + samtaleblokering
+await t('Blokér ord: medlem tilføjer (normaliseret)', async () => { await as(A, `select add_blocked_word($1,'  Pis   Hoved ',true)`, [conv]); const r = await as(A, `select word from conversation_blocked_words`); assert.deepEqual(r.map(x => x.word), ['pis hoved']); });
+await t('Blokér ord: uden bekræftelse tilføjes intet', async () => { await rejects(as(A, `select add_blocked_word($1,'test')`, [conv]), /ack_required/); await rejects(as(A, `select add_blocked_word($1,'test',false)`, [conv]), /ack_required/); assert.equal((await as(A, `select * from conversation_blocked_words where word='test'`)).length, 0); });
+await t('Blokér ord: modparten kan ikke hente listen', async () => { assert.equal((await as(B, `select * from conversation_blocked_words`)).length, 0); await rejects(as(B, `select * from recipient_blocked_words($1,$2)`, [conv, B]), /permission denied/); });
+await t('Blokér ord: uvedkommende ser intet og kan ikke tilføje', async () => { assert.equal((await as(X, `select * from conversation_blocked_words`)).length, 0); await rejects(as(X, `select add_blocked_word($1,'abc',true)`, [conv]), /not_member/); });
+await t('Blokér ord: andre kan ikke slette ejerens ord', async () => { await as(B, `delete from conversation_blocked_words`); assert.equal((await svc(`select count(*)::int n from conversation_blocked_words where user_id=$1`, [A]))[0].n, 1); });
+await t('Blokér ord: direkte insert afvises', async () => rejects(as(A, `insert into conversation_blocked_words(conversation_id,user_id,word) values ($1,$2,'xx')`, [conv, B]), /permission|denied/));
+await t('Blokér ord: længde 2-40 og max 50', async () => { await rejects(as(A, `select add_blocked_word($1,'x',true)`, [conv]), /length/); await rejects(as(A, `select add_blocked_word($1,repeat('a',41),true)`, [conv]), /length/); for (let k = 0; k < 49; k++) await as(A, `select add_blocked_word($1,$2,true)`, [conv, 'ord' + k]); await rejects(as(A, `select add_blocked_word($1,'ord99',true)`, [conv]), /too_many/); await svc(`delete from conversation_blocked_words where word like 'ord%'`); });
+await t('Blokér ord: server henter kun modtagernes ord (ikke afsenderens egne)', async () => { assert.deepEqual((await svc(`select * from recipient_blocked_words($1,$2) w`, [conv, B])).map(r => r.w), ['pis hoved']); assert.equal((await svc(`select * from recipient_blocked_words($1,$2)`, [conv, A])).length, 0); });
+await t('Blokér ord: slettes ved kontosletning (cascade)', async () => { const [Z] = (await db.query(`insert into auth.users(email) values ('z@test.invalid') returning id`)).rows.map(r => r.id); const zc = (await as(Z, `select create_conversation('z') c`))[0].c; await as(Z, `select add_blocked_word($1,'hej',true)`, [zc]); await db.query(`delete from auth.users where id=$1`, [Z]); assert.equal((await svc(`select count(*)::int n from conversation_blocked_words where user_id=$1`, [Z]))[0].n, 0); });
+await t('Blokering: B kan ikke sende, mens A blokerer (server)', async () => { await as(A, `select block_conversation($1)`, [conv]); await rejects(sendAs(B, 'Hej fra B', 'key-blk00001'), /cannot_deliver/); });
+await t('Blokering: A (blokerende) kan stadig skrive', async () => { await sendAs(A, 'Hej fra A', 'key-blk00002'); });
+await t('Blokering: B kan ikke se eller fjerne blokeringen', async () => { assert.equal((await as(B, `select * from conversation_blocks`)).length, 0); await as(B, `select unblock_conversation($1)`, [conv]); await rejects(sendAs(B, 'Hej igen', 'key-blk00003'), /cannot_deliver/); });
+await t('Blokering: ingen udløbskolonne', async () => assert.deepEqual((await db.query(`select column_name from information_schema.columns where table_name='conversation_blocks' order by 1`)).rows.map(r => r.column_name), ['conversation_id', 'created_at', 'user_id']));
+await t('Blokering: ophører kun når A afblokerer', async () => { await as(A, `select unblock_conversation($1)`, [conv]); await sendAs(B, 'Hej igen', 'key-blk00004'); });
+await t('Feedback: nye kategorier', async () => { await svc(`delete from feedback`); await as(B, `select submit_feedback('complaint','x')`); await as(B, `select submit_feedback('filter','y')`); });
 console.log(`\n${pass} bestået, ${fail} fejlet`);
 process.exit(fail ? 1 : 0);

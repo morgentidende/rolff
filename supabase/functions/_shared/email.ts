@@ -11,7 +11,7 @@ function shell(title: string, inner: string) {
 <tr><td bgcolor="#016C72" style="background:#016C72;padding:20px 28px;color:#ffffff">
 <table role="presentation" cellpadding="0" cellspacing="0"><tr>
 <td width="48" style="width:48px;padding-right:14px;vertical-align:middle"><img src="${logoUrl()}" width="48" height="48" alt="Rolff logo" style="display:block;width:48px;height:48px;border:0;border-radius:11px;background:#016C72;color:#ffffff;font-size:12px"></td>
-<td style="vertical-align:middle;color:#ffffff;font-size:22px;font-weight:700;letter-spacing:.3px">Rolff<div style="font-size:13px;font-weight:400;opacity:.85;margin-top:2px">Rolig kommunikation mellem forældre</div></td>
+<td style="vertical-align:middle;color:#ffffff;font-size:22px;font-weight:700;letter-spacing:.3px">Rolff<div style="font-size:13px;font-weight:400;opacity:.85;margin-top:2px">Rolig, saglig kommunikation i konflikter</div></td>
 </tr></table></td></tr>
 <tr><td style="padding:28px;font-size:16px;line-height:1.55">${inner}</td></tr>
 <tr><td style="padding:16px 28px 24px;font-size:12px;color:#7a807e;border-top:1px solid #eeeae3">Rolff er en testversion. Skriv kun opdigtede beskeder – AI-kontrollen kører på en gratis testtjeneste.</td></tr>
@@ -67,16 +67,15 @@ ${button(p.link, "Åbn invitationen")}
   return { subject, html, text };
 }
 
-const CATS: Record<string, string> = { idea: "Idé", problem: "Problem", other: "Andet" };
+const CATS: Record<string, string> = { suggestion: "Forslag", complaint: "Klage", filter: "Filter-feedback", idea: "Forslag", problem: "Klage", other: "Andet" };
 /** Feedback to the team. Category is whitelisted; text and sender are escaped. Never conversation content. */
-export function feedbackMail(p: { category: string; body: string; senderEmail: string }) {
+export function feedbackMail(p: { category: string; body: string; senderName: string; senderId: string }) {
   const cat = CATS[p.category] ?? "Andet";
   const subject = `Rolff feedback: ${cat}`;
   const html = shell(subject, `<p style="margin:0 0 6px;font-size:13px;color:#7a807e">Kategori</p><p style="margin:0 0 16px"><strong>${esc(cat)}</strong></p>
-<p style="margin:0 0 6px;font-size:13px;color:#7a807e">Fra</p><p style="margin:0 0 16px">${esc(p.senderEmail)}</p>
-<p style="margin:0 0 6px;font-size:13px;color:#7a807e">Feedback</p><div style="margin:0;padding:14px 16px;background:#f6f4ef;border-radius:10px;white-space:pre-wrap;word-break:break-word">${esc(p.body)}</div>
-<p style="margin:18px 0 0;font-size:13px;color:#7a807e">Svar på denne mail for at skrive direkte til afsenderen.</p>`);
-  const text = `Rolff feedback\n\nKategori: ${cat}\nFra: ${p.senderEmail}\n\n${p.body}\n`;
+<p style="margin:0 0 6px;font-size:13px;color:#7a807e">Fra (kaldenavn / bruger-id)</p><p style="margin:0 0 16px">${esc(p.senderName)} · <code>${esc(p.senderId)}</code></p>
+<p style="margin:0 0 6px;font-size:13px;color:#7a807e">Feedback</p><div style="margin:0;padding:14px 16px;background:#f6f4ef;border-radius:10px;white-space:pre-wrap;word-break:break-word">${esc(p.body)}</div>`);
+  const text = `Rolff feedback\n\nKategori: ${cat}\nFra: ${p.senderName} (${p.senderId})\n\n${p.body}\n`;
   return { subject, html, text };
 }
 

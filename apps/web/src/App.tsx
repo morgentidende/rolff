@@ -9,7 +9,7 @@ import { exportFileName, findHits, toCsv, type Row } from "./exportUtil";
 type Other = { user_id: string; email: string; alias: string | null };
 type Conv = { id: string; role: string; members: number; others: Other[]; color: string | null };
 const labelOf = (o: Other) => o.alias || o.email;
-const convLabel = (c: Conv, da: boolean) => c.others?.length ? c.others.map(labelOf).join(", ") : (da ? "Venter på modpart" : "Waiting for the other parent");
+const convLabel = (c: Conv, da: boolean) => c.others?.length ? c.others.map(labelOf).join(", ") : (da ? "Venter på den anden part" : "Waiting for the other party");
 type Msg = { id: string; sender_id: string; sender_name: string | null; body: string; created_at: string; mine: boolean };
 const MAX = 480;
 const count = (s: string) => [...s].length;
@@ -22,7 +22,7 @@ function readInviteToken(): string | null {
   return sessionStorage.getItem("invite");
 }
 
-type Sheet = "privacy" | null | "lang" | "theme" | "times" | "faq" | "feedback" | "invite" | "export" | "addMember";
+type Sheet = "privacy" | "words" | null | "lang" | "theme" | "times" | "faq" | "feedback" | "invite" | "export" | "addMember";
 export type MenuItem = { label: string; run: () => void; danger?: boolean };
 
 export function App() {
@@ -139,12 +139,18 @@ function Faq({ lang }: { lang: Lang }) {
     ["Hvad gør AI-tonetjekket?", "Før en besked sendes, vurderer en AI-tjeneste tonen. Kan beskeden opfattes som sårende, bliver den ikke sendt, og du kan rette den. Beskeden og op til 10 nyere beskeder sendes til tjenesten."],
     ["Hvad er modtagetider?", "Du kan vælge, hvornår på ugen nye beskeder når frem til dig. Beskeder, der kommer uden for dine tider, venter, til næste modtagetid – eller til du selv trykker “Modtag beskeder nu”."],
     ["Hvordan kommer man ind i en samtale?", "Kun via invitation på e-mail. Ekstra deltagere (fx advokat eller sagsbehandler) får først adgang, når alle i samtalen har godkendt, og de ser ingen beskeder fra før, de kom med."],
+    ["Hvad bliver blokeret?", "Rolff stopper beskeder, der kan opfattes som sårende (tjekket af AI), beskeder med emojis (de misforstås let – skriv det med ord), beskeder skrevet med store bogstaver (opleves som råb) og den samme besked sendt igen. Du får at vide, hvorfor beskeden ikke blev sendt, og kan rette den."],
+    ["Hvordan blokerer jeg en samtale?", "Tryk ⋮ i samtalen → “Blokér samtale”. Så kan de andre ikke længere sende beskeder i samtalen; de får kun at vide, at beskeden ikke kan sendes – ikke hvem eller hvornår. Blokeringen udløber aldrig af sig selv. Den ophører kun, når du selv trykker “Afblokér”."],
+    ["Hvad er “Blokerede ord”?", "Et valgfrit filter (slået fra som standard): Under ⋮ → “Blokerede ord” kan du tilføje ord eller sætninger, som ikke må nå frem til dig. Listen er privat. Men rammer en besked et af dine ord, får afsenderen at vide præcis hvilket ord, og at modtageren har blokeret det. Derfor skal du bekræfte det for hvert ord, du tilføjer. Du kan fjerne ord igen når som helst."],
     ["Er det her den rigtige app?", "Nej, det er et testmiljø. Skriv kun opdigtede beskeder. AI-tjekket kører på en gratis testtjeneste."],
   ] : [
     ["Can the other person see if I read a message or am online?", "No. Rolff has no read receipts, no online status and no typing indicator."],
     ["What does the AI tone check do?", "Before a message is sent, an AI service assesses its tone. If it may come across as hurtful, it is not sent and you can edit it. The message and up to 10 recent messages are sent to the service."],
     ["What are receive times?", "You choose when during the week new messages reach you. Messages arriving outside your times wait until the next receive time – or until you tap “Receive messages now”."],
     ["How do people join a conversation?", "Only by e-mail invitation. Extra participants (e.g. a lawyer or caseworker) only get access when everyone in the conversation has approved, and they see no messages from before they joined."],
+    ["What gets blocked?", "Rolff stops messages that may come across as hurtful (checked by AI), messages with emojis (easily misread – use words), messages in all caps (reads as shouting) and the same message sent twice. You are told why it was not sent and can edit it."],
+    ["How do I block a conversation?", "Tap ⋮ in the conversation → “Block conversation”. The others can then no longer send messages there; they are only told the message cannot be sent – not who or when. A block never expires by itself. It only ends when you tap “Unblock”."],
+    ["What are “Blocked words”?", "An optional filter (off by default): under ⋮ → “Blocked words” you can add words or phrases that must not reach you. The list is private. But if a message hits one of your words, the sender is told exactly which word and that the recipient blocked it. That is why you confirm each word you add. You can remove words at any time."],
     ["Is this the real app?", "No, this is a test environment. Write made-up messages only. The AI check runs on a free test service."],
   ];
   return <div className="faq">{qa.map(([q, a]) => <details key={q}><summary>{q}</summary><p>{a}</p></details>)}</div>;
@@ -192,9 +198,37 @@ function PrivacyPanel({ lang }: { lang: Lang }) {
   );
 }
 
+function BlockedWords({ lang, conv }: { lang: Lang; conv: string }) {
+  const da = lang === "da";
+  const [words, setWords] = useState<{ id: string; word: string }[]>([]); const [w, setW] = useState(""); const [ack, setAck] = useState(false); const [err, setErr] = useState("");
+  const load = () => supabase.from("conversation_blocked_words").select("id,word").eq("conversation_id", conv).order("created_at").then(({ data }) => setWords((data as any[]) ?? []));
+  useEffect(() => { load(); }, [conv]);
+  const add = async (e: React.FormEvent) => {
+    e.preventDefault(); setErr("");
+    const r = await supabase.rpc("add_blocked_word", { conv, p_word: w, p_ack: ack });
+    if (r.error) setErr(/too_many/.test(r.error.message) ? (da ? "Højst 50 ord." : "At most 50 words.") : /length/.test(r.error.message) ? (da ? "2–40 tegn." : "2–40 characters.") : (da ? "Kunne ikke tilføje." : "Could not add."));
+    else { setW(""); setAck(false); load(); }
+  };
+  return (
+    <div>
+      <p className="meta">{da ? "Valgfrit. Beskeder fra de andre, der indeholder et af dine ord eller sætninger, bliver ikke leveret til dig. Store/små bogstaver og accenter ignoreres. Kun du kan se din liste." : "Optional. Messages from the others containing one of your words or phrases are not delivered to you. Case and accents are ignored. Only you can see your list."}</p>
+      {words.length === 0 ? <p className="meta">{da ? "Ingen blokerede ord (slået fra)." : "No blocked words (off)."}</p> :
+        <ul className="words">{words.map((x) => <li key={x.id}><span>{x.word}</span><button className="ghost" onClick={async () => { await supabase.from("conversation_blocked_words").delete().eq("id", x.id); load(); }}>{da ? "Fjern" : "Remove"}</button></li>)}</ul>}
+      <form onSubmit={add}>
+        <label htmlFor="bw">{da ? "Tilføj ord eller sætning" : "Add word or phrase"}</label>
+        <input id="bw" maxLength={40} value={w} onChange={(e) => { setW(e.target.value); setAck(false); }} />
+        <p className="notice" role="note">{da ? "Bemærk: Hvis en besked bliver stoppet af dette ord, får afsenderen at vide præcis hvilket ord eller hvilken sætning der ramte – og at det er dig/modtageren, der har blokeret det. Resten af din liste ser de aldrig." : "Note: if a message is stopped by this word, the sender is told exactly which word or phrase matched – and that the recipient blocked it. They never see the rest of your list."}</p>
+        <label style={{ display: "flex", gap: 8 }}><input type="checkbox" style={{ width: 24, minHeight: 24 }} checked={ack} onChange={(e) => setAck(e.target.checked)} />{da ? "Jeg forstår, at afsenderen får ordet at se." : "I understand the sender will see the word."}</label>
+        <div className="row end"><button type="submit" disabled={!ack || w.trim().length < 2}>{da ? "Tilføj" : "Add"}</button></div>
+        {err && <p className="err" role="alert">{err}</p>}
+      </form>
+    </div>
+  );
+}
+
 function FeedbackForm({ lang }: { lang: Lang }) {
   const da = lang === "da";
-  const [cat, setCat] = useState("idea"); const [body, setBody] = useState(""); const [state, setState] = useState<"" | "busy" | "ok" | "err" | "limit">("");
+  const [cat, setCat] = useState("suggestion"); const [body, setBody] = useState(""); const [state, setState] = useState<"" | "busy" | "ok" | "err" | "limit">("");
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setState("busy");
     let r; try { r = await callFn("feedback", { category: cat, body: body.trim() }); } catch { r = { status: 0, data: null as any }; }
@@ -202,13 +236,13 @@ function FeedbackForm({ lang }: { lang: Lang }) {
   };
   return (
     <form onSubmit={submit}>
-      <p className="meta">{da ? "Skriv ikke beskeder fra samtaler her. Feedback sendes til udviklerne sammen med din e-mail, så vi kan svare dig." : "Do not paste conversation messages here. Feedback is sent to the developers with your email so we can reply."}</p>
-      <label htmlFor="fc">{da ? "Kategori (valgfri)" : "Category (optional)"}</label>
-      <select id="fc" value={cat} onChange={(e) => setCat(e.target.value)}><option value="idea">{da ? "Idé" : "Idea"}</option><option value="problem">{da ? "Problem" : "Problem"}</option><option value="other">{da ? "Andet" : "Other"}</option></select>
+      <p className="meta">{da ? "Skriv ikke samtaleindhold eller personoplysninger, du ikke vil dele. Feedback sendes til Rolff sammen med dit kaldenavn og bruger-id – ikke dine samtaler." : "Do not write conversation content or personal data you do not want to share. Feedback is sent to Rolff with your nickname and user id – not your conversations."}</p>
+      <label htmlFor="fc">{da ? "Kategori" : "Category"}</label>
+      <select id="fc" value={cat} onChange={(e) => setCat(e.target.value)}><option value="suggestion">{da ? "Forslag" : "Suggestion"}</option><option value="complaint">{da ? "Klage" : "Complaint"}</option><option value="filter">{da ? "Filter-feedback" : "Filter feedback"}</option></select>
       <label htmlFor="fb">{da ? "Din feedback" : "Your feedback"}</label>
       <textarea id="fb" rows={5} maxLength={2000} required value={body} onChange={(e) => { setBody(e.target.value); setState(""); }} />
       <div className="row end"><button type="submit" disabled={state === "busy" || !body.trim()}>{da ? "Send feedback" : "Send feedback"}</button></div>
-      {state === "ok" && <p className="meta" role="status">{da ? "Tak! Din feedback er sendt til udviklerne." : "Thanks! Your feedback was sent to the developers."}</p>}
+      {state === "ok" && <p className="meta" role="status">{da ? "Tak! Din feedback er sendt." : "Thanks! Your feedback was sent."}</p>}
       {state === "limit" && <p className="err" role="alert">{da ? "Du har sendt meget feedback i dag. Prøv igen i morgen." : "Too much feedback today. Try again tomorrow."}</p>}
       {state === "err" && <p className="err" role="alert">{da ? "Feedback kunne ikke gemmes." : "Could not save feedback."}</p>}
     </form>
@@ -379,6 +413,9 @@ function Chat({ lang, conv, back, menu }: { lang: Lang; conv: Conv; back: () => 
   const [text, setText] = useState(localStorage.getItem(draftKey) ?? "");
   const [status, setStatus] = useState<{ kind: string; spans?: string[]; blockedText?: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [blocked, setBlocked] = useState(false);
+  useEffect(() => { supabase.from("conversation_blocks").select("user_id").eq("conversation_id", conv.id).then(({ data }) => setBlocked((data ?? []).length > 0)); }, [conv.id]);
+  const setBlock = async (on: boolean) => { const r = await supabase.rpc(on ? "block_conversation" : "unblock_conversation", { conv: conv.id }); if (!r.error) setBlocked(on); };
   const [sheet, setSheet] = useState<Sheet>(null);
   const [q, setQ] = useState<string | null>(null); const [cur, setCur] = useState(0);
   const endRef = useRef<HTMLDivElement>(null); const listRef = useRef<HTMLDivElement>(null);
@@ -402,6 +439,9 @@ function Chat({ lang, conv, back, menu }: { lang: Lang; conv: Conv; back: () => 
     setBusy(false);
     if (r.status === 200 && r.data?.status === "accepted") { setText(""); localStorage.removeItem(keyStore); setStatus({ kind: "accepted" }); load(); }
     else if (r.status === 200 && r.data?.status === "blocked") setStatus({ kind: "blocked", spans: r.data.spans ?? [], blockedText: text });
+    else if (r.status === 200 && r.data?.status === "blocked_word") setStatus({ kind: "note", blockedText: da ? `Beskeden blev ikke sendt: Modtageren har blokeret ordet/sætningen "${r.data.word}". Ret beskeden og prøv igen.` : `The message was not sent: the recipient has blocked the word/phrase "${r.data.word}". Edit the message and try again.` });
+    else if (r.status === 200 && r.data?.status === "rule") setStatus({ kind: "note", blockedText: ({ emoji: da ? "Beskeden blev ikke sendt: Emojis er ikke tilladt i Rolff. Skriv det med ord." : "Not sent: emojis are not allowed in Rolff. Use words.", caps: da ? "Beskeden blev ikke sendt: Den er skrevet med store bogstaver, som kan opfattes som råb." : "Not sent: all caps can read as shouting.", repeat: da ? "Beskeden blev ikke sendt: Du har lige sendt den samme besked." : "Not sent: you just sent the same message." } as Record<string, string>)[r.data.rule] ?? "" });
+    else if (r.status === 200 && r.data?.status === "cannot_deliver") setStatus({ kind: "note", blockedText: da ? "Beskeden kan ikke sendes i denne samtale." : "Messages cannot be sent in this conversation." });
     else if (r.data?.error === "read_only") setStatus({ kind: "readOnly" });
     else if (r.status === 429) setStatus({ kind: "rateLimited" });
     else setStatus({ kind: "techError" });
@@ -419,7 +459,9 @@ function Chat({ lang, conv, back, menu }: { lang: Lang; conv: Conv; back: () => 
         <div role="heading" aria-level={2} className="chattitle">{others.length ? others.map((o) => <AliasEdit key={o.user_id} lang={lang} other={o} saved={(a) => { setOthers(others.map((x) => x.user_id === o.user_id ? { ...x, alias: a } : x)); load(); }} />) : convLabel(conv, da)}</div>
         <button className="icon" aria-label={da ? "Søg i samtalen" : "Search conversation"} aria-pressed={q !== null} onClick={() => { setQ(q === null ? "" : null); setCur(0); }}><Icon d={<><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></>} /></button>
         {conv.role === "parent" && <button className="icon" aria-label={da ? "Tilføj person" : "Add person"} onClick={() => setSheet("addMember")}><Icon d={<><circle cx="9" cy="8" r="4" /><path d="M2 21c0-4 3-6 7-6s7 2 7 6" /><path d="M19 8v6M16 11h6" /></>} /></button>}
-        <Menu lang={lang} items={[{ label: da ? "Eksportér samtale" : "Export conversation", run: () => setSheet("export") }, ...menu]} />
+        <Menu lang={lang} items={[{ label: da ? "Eksportér samtale" : "Export conversation", run: () => setSheet("export") },
+          { label: da ? "Blokerede ord" : "Blocked words", run: () => setSheet("words") },
+          blocked ? { label: da ? "Afblokér samtale" : "Unblock conversation", run: () => setBlock(false) } : { label: da ? "Blokér samtale" : "Block conversation", run: () => { if (confirm(da ? "Blokér samtalen? De andre kan ikke sende dig beskeder her, før du selv afblokerer. De får ikke at vide, at du har blokeret." : "Block this conversation? The others cannot send messages here until you unblock. They are not told that you blocked.")) setBlock(true); }, danger: true }, ...menu]} />
       </header>
       {q !== null && <div className="searchbar" role="search">
         <input type="search" autoFocus aria-label={da ? "Søg i viste beskeder" : "Search visible messages"} placeholder={da ? "Søg i viste beskeder" : "Search visible messages"} value={q} onChange={(e) => { setQ(e.target.value); setCur(0); }}
@@ -443,12 +485,15 @@ function Chat({ lang, conv, back, menu }: { lang: Lang; conv: Conv; back: () => 
         <div ref={endRef} />
       </div>
       {status?.kind === "blocked" && <div className="notice" role="alert"><p style={{ margin: 0 }}>{t.blocked}</p>{status.spans!.length > 0 && <p className="meta" style={{ marginBottom: 0 }}>{t.flagged}: {highlight(status.blockedText!, status.spans!)}</p>}</div>}
-      {status && status.kind !== "blocked" && <div className={status.kind === "accepted" ? "notice" : "err"} role="status">{(t as any)[status.kind]}</div>}
+      {status?.kind === "note" && <div className="notice" role="alert">{status.blockedText}</div>}
+      {status && status.kind !== "blocked" && status.kind !== "note" && <div className={status.kind === "accepted" ? "notice" : "err"} role="status">{(t as any)[status.kind]}</div>}
       {conv.role !== "reader" ? (
         <div className="card composer">
           <textarea aria-label={t.write} placeholder={t.write} rows={3} value={text} onChange={(e) => setText(e.target.value)} />
           <div className="row"><span className="meta" style={{ color: n > MAX ? "crimson" : undefined }}>{n}/{MAX}</span><span className="spacer" /><button onClick={send} disabled={busy || !text.trim() || n > MAX}>{busy ? t.sending : t.send}</button></div>
         </div>) : <p className="meta">{t.readOnly}</p>}
+      {blocked && <div className="notice" role="status">{da ? "Du har blokeret samtalen. De andre kan ikke sende beskeder her. " : "You blocked this conversation. The others cannot send messages here. "}<button className="ghost" onClick={() => setBlock(false)}>{da ? "Afblokér" : "Unblock"}</button></div>}
+      {sheet === "words" && <SheetView title={da ? "Blokerede ord" : "Blocked words"} close={() => setSheet(null)} lang={lang}><BlockedWords lang={lang} conv={conv.id} /></SheetView>}
       {sheet === "export" && <SheetView title={da ? "Eksportér samtale" : "Export conversation"} close={() => setSheet(null)} lang={lang}><ExportPanel lang={lang} msgs={msgs} /></SheetView>}
       {sheet === "addMember" && <SheetView title={da ? "Tilføj person" : "Add person"} close={() => setSheet(null)} lang={lang}><AddMember lang={lang} conv={conv.id} done={load} /></SheetView>}
     </>
