@@ -23,7 +23,7 @@ Deno.test("timeoutFromEnv clamps and defaults", async () => {
   if (timeoutFromEnv(e("abc")) !== 15000) throw new Error("nan");
 });
 
-Deno.test("OpenAI: EU base-url som standard, store:false, højst 10 kontekstbeskeder (mock, intet netværkskald)", async () => {
+Deno.test("OpenAI: EU base-url som standard, store:false, højst 5 kontekstbeskeder à 300 tegn (mock, intet netværkskald)", async () => {
   const m = await import("../../supabase/functions/_shared/moderation.ts");
   const env = (o: Record<string, string>) => ({ get: (k: string) => o[k] });
   const p = m.providerFromEnv(env({ MODERATION_PROVIDER: "openai", MODERATION_TIER: "paid", APP_ENV: "test", OPENAI_API_KEY: "sk-test" })) as any;
@@ -36,12 +36,12 @@ Deno.test("OpenAI: EU base-url som standard, store:false, højst 10 kontekstbesk
   globalThis.fetch = (async (url: string, init: any) => { seen = { url, body: JSON.parse(init.body), auth: init.headers.authorization };
     return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ decision: "allow", reason_code: "none", spans: [] }) } }] }), { status: 200 }); }) as any;
   try {
-    const ctx = Array.from({ length: 15 }, (_, i) => ({ mine: i % 2 === 0, body: `ctx${i}` }));
+    const ctx = Array.from({ length: 15 }, (_, i) => ({ mine: i % 2 === 0, body: `ctx${i}` + (i === 14 ? "x".repeat(500) : "") }));
     await p.moderate("hej", ctx, new AbortController().signal);
   } finally { globalThis.fetch = orig; }
   if (seen.url !== "https://eu.api.openai.com/v1/chat/completions") throw new Error("url " + seen.url);
   if (seen.body.store !== false || seen.body.model !== "gpt-5.4-nano") throw new Error("store/model");
   const payload = JSON.parse(seen.body.messages[1].content);
-  if (payload.context.length !== 10 || payload.context[0].text !== "ctx5") throw new Error("ctx");
+  if (payload.context.length !== 5 || payload.context[0].text !== "ctx10" || [...payload.context[4].text].length !== 300) throw new Error("ctx");
   if (seen.auth !== "Bearer sk-test") throw new Error("auth");
 });
