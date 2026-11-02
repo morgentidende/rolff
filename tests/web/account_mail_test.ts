@@ -8,5 +8,6 @@ Deno.test("account-mail: link, allow-list, mails", () => {
   if (allowed("a@b.dk", "test", "")) throw new Error("empty allow");
   if (!EMAIL.test("a@b.dk") || EMAIL.test("a b@c.dk")) throw new Error("email");
   const r = recoveryMail({ link: l }); if (!r.html.includes("auth=recovery&amp;th=ab%26c") || !r.text.includes(l)) throw new Error("mail");
-  const c = emailChangeMail({ link: l, current: true, newEmail: "<x>@y.dk" }); if (c.html.includes("<x>")) throw new Error("esc");
+  const c = emailChangeMail({ link: "", current: true, newEmail: "<x>@y.dk" }); if (c.html.includes("<x>") || c.html.includes("href=\"\"")) throw new Error("esc");
+  const n = emailChangeMail({ link: l, current: false, newEmail: "a@b.dk" }); if (!n.text.includes(l)) throw new Error("new");
 });

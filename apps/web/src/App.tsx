@@ -69,7 +69,7 @@ export function App() {
     supabase.auth.verifyOtp({ token_hash: th, type }).then(({ error }) => {
       if (error) { setInviteMsg(da ? "Linket er ugyldigt eller udløbet. Bed om et nyt." : "The link is invalid or expired. Request a new one."); return; }
       if (type === "recovery") setSheet("newpw");
-      else setInviteMsg(da ? "Bekræftet. E-mailen skiftes, når både den gamle og den nye adresse er bekræftet." : "Confirmed. The email changes once both the old and the new address are confirmed.");
+      else setInviteMsg(da ? "Bekræftet. Din e-mail er skiftet." : "Confirmed. Your email has been changed.");
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (session) supabase.rpc("touch_seen").then(() => {}); }, [session]);
@@ -790,7 +790,7 @@ function AccountPanel({ lang }: { lang: Lang }) {
     let r; try { r = await callFn("account-mail", { action: "change_email", password: ep, new_email: ne }); } catch { r = { status: 0, data: null as any }; }
     setBusy(false);
     const err = r.data?.error;
-    setEMsg(r.status === 200 ? [true, da ? `Vi har sendt et bekræftelseslink til både ${email} og ${ne}. E-mailen skiftes først, når begge er bekræftet.` : `We sent a confirmation link to both ${email} and ${ne}. The email changes once both are confirmed.`]
+    setEMsg(r.status === 200 ? [true, da ? `Vi har sendt et bekræftelseslink til ${ne}. E-mailen skiftes, når du trykker på linket. ${email} får besked om ændringen.` : `We sent a confirmation link to ${ne}. The email changes when you open it. ${email} is notified.`]
       : [false, err === "wrong_password" ? (da ? "Adgangskoden er forkert." : "Wrong password.")
         : err === "rate_limited" ? (da ? "For mange forsøg. Prøv igen om en time." : "Too many attempts. Try again in an hour.")
         : err === "email_taken" ? (da ? "Den e-mail kan ikke bruges." : "That email cannot be used.")
@@ -812,7 +812,7 @@ function AccountPanel({ lang }: { lang: Lang }) {
       <h2>{da ? "Skift e-mail" : "Change email"}</h2>
       <label htmlFor="ne">{da ? "Ny e-mail" : "New email"}</label><input id="ne" type="email" required autoComplete="email" value={ne} onChange={(e) => setNe(e.target.value)} />
       <label htmlFor="ep">{da ? "Din adgangskode" : "Your password"}</label><PasswordInput id="ep" lang={lang} value={ep} onChange={setEp} minLength={1} autoComplete="current-password" />
-      <p className="meta">{da ? "Vi sender et link til både den nuværende og den nye adresse. Begge skal bekræftes." : "We send a link to both the current and the new address. Both must be confirmed."}</p>
+      <p className="meta">{da ? "Vi sender et bekræftelseslink til den nye adresse og en besked til den nuværende." : "We send a confirmation link to the new address and a notice to the current one."}</p>
       {eMsg && <p className={eMsg[0] ? "notice" : "err"} role={eMsg[0] ? "status" : "alert"}>{eMsg[1]}</p>}
       <button type="submit" disabled={busy}>{da ? "Skift e-mail" : "Change email"}</button>
     </form>
