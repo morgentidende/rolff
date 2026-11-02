@@ -72,3 +72,5 @@ button.danger{background:#c0392b;color:#fff;border-color:#c0392b}button.danger:d
 #inactivity,#delete{margin:18px 0 6px;font-size:1rem}
 .words{list-style:none;padding:0;margin:8px 0}.words li{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid color-mix(in srgb,currentColor 12%,transparent)}
 .linkish{background:none;border:0;padding:8px 0;min-height:44px;color:var(--accent,#016C72);text-decoration:underline;font:inherit;cursor:pointer;width:auto}
+.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:10px 0}.plan h3{margin:0 0 4px;font-size:18px}.plan .price{margin:0 0 6px}.plan.current{border:2px solid var(--accent)}.badge{display:inline-block;margin:0;padding:4px 10px;border-radius:999px;background:var(--accent);color:var(--accent-text);font-size:14px}
+.attach{margin-top:6px}.att{margin-top:6px;white-space:normal}button.linkish{min-height:0;padding:0;border:0;background:none;color:var(--accent);text-decoration:underline;font-size:inherit}
