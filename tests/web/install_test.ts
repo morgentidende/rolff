@@ -1,0 +1,21 @@
+import { assertEquals } from "jsr:@std/assert@1";
+import { platform, shouldAsk } from "../../apps/web/src/install.ts";
+const IOS = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1";
+const IOS_CHROME = IOS.replace("Version/18.0", "CriOS/130.0");
+const ANDROID = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36";
+Deno.test("install prompt platform", () => {
+  assertEquals(platform(IOS, false, false), "ios");
+  assertEquals(platform(IOS, true, false), "none");
+  assertEquals(platform(IOS_CHROME, false, false), "none");
+  assertEquals(platform(ANDROID, false, true), "prompt");
+  assertEquals(platform(ANDROID, false, false), "none");
+  assertEquals(platform(ANDROID, true, true), "none");
+});
+Deno.test("install prompt memory", () => {
+  const now = 1_800_000_000_000;
+  assertEquals(shouldAsk(null, now), true);
+  assertEquals(shouldAsk("never", now), false);
+  assertEquals(shouldAsk("installed", now), false);
+  assertEquals(shouldAsk(`later:${now - 864e5}`, now), false);
+  assertEquals(shouldAsk(`later:${now - 8 * 864e5}`, now), true);
+});

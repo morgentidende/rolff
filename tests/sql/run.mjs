@@ -497,6 +497,7 @@ await t('Frekvensgrænse: 1..1440 min, på tværs af samtaler, DB-trigger, andre
   await sendIn(lc1, LP, 'Første besked', 'key-pl-0001');
   assert.ok((await lim(lc2, LP)).next_at);
   await rejects(sendIn(lc2, LP, 'Anden besked', 'key-pl-0002'), /person_frequency/);
+  assert.equal((await db.query(`select count(*)::int n from messages where idempotency_key='key-pl-0002'`)).rows[0].n, 0, 'afvist besked må ikke gemmes');
   await sendIn(lc3, LS, 'Fra S', 'key-pl-0003');
   await sendIn(lc1, LQ, 'Q svarer', 'key-pl-0004');
   await db.query(`update messages set created_at = now() - interval '6 minutes' where idempotency_key='key-pl-0001'`);

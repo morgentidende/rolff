@@ -5,6 +5,7 @@ import { callFn, supabase } from "./supabase";
 import { detectLang, strings, type Lang } from "./i18n";
 import { passwordsMatch, pwText, toggleLabel } from "./pw";
 import { cacheClear, cacheGet, cacheSet } from "./localStore";
+import { KEY as A2HS_KEY, platform as a2hsPlatform, shouldAsk } from "./install";
 import { exportFileName, makeZip, myDataFiles, findHits, toCsv, type Row } from "./exportUtil";
 
 type Other = { user_id: string; email: string; alias: string | null };
@@ -97,6 +98,7 @@ export function App() {
       </header>}
       <div className="notice" role="note">{t.testNotice}</div>
       {inviteMsg && <div className="notice" role="status">{inviteMsg}</div>}
+      {session && !conv && <InstallPrompt lang={lang} />}
       {!session ? <Auth lang={lang} peek={inviteToken ? peek : undefined} />
         : conv ? <Chat lang={lang} conv={conv} back={() => setConv(null)} menu={menu} openPlans={() => setSheet("plans")} planKey={sheet} />
         : <Home key={homeKey} lang={lang} open={setConv} invite={() => setSheet("invite")} />}
@@ -1035,4 +1037,32 @@ function PersonSettings({ lang, sender, label, openWords }: { lang: Lang; sender
     <div className="row end"><button type="submit" disabled={busy}>{busy ? (da ? "Gemmer…" : "Saving…") : (da ? "Gem" : "Save")}</button></div>
     {msg && <p className={msg.ok ? "notice" : "err"} role={msg.ok ? "status" : "alert"}>{msg.text}</p>}
   </form>);
+}
+
+// ---------- Add to home screen (PWA). No service worker → nothing cached. ----------
+let deferredPrompt: any = null; const a2hsListeners = new Set<() => void>();
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); deferredPrompt = e; a2hsListeners.forEach((f) => f()); });
+  window.addEventListener("appinstalled", () => { localStorage.setItem(A2HS_KEY, "installed"); deferredPrompt = null; a2hsListeners.forEach((f) => f()); });
+}
+function InstallPrompt({ lang }: { lang: Lang }) {
+  const da = lang === "da"; const [, re] = useState(0); const [hide, setHide] = useState(false);
+  useEffect(() => { const f = () => re((x) => x + 1); a2hsListeners.add(f); return () => { a2hsListeners.delete(f); }; }, []);
+  const standalone = window.matchMedia?.("(display-mode: standalone)").matches || (navigator as any).standalone === true;
+  const kind = a2hsPlatform(navigator.userAgent, standalone, !!deferredPrompt);
+  if (hide || kind === "none" || !shouldAsk(localStorage.getItem(A2HS_KEY), Date.now())) return null;
+  const later = () => { localStorage.setItem(A2HS_KEY, `later:${Date.now()}`); setHide(true); };
+  const never = () => { localStorage.setItem(A2HS_KEY, "never"); setHide(true); };
+  const install = async () => { const p = deferredPrompt; if (!p) return; p.prompt(); const r = await p.userChoice.catch(() => null); deferredPrompt = null; if (r?.outcome === "accepted") localStorage.setItem(A2HS_KEY, "installed"); setHide(true); };
+  return (<section className="card a2hs" aria-labelledby="a2hs-h">
+    <div className="row" style={{ alignItems: "center", gap: 12 }}><img src="./icons/rolff-192.png" alt="" width={48} height={48} style={{ borderRadius: 12 }} />
+      <h2 id="a2hs-h" style={{ margin: 0, fontSize: 18 }}>{da ? "Vil du tilføje Rolff som ikon på hjemmeskærmen?" : "Add Rolff to your home screen?"}</h2></div>
+    {kind === "ios" ? <p>{da ? "Tryk på Del-knappen (firkant med pil op) nederst i Safari, og vælg “Føj til hjemmeskærm”." : "Tap the Share button (square with arrow) in Safari, then “Add to Home Screen”."}</p>
+      : <p>{da ? "Så åbner Rolff som en app – uden adresselinje." : "Rolff then opens like an app."}</p>}
+    <div className="row end">
+      <button type="button" className="ghost" onClick={never}>{da ? "Spørg ikke igen" : "Don't ask again"}</button>
+      <button type="button" className="ghost" onClick={later}>{da ? "Ikke nu" : "Not now"}</button>
+      {kind === "prompt" && <button type="button" onClick={install}>{da ? "Installér" : "Install"}</button>}
+    </div>
+  </section>);
 }
