@@ -91,3 +91,6 @@ I alt groft 6–9 uger. Usikkert estimat.
 5. Push: FCM (Android) + APNs (iOS) via Supabase Edge Function; indholdsfri notifikation ("Du har nye beskeder i Rolff").
 6. Butikskrav: brugsvilkår + accept, kontaktinfo i appen, beslutning om rapportering, privatlivspolitik-URL, App Privacy/Data safety.
 7. Konti (betalt – kræver godkendelse), intern test (TestFlight / lukket test i Play), indsendelse.
+
+## Tillæg 2026-11-02: login og visningsnavn
+Flutter-klienten bruger samme model: login med e-mail+adgangskode (supabase_flutter), visningsnavn via `get_my_public_name`/`set_my_public_name`, hint ved første login, og samme tekst ved oprettelse/invitation om at modparten ser e-mailen, indtil der vælges kaldenavn. Rapportér (⋮ i samtale) og kontakt i FAQ skal med (Apple 1.2 / Google UGC). Glemt adgangskode og e-mail-ændring skal bygges før store-indsendelse (Apple 5.1.1).

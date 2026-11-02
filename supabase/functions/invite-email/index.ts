@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
   const d = r.data[0];
   const link = `${base}#invite=${d.token}`;
   const email = String(i.email).trim().toLowerCase();
-  const sentInvitee = await sendMail(email, inviteMail({ inviterEmail: d.inviter_email, link, expires: d.expires_at }));
+  const sentInvitee = await sendMail(email, inviteMail({ inviterEmail: (await a.admin.rpc("public_label_of", { uid: a.uid })).data ?? d.inviter_email, link, expires: d.expires_at }));
   const sentCopy = sentInvitee ? await sendMail(d.inviter_email, copyMail({ inviteeEmail: email, expires: d.expires_at })) : false;
   if (!sentInvitee) await a.user.rpc("revoke_invitation", { inv: d.invitation_id });
   return json({ data: { conversation_id: d.conversation_id, sent: sentInvitee, copy_sent: sentCopy } }, sentInvitee ? 200 : 502);
