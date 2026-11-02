@@ -2,7 +2,7 @@ export type Lang = "da" | "en";
 const da = {
   tagline: "Rolig, saglig kommunikation mellem mennesker i konflikt.",
   intro: "Til skilsmisser, arvesager, ekskærester, venskaber, retssager og andre situationer, hvor det er svært at tale sammen. Rolff tjekker hver besked før afsendelse og stopper sårende formuleringer. Du bestemmer selv, hvornår du modtager nye beskeder.",
-  ai: "AI-behandling: Din besked og op til 10 nyere beskeder sendes til en AI-tjeneste (testmiljø: Google Gemini, gratis niveau – kun opdigtede testbeskeder!).",
+  ai: "AI-behandling: Din besked og korte uddrag af op til 5 nyere beskeder sendes til OpenAI (USA/global behandling, ikke EU; ingen Zero Data Retention endnu; gemning slået fra).",
   aiAccept: "Jeg forstår og accepterer", email: "E-mail", password: "Adgangskode", name: "Visningsnavn",
   login: "Log ind", signup: "Opret konto", logout: "Log ud", authError: "Login mislykkedes. Tjek oplysningerne og prøv igen.",
   conversations: "Samtaler", newConv: "Ny samtale", title: "Titel (valgfri)", create: "Opret", join: "Tilslut med invitationskode", code: "Invitationskode",
@@ -15,13 +15,13 @@ const da = {
   days: ["Man", "Tir", "Ons", "Tor", "Fre", "Lør", "Søn"], from: "Fra", to: "Til", back: "Tilbage", empty: "Ingen beskeder endnu.", you: "Dig",
   settings: "Indstillinger", lang: "Sprog", theme: "Tema", system: "System", light: "Lys", dark: "Mørk", members: "Medlemmer",
   testNotice: "TESTVERSION – skriv ikke rigtige eller følsomme oplysninger.",
-  demoWarn: "Testversion: Skriv ikke rigtige eller følsomme oplysninger. Beskeder tjekkes af en ekstern AI-tjeneste (Google Gemini, gratis niveau, hvor Google kan bruge data). Ingen garanti for drift. Data kan blive slettet.",
+  demoWarn: "Testversion: Skriv ikke rigtige eller følsomme oplysninger. Beskeder tjekkes i testen af OpenAI (gpt-5.4-nano; behandling i USA/globalt, ikke EU; ingen Zero Data Retention endnu; gemning slået fra med store:false). Kun korte uddrag sendes. Ingen garanti for drift. Data kan blive slettet.",
   demoAccept: "Jeg forstår, at det er en testversion",
 };
 const en: typeof da = {
   tagline: "Calm, factual communication between people in conflict.",
   intro: "For divorces, inheritance disputes, ex-partners, friendships, lawsuits and other situations where talking is hard. Rolff checks every message before it is sent and stops hurtful wording. You decide when new messages reach you.",
-  ai: "AI processing: Your message and up to 10 recent messages are sent to an AI service (test environment: Google Gemini free tier – synthetic test messages only!).",
+  ai: "AI processing: Your message and short excerpts of up to 5 recent messages are sent to OpenAI (US/global processing, not EU; no Zero Data Retention yet; storage turned off).",
   aiAccept: "I understand and accept", email: "Email", password: "Password", name: "Display name",
   login: "Log in", signup: "Create account", logout: "Log out", authError: "Sign-in failed. Check your details and try again.",
   conversations: "Conversations", newConv: "New conversation", title: "Title (optional)", create: "Create", join: "Join with invitation code", code: "Invitation code",
@@ -34,7 +34,7 @@ const en: typeof da = {
   days: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], from: "From", to: "To", back: "Back", empty: "No messages yet.", you: "You",
   settings: "Settings", lang: "Language", theme: "Theme", system: "System", light: "Light", dark: "Dark", members: "Members",
   testNotice: "TEST VERSION – do not enter real or sensitive information.",
-  demoWarn: "Test version: Do not enter real or sensitive information. Messages are checked by an external AI service (Google Gemini free tier, where Google may use the data). No uptime guarantee. Data may be deleted.",
+  demoWarn: "Test version: Do not enter real or sensitive information. In the test, messages are checked by OpenAI (gpt-5.4-nano; processed in the US/globally, not the EU; no Zero Data Retention yet; storage turned off with store:false). Only short excerpts are sent. No uptime guarantee. Data may be deleted.",
   demoAccept: "I understand this is a test version",
 };
 export const strings = { da, en };

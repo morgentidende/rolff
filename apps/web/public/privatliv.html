@@ -22,7 +22,7 @@
 <p>Vi har ingen læsekvitteringer, online-status, skriveindikator eller profilbilleder. Logs indeholder ikke beskedtekst.</p>
 
 <h2>3. AI-tonetjek</h2>
-<p>Før en besked sendes, sendes den – med højst 10 tidligere beskeder som kontekst – til en AI-udbyder, som vurderer tonen. I testperioden er det Google Gemini (gratis niveau, hvor Google kan bruge data – derfor kun opdigtede beskeder). Senere planlægges OpenAI med EU-dataopbevaring og <code>store:false</code>; aftale om nul-dataopbevaring (ZDR) er <em>under godkendelse</em>, se <a href="https://developers.openai.com/api/docs/guides/your-data">OpenAI: your data</a>. Tonetjekket er ikke en juridisk vurdering.</p>
+<p>Før en besked sendes, sendes den – med korte uddrag af højst 5 tidligere beskeder som kontekst – til en AI-udbyder, som vurderer tonen. I testperioden er det OpenAI (model gpt-5.4-nano) via det globale endpoint – behandling i USA/globalt, ikke EU. <code>store:false</code> er slået til; aftale om nul-dataopbevaring (ZDR) findes <em>endnu ikke</em>. Kun beskeden og korte uddrag (højst 5 tidligere beskeder, 300 tegn hver) sendes. Google Gemini kan bruges som reserve i testen, se <a href="https://developers.openai.com/api/docs/guides/your-data">OpenAI: your data</a>. Tonetjekket er ikke en juridisk vurdering.</p>
 
 <h2>4. Modpartens kopi (bevismodellen)</h2>
 <p>Rolff er lavet, så samtaler kan bruges som dokumentation. Det, du har sendt, bliver hos de andre i samtalen – også hvis du sletter din konto (afsender vises da som “Slettet bruger”). Du har ret til sletning af <em>dine</em> data, men ikke en ret til at kræve modpartens kopi slettet.</p>
@@ -38,7 +38,7 @@
 <ul>
 <li>Supabase (database, login, funktioner) – Frankfurt, EU.</li>
 <li>Hostinger (web-hosting og afsendelse af mail).</li>
-<li>Google Gemini (AI-tonetjek, test) / OpenAI (planlagt).</li>
+<li>OpenAI (AI-tonetjek, USA/global) / Google Gemini (reserve i test).</li>
 <li>Firebase (push-notifikationer – fremtidig mobilapp).</li>
 </ul>
 
@@ -69,10 +69,10 @@
 <li><strong>Reports:</strong> the content (category, your text and the messages <em>you</em> tick) is only e-mailed to Rolff's developer with your nickname, user id and conversation id. Rolff stores only category, time and number of attached messages – not the text. No 24/7 staff, no guarantee of reply or action. Emergency: call 112.</li>
 <li><strong>Metadata:</strong> timestamps, tone-check outcome codes (not the text), last seen.</li>
 </ul>
-<h2>3. AI tone check</h2><p>Before sending, the message plus at most 10 earlier messages is sent to an AI provider. During testing: Google Gemini (free tier; Google may use data – made-up messages only). Planned: OpenAI with EU data residency and <code>store:false</code>; zero data retention is <em>pending approval</em> (<a href="https://developers.openai.com/api/docs/guides/your-data">OpenAI: your data</a>).</p>
+<h2>3. AI tone check</h2><p>Before sending, the message plus short excerpts of at most 5 earlier messages is sent to an AI provider. During testing: OpenAI (gpt-5.4-nano) via the global endpoint – processed in the US/globally, not the EU. <code>store:false</code> is on; there is <em>no</em> zero data retention agreement yet. Only the message and short excerpts (at most 5 earlier messages, 300 characters each) are sent. Google Gemini may be used as a test fallback (<a href="https://developers.openai.com/api/docs/guides/your-data">OpenAI: your data</a>).</p>
 <h2>4. The other party's copy</h2><p>What you sent stays with the others in the conversation, also if you delete your account (shown as “Deleted user”). You may delete <em>your</em> data, but cannot demand deletion of the other party's copy.</p>
 <h2>5. Retention</h2><p>1 year (default), 5 years or unlimited. Cloud sync is optional and off by default (see Danish section for details). Inactive accounts are deleted after 90 days by default, with a warning 14 days before.</p>
-<h2>6. Processors</h2><p>Supabase (Frankfurt, EU), Hostinger, Google Gemini / OpenAI (planned), Firebase (future push).</p>
+<h2>6. Processors</h2><p>Supabase (Frankfurt, EU), Hostinger, OpenAI (US/global) / Google Gemini (test fallback), Firebase (future push).</p>
 <h2>7. Your rights</h2><p>Download my data and delete account under ⋮ → Privacy and deletion; change display name, e-mail and password in the app. You may complain to the Danish Data Protection Agency.</p>
 <h2>8. Children</h2><p>Users under 13 need consent from a parent/guardian.</p>
 <h2>9. Security</h2><p>HTTPS in transit. Rolff does <em>not</em> offer end-to-end encryption. A local browser copy is encrypted with a key that stays on the device.</p>
