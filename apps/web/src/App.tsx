@@ -211,7 +211,7 @@ function PrivacyPanel({ lang }: { lang: Lang }) {
     if (r.status !== 200) { setState(r.status === 403 ? "wrong" : "err"); return; }
     try { localStorage.clear(); sessionStorage.clear(); if ("caches" in window) for (const k of await caches.keys()) await caches.delete(k);
       const dbs = (indexedDB as any).databases ? await (indexedDB as any).databases() : []; for (const d of dbs) if (d.name) indexedDB.deleteDatabase(d.name); } catch { /* best effort */ }
-    await supabase.auth.signOut({ scope: "local" }); location.replace(location.pathname + "?deleted=1");
+    await cacheClear(); await supabase.auth.signOut({ scope: "local" }); location.replace(location.pathname + "?deleted=1");
   };
   return (
     <div>
