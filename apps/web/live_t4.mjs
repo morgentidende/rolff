@@ -1,0 +1,13 @@
+import { createClient } from "@supabase/supabase-js"; import fs from "node:fs"; import { createHash } from "node:crypto";
+const U = "https://dubwlbqazbllnwpsqrjv.supabase.co", sk = fs.readFileSync("/tmp/sk","utf8").trim(), pk = fs.readFileSync("/tmp/pk","utf8").trim();
+const admin = createClient(U, sk, { auth: { persistSession: false } }); const uid = fs.readFileSync("/tmp/rolff_live_uid","utf8").trim();
+const cur = (await admin.auth.admin.getUserById(uid)).data.user.email, nx = cur.replace("+ra", "+rn");
+const gn = await admin.auth.admin.generateLink({ type: "email_change_new", email: cur, newEmail: nx });
+const thn = createHash("sha224").update(nx + gn.data.properties.email_otp).digest("hex");
+const gc = await admin.auth.admin.generateLink({ type: "email_change_current", email: cur, newEmail: nx });
+const c = createClient(U, pk, { auth: { persistSession: false } });
+const st = async () => (await admin.auth.admin.getUserById(uid)).data.user.email.includes("+rn") ? "CHANGED" : "unchanged";
+const v1 = await c.auth.verifyOtp({ token_hash: gc.data.properties.hashed_token, type: "email_change" });
+console.log("cur", v1.error?.message ?? "ok", await st());
+const v2 = await createClient(U, pk, { auth: { persistSession: false } }).auth.verifyOtp({ token_hash: thn, type: "email_change" });
+console.log("new", v2.error?.message ?? "ok", await st());

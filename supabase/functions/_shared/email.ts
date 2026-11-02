@@ -123,12 +123,18 @@ ${btn(p.link, "Vælg ny adgangskode")}
   return { subject, html, text };
 }
 export function emailChangeMail(p: { link: string; current: boolean; newEmail: string }) {
-  const subject = "Bekræft ændring af e-mail i Rolff";
-  const what = p.current
-    ? `Der er bedt om at ændre e-mailen på din Rolff-konto til <strong>${esc(p.newEmail)}</strong>. Bekræft her fra din nuværende adresse. Ændringen sker først, når både den gamle og den nye adresse er bekræftet.`
-    : `Bekræft, at denne adresse skal bruges til din Rolff-konto. Ændringen sker først, når både den gamle og den nye adresse er bekræftet.`;
+  if (p.current) {
+    const subject = "Din e-mail i Rolff er ved at blive ændret";
+    const what = `Der er bedt om at ændre e-mailen på din Rolff-konto til <strong>${esc(p.newEmail)}</strong> (med din adgangskode). Ændringen sker, når den nye adresse bekræftes.`;
+    const html = shell(subject, `<p style="margin:0 0 14px">Hej,</p><p style="margin:0 0 14px">${what}</p>
+<p style="margin:0;font-size:14px">Var det ikke dig? Så log ind og skift din adgangskode med det samme (⋮ → Konto), eller brug "Glemt adgangskode".</p>`);
+    const text = `Hej,\n\n${what.replace(/<[^>]+>/g, "")}\n\nVar det ikke dig? Så log ind og skift din adgangskode med det samme (⋮ → Konto), eller brug "Glemt adgangskode".`;
+    return { subject, html, text };
+  }
+  const subject = "Bekræft din nye e-mail i Rolff";
+  const what = "Bekræft, at denne adresse skal bruges til din Rolff-konto. Linket virker én gang og udløber efter en time.";
   const html = shell(subject, `<p style="margin:0 0 14px">Hej,</p><p style="margin:0 0 22px">${what}</p>${btn(p.link, "Bekræft")}
-<p style="margin:22px 0 0;font-size:13px;color:#7a807e">Har du ikke bedt om det, så ignorer mailen og skift gerne din adgangskode.</p>`);
-  const text = `Hej,\n\n${what.replace(/<[^>]+>/g, "")}\n${p.link}\n\nHar du ikke bedt om det, så ignorer mailen og skift gerne din adgangskode.`;
+<p style="margin:22px 0 0;font-size:13px;color:#7a807e">Har du ikke bedt om det, så ignorer mailen.</p>`);
+  const text = `Hej,\n\n${what}\n${p.link}\n\nHar du ikke bedt om det, så ignorer mailen.`;
   return { subject, html, text };
 }

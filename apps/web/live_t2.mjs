@@ -1,0 +1,17 @@
+import { createClient } from "@supabase/supabase-js"; import fs from "node:fs"; import { randomBytes } from "node:crypto";
+const U = "https://dubwlbqazbllnwpsqrjv.supabase.co", pk = fs.readFileSync("/tmp/pk","utf8").trim(), sk = fs.readFileSync("/tmp/sk","utf8").trim();
+const admin = createClient(U, sk, { auth: { persistSession: false } }); const uid = fs.readFileSync("/tmp/rolff_live_uid","utf8").trim();
+const out = {};
+const c = createClient(U, pk, { auth: { persistSession: false } });
+const r = await c.auth.verifyOtp({ token_hash: process.argv[2], type: "recovery" }); out.recovery_verify = r.error?.message ?? "ok";
+const npw = randomBytes(12).toString("hex");
+out.update = (await c.auth.updateUser({ password: npw })).error?.message ?? "ok";
+const me = (await admin.auth.admin.getUserById(uid)).data.user.email;
+out.login_new = (await createClient(U, pk, { auth: { persistSession: false } }).auth.signInWithPassword({ email: me, password: npw })).error?.message ?? "ok";
+const c1 = createClient(U, pk, { auth: { persistSession: false } });
+out.ec_current = (await c1.auth.verifyOtp({ token_hash: process.argv[3], type: "email_change" })).error?.message ?? "ok";
+out.after1 = (await admin.auth.admin.getUserById(uid)).data.user.email.includes("+rn") ? "changed" : "unchanged";
+out.ec_new = (await c1.auth.verifyOtp({ token_hash: process.argv[4], type: "email_change" })).error?.message ?? "ok";
+out.after2 = (await admin.auth.admin.getUserById(uid)).data.user.email.includes("+rn") ? "changed" : "unchanged";
+out.reuse = (await c.auth.verifyOtp({ token_hash: process.argv[2], type: "recovery" })).error ? "rejected" : "ACCEPTED";
+console.log(JSON.stringify(out));

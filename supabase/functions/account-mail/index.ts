@@ -1,10 +1,13 @@
 // Forgot password + change e-mail. Mails go through our own PHP mailer (not Supabase SMTP).
 // POST {action:"recover", email}                 – no login; always answers {ok:true} (no account enumeration)
 // POST {action:"change_email", password, new_email} – logged in; re-auth with password, then mails
-//      a confirmation link to BOTH the current and the new address (both must be confirmed).
+//      a confirmation link to the NEW address (proves ownership) and a notice without link to the
+//      current address. The account owner is proven by the password. (Admin-generated "current" links
+//      were found to switch the e-mail on their own, without the new address confirming – so not used.)
 // Links point to APP_URL?auth=<type>&th=<token_hash>; the app calls verifyOtp. Rate limited per address.
 // Outside APP_ENV=production only addresses matching TEST_MAIL_ALLOW get mail. Logs never contain addresses.
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { crypto as stdCrypto } from "jsr:@std/crypto@1";
 import { authed, cors, json } from "../_shared/http.ts";
 import { recoveryMail, emailChangeMail, sendMail } from "../_shared/email.ts";
 import { allowed, authLink, EMAIL } from "../_shared/authmail.ts";
@@ -39,12 +42,13 @@ Deno.serve(async (req) => {
     if (check.error || check.data.user?.id !== u.uid) return json({ error: "wrong_password" }, 403);
     if (!(await u.admin.rpc("auth_mail_allow", { p_hash: await sha(cur), p_kind: "email_change" })).data) return json({ error: "rate_limited" }, 429);
     if (!allowed(cur, env, allow) || !allowed(next, env, allow)) return json({ error: "test_mail_blocked" }, 403);
-    const gc = await u.admin.auth.admin.generateLink({ type: "email_change_current", email: cur, newEmail: next });
     const gn = await u.admin.auth.admin.generateLink({ type: "email_change_new", email: cur, newEmail: next });
-    const hc = gc.data?.properties?.hashed_token, hn = gn.data?.properties?.hashed_token;
-    if (!hc || !hn) return json({ error: /already|exists|registered/i.test(gn.error?.message ?? gc.error?.message ?? "") ? "email_taken" : "failed" }, 400);
-    const m1 = await sendMail(cur, emailChangeMail({ link: authLink(app, "email_change", hc), current: true, newEmail: next }));
-    const m2 = await sendMail(next, emailChangeMail({ link: authLink(app, "email_change", hn), current: false, newEmail: next }));
+    const otp = gn.data?.properties?.email_otp;
+    if (!otp) return json({ error: /already|exists|registered/i.test(gn.error?.message ?? "") ? "email_taken" : "failed" }, 400);
+    // GoTrue stores the new-address token as sha224(new_email + otp); verifyOtp(token_hash) matches on that.
+    const th = [...new Uint8Array(await stdCrypto.subtle.digest("SHA-224", new TextEncoder().encode(next + otp)))].map((b) => b.toString(16).padStart(2, "0")).join("");
+    const m2 = await sendMail(next, emailChangeMail({ link: authLink(app, "email_change", th), current: false, newEmail: next }));
+    const m1 = await sendMail(cur, emailChangeMail({ link: "", current: true, newEmail: next }));
     if (!m1 || !m2) { console.log(JSON.stringify({ evt: "email_change_mail_failed" })); return json({ error: "mail_failed" }, 502); }
     return json({ data: { sent: true } });
   }
