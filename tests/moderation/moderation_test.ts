@@ -22,3 +22,26 @@ Deno.test("timeoutFromEnv clamps and defaults", async () => {
   if (timeoutFromEnv(e("99999")) !== 30000) throw new Error("max");
   if (timeoutFromEnv(e("abc")) !== 15000) throw new Error("nan");
 });
+
+Deno.test("OpenAI: EU base-url som standard, store:false, højst 10 kontekstbeskeder (mock, intet netværkskald)", async () => {
+  const m = await import("../../supabase/functions/_shared/moderation.ts");
+  const env = (o: Record<string, string>) => ({ get: (k: string) => o[k] });
+  const p = m.providerFromEnv(env({ MODERATION_PROVIDER: "openai", MODERATION_TIER: "paid", APP_ENV: "test", OPENAI_API_KEY: "sk-test" })) as any;
+  if (p.baseUrl !== "https://eu.api.openai.com/v1" || p.model !== "gpt-5.4-nano") throw new Error("defaults");
+  const g = m.providerFromEnv(env({ MODERATION_PROVIDER: "openai", MODERATION_TIER: "paid", APP_ENV: "test", OPENAI_API_KEY: "k", OPENAI_BASE_URL: "https://api.openai.com/v1" })) as any;
+  if (g.baseUrl !== "https://api.openai.com/v1") throw new Error("configurable");
+  let threw = false; try { m.providerFromEnv(env({ MODERATION_PROVIDER: "openai", MODERATION_TIER: "paid", OPENAI_API_KEY: "k", OPENAI_BASE_URL: "https://evil.example/v1" })); } catch { threw = true; }
+  if (!threw) throw new Error("base url allowlist");
+  const orig = globalThis.fetch; let seen: any = null;
+  globalThis.fetch = (async (url: string, init: any) => { seen = { url, body: JSON.parse(init.body), auth: init.headers.authorization };
+    return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ decision: "allow", reason_code: "none", spans: [] }) } }] }), { status: 200 }); }) as any;
+  try {
+    const ctx = Array.from({ length: 15 }, (_, i) => ({ mine: i % 2 === 0, body: `ctx${i}` }));
+    await p.moderate("hej", ctx, new AbortController().signal);
+  } finally { globalThis.fetch = orig; }
+  if (seen.url !== "https://eu.api.openai.com/v1/chat/completions") throw new Error("url " + seen.url);
+  if (seen.body.store !== false || seen.body.model !== "gpt-5.4-nano") throw new Error("store/model");
+  const payload = JSON.parse(seen.body.messages[1].content);
+  if (payload.context.length !== 10 || payload.context[0].text !== "ctx5") throw new Error("ctx");
+  if (seen.auth !== "Bearer sk-test") throw new Error("auth");
+});

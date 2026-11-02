@@ -118,9 +118,10 @@ export class GeminiProvider implements ModerationProvider {
 
 export class OpenAIProvider implements ModerationProvider {
   name = "openai";
-  constructor(private apiKey: string, public model: string) {}
+  /** baseUrl: OPENAI_BASE_URL, default EU data residency endpoint. The key must belong to an EU project. */
+  constructor(private apiKey: string, public model: string, public baseUrl = "https://eu.api.openai.com/v1") {}
   async moderate(msg: string, ctx: ContextMsg[], signal: AbortSignal) {
-    const r = await fetch("https://api.openai.com/v1/chat/completions", {
+    const r = await fetch(`${this.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
       method: "POST", signal,
       headers: { "content-type": "application/json", authorization: `Bearer ${this.apiKey}` },
       body: JSON.stringify({
@@ -152,7 +153,9 @@ export function providerFromEnv(env: ModerationEnv): ModerationProvider {
   }
   if (p === "openai") {
     const k = env.get("OPENAI_API_KEY"); if (!k) throw new ModerationTechnicalError("missing_key");
-    return new OpenAIProvider(k, env.get("MODERATION_MODEL") ?? "gpt-5.4-mini");
+    const base = env.get("OPENAI_BASE_URL") ?? "https://eu.api.openai.com/v1";
+    if (!/^https:\/\/([a-z0-9-]+\.)*openai\.com\/v1\/?$/.test(base)) throw new ModerationTechnicalError("bad_base_url");
+    return new OpenAIProvider(k, env.get("MODERATION_MODEL") ?? "gpt-5.4-nano", base);
   }
   throw new ModerationTechnicalError("unknown_provider");
 }
