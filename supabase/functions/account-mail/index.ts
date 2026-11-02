@@ -11,6 +11,7 @@ import { crypto as stdCrypto } from "jsr:@std/crypto@1";
 import { authed, cors, json } from "../_shared/http.ts";
 import { recoveryMail, emailChangeMail, sendMail } from "../_shared/email.ts";
 import { allowed, authLink, EMAIL } from "../_shared/authmail.ts";
+import { appUrl } from "../_shared/links.ts";
 const sha = async (s: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s.trim().toLowerCase())))].map((b) => b.toString(16).padStart(2, "0")).join("");
 const admin = () => createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}").default, { auth: { persistSession: false } });
 
@@ -18,7 +19,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   let i: any; try { i = await req.json(); } catch { return json({ error: "bad_request" }, 400); }
   // DEMO_OPEN_MAIL=1: hosted demo may mail any address (rate limits still apply).
-  const env = Deno.env.get("DEMO_OPEN_MAIL") === "1" ? "production" : (Deno.env.get("APP_ENV") ?? "test"), allow = Deno.env.get("TEST_MAIL_ALLOW") ?? "", app = Deno.env.get("APP_URL") ?? "";
+  const env = Deno.env.get("DEMO_OPEN_MAIL") === "1" ? "production" : (Deno.env.get("APP_ENV") ?? "test"), allow = Deno.env.get("TEST_MAIL_ALLOW") ?? "", app = appUrl();
   if (i?.action === "recover") {
     const email = String(i?.email ?? "").trim().toLowerCase();
     if (!EMAIL.test(email) || email.length > 254) return json({ error: "bad_input" }, 400);

@@ -13,3 +13,8 @@
 - Flere modtagere: den strengeste grænse gælder; UI siger det.
 - Privatliv: RLS: kun modtageren kan læse sine rækker; skrivning kun via `set_person_limit` (kræver fælles aktiv samtale). Afsenderen får kun den bindende grænse via `get_my_send_limits` og fejlsvar.
 - Håndhævelse og fejlrækkefølge i `send-message` / `send-attachment`: auth → idempotens → **frekvens** (`frequency_limit` + `retry_after_s`) → **længde** (`length_limit` + `limit`, `count`) → rolle/rate limit (`prepare_send`) → blokering → regler/blokerede ord → AI. Grænserne tjekkes før rate limit og AI, så de koster intet og ikke tæller som forsøg. Læsere får stadig `read_only`. DB-trigger `messages_person_freq` er backstop for frekvens.
+
+## Links i mails og invitationer
+- Alle links bygges ét sted: `supabase/functions/_shared/links.ts` (`appUrl()`, `inviteLink()`), fra secret `APP_URL`. Standard (også hvis `APP_URL` mangler eller er ugyldig) er webappen https://yellowgreen-lobster-916967.hostingersite.com/.
+- Bruges af invitationsmails (`#invite=<token>`), godkendelsesmails, kontomails (`?auth=…&th=…`), inaktivitetsmail og logoet i mails. Webappen har ingen egne delings-links; FAQ indeholder ingen links.
+- Senere app-deep-links: sæt `APP_URL` til et https universal-link-domæne. Der skal ikke ændres kode.

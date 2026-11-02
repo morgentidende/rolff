@@ -1,8 +1,9 @@
+import { appUrl } from "./links.ts";
 // Invitation e-mail templates. Never include message content.
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 const fmt = (d: string) => new Date(d).toLocaleString("da-DK", { timeZone: "Europe/Copenhagen", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
 
-const logoUrl = () => `${(Deno.env.get("APP_URL") ?? "").replace(/\/?$/, "/")}icons/rolff-128.png`;
+const logoUrl = () => `${appUrl()}icons/rolff-128.png`;
 function shell(title: string, inner: string) {
   return `<!doctype html><html lang="da"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${esc(title)}</title></head>
 <body style="margin:0;padding:0;background:#f3f1ec;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#2b2f2e">

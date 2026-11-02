@@ -4,6 +4,7 @@
 // When the last member approves, a one-time link is minted and mailed to the participant. No message content in any mail.
 import { authed, cors, json } from "../_shared/http.ts";
 import { approvalMail, copyMail, inviteMail, memberInviteMail, sendMail } from "../_shared/email.ts";
+import { appUrl, inviteLink } from "../_shared/links.ts";
 
 const errCode = (m: string) => /plan_required/.test(m) ? "plan_required" : /rate_limited/.test(m) ? "rate_limited" : /bad_email|bad_role/.test(m) ? "bad_input" : /forbidden/.test(m) ? "forbidden" : /stale/.test(m) ? "stale" : /not_found/.test(m) ? "not_found" : "invite_failed";
 
@@ -11,7 +12,7 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   const a = await authed(req); if (a instanceof Response) return a;
   let i: any; try { i = await req.json(); } catch { return json({ error: "bad_request" }, 400); }
-  const base = Deno.env.get("APP_URL") ?? "";
+  const base = appUrl();
   const action = String(i?.action ?? "conversation");
 
   const notifyApprovers = async (inv: string, role: string) => {
@@ -21,7 +22,7 @@ Deno.serve(async (req) => {
   };
   const mailParticipant = async (d: { token: string; invitee_email: string; inviter_email: string }, role: string) => {
     const exp = new Date(Date.now() + 72 * 3600e3).toISOString();
-    return sendMail(d.invitee_email, memberInviteMail({ inviterEmail: d.inviter_email, link: `${base}#invite=${d.token}`, expires: exp, role }));
+    return sendMail(d.invitee_email, memberInviteMail({ inviterEmail: d.inviter_email, link: inviteLink(d.token), expires: exp, role }));
   };
 
   if (action === "member") {
@@ -55,7 +56,7 @@ Deno.serve(async (req) => {
   const r = await a.user.rpc("create_email_invitation", { p_email: String(i?.email ?? "") });
   if (r.error) return json({ error: errCode(r.error.message) }, 400);
   const d = r.data[0];
-  const link = `${base}#invite=${d.token}`;
+  const link = inviteLink(d.token);
   const email = String(i.email).trim().toLowerCase();
   const sentInvitee = await sendMail(email, inviteMail({ inviterEmail: (await a.admin.rpc("public_label_of", { uid: a.uid })).data ?? d.inviter_email, link, expires: d.expires_at }));
   const sentCopy = sentInvitee ? await sendMail(d.inviter_email, copyMail({ inviteeEmail: email, expires: d.expires_at })) : false;
