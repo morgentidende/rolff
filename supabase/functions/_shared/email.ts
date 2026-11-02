@@ -98,3 +98,16 @@ export function inactivityMail(p: { link: string }) {
   const text = `Hej,\n\nDu har ikke logget ind i Rolff i et stykke tid. Om 14 dage sletter vi din konto og dine egne data automatisk. Log ind for at beholde den: ${p.link}\nDu kan slå automatisk sletning fra under ⋮ → Privatliv.\n\nDet, du har skrevet til andre, bliver hos dem – også efter sletning.`;
   return { subject, html, text };
 }
+
+export const REPORT_LABELS: Record<string, string> = { harassment: "Chikane/trusler", inappropriate: "Upassende indhold", child_safety: "Børns sikkerhed", other: "Andet" };
+export function reportMail(p: { category: string; body: string; senderName: string; senderId: string; conversationId: string; messages: { sender_name: string; body: string; created_at: string }[] }) {
+  const cat = REPORT_LABELS[p.category] ?? "Andet";
+  const subject = `Rolff rapport: ${cat}`;
+  const msgs = p.messages.map((m) => `<div style="margin:0 0 10px;padding:10px 14px;background:#f6f4ef;border-radius:10px"><div style="font-size:12px;color:#7a807e">${esc(m.sender_name)} · ${esc(String(m.created_at))}</div><div style="white-space:pre-wrap;word-break:break-word">${esc(m.body)}</div></div>`).join("");
+  const html = shell(subject, `<p style="margin:0 0 6px;font-size:13px;color:#7a807e">Kategori</p><p style="margin:0 0 16px"><strong>${esc(cat)}</strong></p>
+<p style="margin:0 0 6px;font-size:13px;color:#7a807e">Fra (kaldenavn / bruger-id) · samtale</p><p style="margin:0 0 16px">${esc(p.senderName)} · <code>${esc(p.senderId)}</code> · <code>${esc(p.conversationId)}</code></p>
+<p style="margin:0 0 6px;font-size:13px;color:#7a807e">Beskrivelse</p><div style="margin:0 0 16px;padding:14px 16px;background:#f6f4ef;border-radius:10px;white-space:pre-wrap;word-break:break-word">${esc(p.body || "–")}</div>
+<p style="margin:0 0 6px;font-size:13px;color:#7a807e">Vedhæftede beskeder valgt af brugeren (${p.messages.length})</p>${msgs || "<p>–</p>"}`);
+  const text = `Rolff rapport\n\nKategori: ${cat}\nFra: ${p.senderName} (${p.senderId})\nSamtale: ${p.conversationId}\n\n${p.body || "–"}\n\nVedhæftede beskeder (${p.messages.length}):\n` + p.messages.map((m) => `[${m.created_at}] ${m.sender_name}: ${m.body}`).join("\n") + "\n";
+  return { subject, html, text };
+}

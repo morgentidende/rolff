@@ -37,3 +37,11 @@ Deno.test("feedbackmail: escaping, kategori-whitelist, afsender", async () => {
   if (!m.html.includes("Mor &lt;b&gt;") || !m.text.includes("00000000-0000-0000-0000-000000000001")) throw new Error("sender missing");
   if (feedbackMail({ category: "filter", body: "x", senderName: "a", senderId: "b" }).subject !== "Rolff feedback: Filter-feedback") throw new Error("cat");
 });
+
+Deno.test("reportMail escapes and includes only chosen messages", async () => {
+  const { reportMail } = await import("../../supabase/functions/_shared/email.ts");
+  const m = reportMail({ category: "child_safety", body: "<b>x</b>", senderName: "A", senderId: "u1", conversationId: "c1", messages: [{ sender_name: "B", body: "<script>", created_at: "t" }] });
+  if (!m.subject.includes("Børns sikkerhed")) throw new Error("cat");
+  if (m.html.includes("<script>") || m.html.includes("<b>x</b>")) throw new Error("escape");
+  if (!m.text.includes("(1)")) throw new Error("count");
+});

@@ -92,15 +92,22 @@ export class GeminiProvider implements ModerationProvider {
   name = "gemini";
   constructor(private apiKey: string, public model: string) {}
   async moderate(msg: string, ctx: ContextMsg[], signal: AbortSignal) {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(this.model)}:generateContent`, {
+    // One retry on transient 429/500/503 (preview models are often overloaded); overall timeout still applies.
+    let r!: Response;
+    for (let attempt = 0; attempt < 3; attempt++) {
+    r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(this.model)}:generateContent`, {
       method: "POST", signal,
       headers: { "content-type": "application/json", "x-goog-api-key": this.apiKey },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
         contents: [{ role: "user", parts: [{ text: buildUserPayload(msg, ctx) }] }],
-        generationConfig: { temperature: 0, responseMimeType: "application/json", responseSchema: RESPONSE_SCHEMA },
+        generationConfig: { temperature: 0, responseMimeType: "application/json", responseSchema: RESPONSE_SCHEMA,
+          ...(this.model.startsWith("gemini-3") ? { thinkingConfig: { thinkingLevel: "minimal" } } : {}) },
       }),
     });
+    if (![429, 500, 503].includes(r.status) || attempt === 2) break;
+    await new Promise((res) => setTimeout(res, 600 * (attempt + 1)));
+    }
     if (!r.ok) throw new ModerationTechnicalError(`http_${r.status}`);
     const j = await r.json();
     const text = j?.candidates?.[0]?.content?.parts?.map((p: any) => p.text ?? "").join("");
@@ -141,11 +148,17 @@ export function providerFromEnv(env: ModerationEnv): ModerationProvider {
   if (appEnv === "production" && tier !== "paid") throw new ModerationTechnicalError("free_tier_forbidden_in_production");
   if (p === "gemini") {
     const k = env.get("GEMINI_API_KEY"); if (!k) throw new ModerationTechnicalError("missing_key");
-    return new GeminiProvider(k, env.get("MODERATION_MODEL") ?? "gemini-3.5-flash-lite");
+    return new GeminiProvider(k, env.get("MODERATION_MODEL") ?? "gemini-3-flash-preview");
   }
   if (p === "openai") {
     const k = env.get("OPENAI_API_KEY"); if (!k) throw new ModerationTechnicalError("missing_key");
     return new OpenAIProvider(k, env.get("MODERATION_MODEL") ?? "gpt-5.4-mini");
   }
   throw new ModerationTechnicalError("unknown_provider");
+}
+
+/** MODERATION_TIMEOUT_MS (default 15000, clamped 3000–30000). */
+export function timeoutFromEnv(env: ModerationEnv): number {
+  const n = Number(env.get("MODERATION_TIMEOUT_MS") ?? "15000");
+  return Number.isFinite(n) ? Math.min(30000, Math.max(3000, Math.round(n))) : 15000;
 }
