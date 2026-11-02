@@ -15,7 +15,7 @@ const da = {
   days: ["Man", "Tir", "Ons", "Tor", "Fre", "Lør", "Søn"], from: "Fra", to: "Til", back: "Tilbage", empty: "Ingen beskeder endnu.", you: "Dig",
   settings: "Indstillinger", lang: "Sprog", theme: "Tema", system: "System", light: "Lys", dark: "Mørk", members: "Medlemmer",
   testNotice: "TESTVERSION – skriv ikke rigtige eller følsomme oplysninger.",
-  demoWarn: "Testversion: Skriv ikke rigtige eller følsomme oplysninger. Beskeder tjekkes i testen af OpenAI (gpt-5.4-nano; behandling i USA/globalt, ikke EU; ingen Zero Data Retention endnu; gemning slået fra med store:false). Kun korte uddrag sendes. Ingen garanti for drift. Data kan blive slettet.",
+  demoWarn: "Testversion: Skriv ikke rigtige eller følsomme oplysninger. Beskeder tjekkes i testen af OpenAI (gpt-6-luna; behandling i USA/globalt, ikke EU; ingen Zero Data Retention endnu; gemning slået fra med store:false). Kun korte uddrag sendes. Ingen garanti for drift. Data kan blive slettet.",
   demoAccept: "Jeg forstår, at det er en testversion",
 };
 const en: typeof da = {
@@ -34,7 +34,7 @@ const en: typeof da = {
   days: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], from: "From", to: "To", back: "Back", empty: "No messages yet.", you: "You",
   settings: "Settings", lang: "Language", theme: "Theme", system: "System", light: "Light", dark: "Dark", members: "Members",
   testNotice: "TEST VERSION – do not enter real or sensitive information.",
-  demoWarn: "Test version: Do not enter real or sensitive information. In the test, messages are checked by OpenAI (gpt-5.4-nano; processed in the US/globally, not the EU; no Zero Data Retention yet; storage turned off with store:false). Only short excerpts are sent. No uptime guarantee. Data may be deleted.",
+  demoWarn: "Test version: Do not enter real or sensitive information. In the test, messages are checked by OpenAI (gpt-6-luna; processed in the US/globally, not the EU; no Zero Data Retention yet; storage turned off with store:false). Only short excerpts are sent. No uptime guarantee. Data may be deleted.",
   demoAccept: "I understand this is a test version",
 };
 export const strings = { da, en };

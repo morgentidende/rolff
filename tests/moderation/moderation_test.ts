@@ -27,7 +27,7 @@ Deno.test("OpenAI: EU base-url som standard, store:false, højst 5 kontekstbeske
   const m = await import("../../supabase/functions/_shared/moderation.ts");
   const env = (o: Record<string, string>) => ({ get: (k: string) => o[k] });
   const p = m.providerFromEnv(env({ MODERATION_PROVIDER: "openai", MODERATION_TIER: "paid", APP_ENV: "test", OPENAI_API_KEY: "sk-test" })) as any;
-  if (p.baseUrl !== "https://eu.api.openai.com/v1" || p.model !== "gpt-5.4-nano") throw new Error("defaults");
+  if (p.baseUrl !== "https://eu.api.openai.com/v1" || p.model !== "gpt-6-luna") throw new Error("defaults");
   const g = m.providerFromEnv(env({ MODERATION_PROVIDER: "openai", MODERATION_TIER: "paid", APP_ENV: "test", OPENAI_API_KEY: "k", OPENAI_BASE_URL: "https://api.openai.com/v1" })) as any;
   if (g.baseUrl !== "https://api.openai.com/v1") throw new Error("configurable");
   let threw = false; try { m.providerFromEnv(env({ MODERATION_PROVIDER: "openai", MODERATION_TIER: "paid", OPENAI_API_KEY: "k", OPENAI_BASE_URL: "https://evil.example/v1" })); } catch { threw = true; }
@@ -40,7 +40,7 @@ Deno.test("OpenAI: EU base-url som standard, store:false, højst 5 kontekstbeske
     await p.moderate("hej", ctx, new AbortController().signal);
   } finally { globalThis.fetch = orig; }
   if (seen.url !== "https://eu.api.openai.com/v1/chat/completions") throw new Error("url " + seen.url);
-  if (seen.body.store !== false || seen.body.model !== "gpt-5.4-nano") throw new Error("store/model");
+  if (seen.body.store !== false || seen.body.model !== "gpt-6-luna") throw new Error("store/model");
   const payload = JSON.parse(seen.body.messages[1].content);
   if (payload.context.length !== 5 || payload.context[0].text !== "ctx10" || [...payload.context[4].text].length !== 300) throw new Error("ctx");
   if (seen.auth !== "Bearer sk-test") throw new Error("auth");
