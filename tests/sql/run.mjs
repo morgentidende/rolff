@@ -358,5 +358,19 @@ await t('Blokering: B kan ikke se eller fjerne blokeringen', async () => { asser
 await t('Blokering: ingen udløbskolonne', async () => assert.deepEqual((await db.query(`select column_name from information_schema.columns where table_name='conversation_blocks' order by 1`)).rows.map(r => r.column_name), ['conversation_id', 'created_at', 'user_id']));
 await t('Blokering: ophører kun når A afblokerer', async () => { await as(A, `select unblock_conversation($1)`, [conv]); await sendAs(B, 'Hej igen', 'key-blk00004'); });
 await t('Feedback: nye kategorier', async () => { await svc(`delete from feedback`); await as(B, `select submit_feedback('complaint','x')`); await as(B, `select submit_feedback('filter','y')`); });
+
+await t('Rapport: B rapporterer med valgte beskeder; kun metadata gemmes', async () => {
+  const ms = await as(B, `select id from get_messages($1)`, [conv]);
+  const r = await as(B, `select * from submit_report($1,'harassment',$2::uuid[])`, [conv, [ms[0].id]]);
+  assert.equal(r.length, 1); assert.ok(r[0].body);
+  assert.deepEqual((await db.query(`select column_name from information_schema.columns where table_name='report_log' order by 1`)).rows.map(x => x.column_name), ['attached_count','category','conversation_id','created_at','id','user_id']);
+  assert.equal((await svc(`select attached_count from report_log where user_id=$1`, [B]))[0].attached_count, 1);
+});
+await t('Rapport: ukendt kategori og fremmede besked-id afvises', async () => {
+  await rejects(as(B, `select * from submit_report($1,'spam','{}')`, [conv]), /bad_input/);
+  await rejects(as(B, `select * from submit_report($1,'other',$2::uuid[])`, [conv, ['00000000-0000-0000-0000-000000000001']]), /bad_messages/);
+});
+await t('Rapport: ikke-medlem afvises og kan ikke læse log', async () => { await rejects(as(X, `select * from submit_report($1,'other','{}')`, [conv]), /not_member/); await rejects(as(B, `select * from report_log`), /permission|denied/); });
+await t('Rapport: rate limit 3/døgn', async () => { await as(B, `select * from submit_report($1,'other','{}')`, [conv]); await as(B, `select * from submit_report($1,'other','{}')`, [conv]); await rejects(as(B, `select * from submit_report($1,'other','{}')`, [conv]), /rate_limited/); });
 console.log(`\n${pass} bestået, ${fail} fejlet`);
 process.exit(fail ? 1 : 0);
