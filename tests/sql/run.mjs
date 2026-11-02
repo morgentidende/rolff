@@ -406,5 +406,18 @@ await t('Opbevaring: gamle beskeder skjules for 1 år, bevares fysisk hvis modpa
   assert.equal((await svc(`select count(*)::int n from messages where id=$1`, [id]))[0].n, 0);
   await rejects(as(A, `select retention_sweep()`), /permission|denied/);
 });
+
+await t('Eksport: kun egne data, ingen andres aliaser/ord/feedback; rate limit', async () => {
+  await svc(`insert into contact_aliases(owner_id,contact_user_id,alias) values ($1,$2,'HemmeligtAlias') on conflict do nothing`, [A, B]);
+  await svc(`insert into conversation_blocked_words(conversation_id,user_id,word) values ($1,$2,'hemmeligtord') on conflict do nothing`, [conv, A]);
+  await svc(`insert into feedback(user_id,category,body) values ($1,'other','AFeedbackTekst')`, [A]);
+  const e = (await svc(`select export_user_data($1) e`, [B]))[0].e; const j = JSON.stringify(e);
+  for (const leak of ['HemmeligtAlias', 'hemmeligtord', 'AFeedbackTekst']) assert.ok(!j.includes(leak), leak);
+  assert.ok(e.account && e.memberships.length >= 1);
+  const ea = JSON.stringify((await svc(`select export_user_data($1) e`, [A]))[0].e); assert.ok(ea.includes('HemmeligtAlias') && ea.includes('hemmeligtord'));
+  await svc(`select export_user_data($1)`, [B]); await svc(`select export_user_data($1)`, [B]);
+  await rejects(svc(`select export_user_data($1)`, [B]), /rate_limited/);
+  await rejects(as(A, `select export_user_data($1)`, [A]), /permission|denied/);
+});
 console.log(`\n${pass} bestået, ${fail} fejlet`);
 process.exit(fail ? 1 : 0);
