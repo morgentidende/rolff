@@ -404,6 +404,7 @@ function Auth({ lang, peek }: { lang: Lang; peek?: Peek | null }) {
       {peek ? <div className="notice"><strong>{lang === "da" ? `${peek.inviter_email} har inviteret dig.` : `${peek.inviter_email} invited you.`}</strong> {lang === "da" ? "Vælg en adgangskode for at komme ind i samtalen. Har du allerede en konto, så log ind." : "Choose a password to join. Already have an account? Log in."}<p className="meta" style={{ marginBottom: 0 }}>{evidenceNote(lang)} {emailVisibleNote(lang)}</p></div>
         : peek === null ? <div className="notice" role="alert">{lang === "da" ? "Invitationen er ugyldig, udløbet eller allerede brugt." : "The invitation is invalid, expired or already used."}</div> : null}
       {new URLSearchParams(location.search).has("deleted") && <div className="notice" role="status">{lang === "da" ? "Din konto er slettet." : "Your account has been deleted."}</div>}
+      <div className="notice" role="note"><strong>{t.demoWarn}</strong></div>
       <p>{t.tagline}</p><p>{t.intro}</p>
       {mode === "forgot" ? <form onSubmit={submit}>
         <h2>{lang === "da" ? "Glemt adgangskode" : "Forgot password"}</h2>
@@ -420,6 +421,7 @@ function Auth({ lang, peek }: { lang: Lang; peek?: Peek | null }) {
         {mode === "signup" && <><label htmlFor="p2">{pwText[lang].repeat}</label>
           <PasswordInput id="p2" lang={lang} value={pw2} onChange={(v) => { setPw2(v); setErr(""); }} minLength={8} autoComplete="new-password" invalid={pw2.length > 0 && !passwordsMatch(pw, pw2)} describedBy="pwerr" /></>}
         {mode === "signup" && <p className="meta" role="note">{evidenceNote(lang)} {emailVisibleNote(lang)}</p>}
+        {mode === "signup" && <p><label style={{ display: "flex", gap: 8 }}><input type="checkbox" style={{ width: 24, minHeight: 24 }} required />{t.demoAccept}</label></p>}
         {mode === "signup" && <p><label style={{ display: "flex", gap: 8 }}><input type="checkbox" style={{ width: 24, minHeight: 24 }} checked={ai} onChange={(e) => setAi(e.target.checked)} required />{t.ai} {t.aiAccept}</label></p>}
         {err ? <p className="err" id="pwerr" role="alert">{err}</p>
           : mode === "signup" && pw2.length > 0 && !passwordsMatch(pw, pw2) ? <p className="err" id="pwerr" aria-live="polite">{pwText[lang].mismatch}</p> : null}

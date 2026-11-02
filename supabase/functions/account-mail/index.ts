@@ -17,7 +17,8 @@ const admin = () => createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SU
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   let i: any; try { i = await req.json(); } catch { return json({ error: "bad_request" }, 400); }
-  const env = Deno.env.get("APP_ENV") ?? "test", allow = Deno.env.get("TEST_MAIL_ALLOW") ?? "", app = Deno.env.get("APP_URL") ?? "";
+  // DEMO_OPEN_MAIL=1: hosted demo may mail any address (rate limits still apply).
+  const env = Deno.env.get("DEMO_OPEN_MAIL") === "1" ? "production" : (Deno.env.get("APP_ENV") ?? "test"), allow = Deno.env.get("TEST_MAIL_ALLOW") ?? "", app = Deno.env.get("APP_URL") ?? "";
   if (i?.action === "recover") {
     const email = String(i?.email ?? "").trim().toLowerCase();
     if (!EMAIL.test(email) || email.length > 254) return json({ error: "bad_input" }, 400);

@@ -14,7 +14,7 @@ function shell(title: string, inner: string) {
 <td style="vertical-align:middle;color:#ffffff;font-size:22px;font-weight:700;letter-spacing:.3px">Rolff<div style="font-size:13px;font-weight:400;opacity:.85;margin-top:2px">Rolig, saglig kommunikation i konflikter</div></td>
 </tr></table></td></tr>
 <tr><td style="padding:28px;font-size:16px;line-height:1.55">${inner}</td></tr>
-<tr><td style="padding:16px 28px 24px;font-size:12px;color:#7a807e;border-top:1px solid #eeeae3">Rolff er en testversion. Skriv kun opdigtede beskeder – AI-kontrollen kører på en gratis testtjeneste.</td></tr>
+<tr><td style="padding:16px 28px 24px;font-size:12px;color:#7a807e;border-top:1px solid #eeeae3"><strong>Testversion.</strong> Skriv ikke rigtige eller følsomme oplysninger. Beskeder tjekkes af en ekstern AI-tjeneste (Google Gemini, gratis niveau – Google kan bruge data). Ingen garanti for drift, og data kan blive slettet.<br><em>Test version. Do not enter real or sensitive information. Messages are checked by an external AI service (Google Gemini free tier – Google may use the data). No uptime guarantee; data may be deleted.</em></td></tr>
 </table></td></tr></table></body></html>`;
 }
 

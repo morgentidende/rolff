@@ -14,7 +14,9 @@ const da = {
   windows: "Modtagetider", windowsOn: "Brug modtagetider", tz: "Tidszone", add: "Tilføj", remove: "Fjern", save: "Gem", saved: "Gemt",
   days: ["Man", "Tir", "Ons", "Tor", "Fre", "Lør", "Søn"], from: "Fra", to: "Til", back: "Tilbage", empty: "Ingen beskeder endnu.", you: "Dig",
   settings: "Indstillinger", lang: "Sprog", theme: "Tema", system: "System", light: "Lys", dark: "Mørk", members: "Medlemmer",
-  testNotice: "TESTMILJØ – brug kun opdigtede beskeder og testkonti.",
+  testNotice: "TESTVERSION – skriv ikke rigtige eller følsomme oplysninger.",
+  demoWarn: "Testversion: Skriv ikke rigtige eller følsomme oplysninger. Beskeder tjekkes af en ekstern AI-tjeneste (Google Gemini, gratis niveau, hvor Google kan bruge data). Ingen garanti for drift. Data kan blive slettet.",
+  demoAccept: "Jeg forstår, at det er en testversion",
 };
 const en: typeof da = {
   tagline: "Calm, factual communication between people in conflict.",
@@ -31,7 +33,9 @@ const en: typeof da = {
   windows: "Receive times", windowsOn: "Use receive times", tz: "Time zone", add: "Add", remove: "Remove", save: "Save", saved: "Saved",
   days: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], from: "From", to: "To", back: "Back", empty: "No messages yet.", you: "You",
   settings: "Settings", lang: "Language", theme: "Theme", system: "System", light: "Light", dark: "Dark", members: "Members",
-  testNotice: "TEST ENVIRONMENT – use synthetic messages and test accounts only.",
+  testNotice: "TEST VERSION – do not enter real or sensitive information.",
+  demoWarn: "Test version: Do not enter real or sensitive information. Messages are checked by an external AI service (Google Gemini free tier, where Google may use the data). No uptime guarantee. Data may be deleted.",
+  demoAccept: "I understand this is a test version",
 };
 export const strings = { da, en };
 export const detectLang = (): Lang => (localStorage.getItem("lang") as Lang) || (navigator.language.startsWith("da") ? "da" : "en");
