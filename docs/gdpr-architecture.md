@@ -67,3 +67,12 @@ Supabase (DB, auth, functions – Frankfurt), Hostinger (web + mail-relay), Open
 
 ## 8. Rækkefølge
 1) Dette dokument → 2) slet-knap + sletning → 3) sky/opbevaring-indstillinger + retention-job → 4) FAQ + privatlivspolitik → 5) OpenAI-provider (mock) → 6) lokal kryptering.
+
+## 9. Download mine data (art. 15) – design
+
+- ⋮ → "Download mine data" → genindtast kodeord (`signInWithPassword` med egen e-mail) → RPC `export_my_data()` (security definer, kun `auth.uid()`, rate limit fx 3/døgn i `moderation_attempts`-lignende tabel uden indhold).
+- Indhold: konto (e-mail, oprettet), indstillinger (sprog/tema fra klienten, modtagetider, farver, **egne** kaldenavne, **egne** blokerede ord, opbevaring/synk), medlemskaber (rolle, joined/left), samtykker og invitationer brugeren har oprettet/accepteret, egen feedback, og beskeder via samme regler som `get_messages` (egne + leverede, kun fra eget `joined_at`).
+- Aldrig: modpartens kaldenavne, blokerede ord, indstillinger, farver eller ikke-leverede beskeder.
+- Filen bygges **på enheden**: JSON + ZIP med CSV-filer (UTF-8 BOM, formel-escape via `exportUtil.csvCell`). Serveren logger intet indhold.
+- Tests: to brugere med private data hver → eksporten indeholder kun egne rækker; alle tabeller med `user_id` er dækket (test over `information_schema`); ikke-leverede beskeder udelades.
+- Nævnes i FAQ og privatlivspolitik.
