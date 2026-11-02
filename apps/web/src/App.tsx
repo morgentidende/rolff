@@ -58,7 +58,7 @@ export function App() {
       sessionStorage.removeItem("invite"); setInviteToken(null);
       if (r.status === 200) supabase.rpc("list_my_conversations").then(({ data }) => { const c = ((data as Conv[]) ?? []).find((x) => x.id === r.data?.data); if (c) setConv(c); });
       setInviteMsg(r.status === 200 ? (da ? "Du er nu med i samtalen." : "You have joined the conversation.")
-        : (da ? "Invitationen kunne ikke bruges. Den kan være udløbet, brugt eller sendt til en anden e-mail." : "The invitation could not be used. It may be expired, used, or meant for another email."));
+        : (da ? "Invitationen kunne ikke bruges. Den kan være udløbet, brugt eller sendt til en anden e-mail. Er der kommet en ny deltager i samtalen, skal den også godkende – så får du en ny mail med et nyt link." : "The invitation could not be used. It may be expired, used, or meant for another email. If someone new joined the conversation, they must approve too – you will then get a new email with a new link."));
     });
   }, [session, inviteToken]);
   useEffect(() => {

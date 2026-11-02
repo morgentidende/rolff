@@ -119,10 +119,11 @@ await t('Samtykke til læser genbruges ikke til anden rolle', async () => {
 });
 await t('Med enstemmigt samtykke kan læser tilslutte sig', async () => { const r = await as(C, `select accept_invitation($1) c`, [globalThis.tkC]); assert.equal(r[0].c, conv); });
 await t('Nyt medlem ser ingen tidligere historik', async () => assert.equal((await as(C, `select * from get_messages($1)`, [conv])).length, 0));
-await t('Gamle samtykker gælder ikke efter medlemsændring', async () => {
-  // writer invitation was created at old member_version -> now stale
+await t('Gamle samtykker rækker ikke efter medlemsændring: nyt medlem skal også godkende', async () => {
+  // writer invitation is carried over to the new member set; C (new) has not approved -> not complete
   const any = (await db.query(`select id from invitations where role='writer'`)).rows[0].id;
-  await rejects(as(B, `select consent_invitation($1)`, [any]), /stale_invitation/);
+  const r = (await db.query(`select public._all_consented(i) ok, i.member_version = c.member_version same from invitations i join conversations c on c.id=i.conversation_id where i.id=$1`, [any])).rows[0];
+  assert.equal(r.same, true); assert.equal(r.ok, false);
 });
 await t('Læser kan ikke sende (heller ikke via server-API)', async () => rejects(svc(`select * from prepare_send($1,$2,'hej')`, [C, conv]), /read_only/));
 await t('Læser kan ikke committe selv med godkendelse', async () => {
