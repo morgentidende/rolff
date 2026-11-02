@@ -9,6 +9,7 @@ jobs:
         with: { node-version: 22 }
       - uses: denoland/setup-deno@v2
         with: { deno-version: v2.x }
+      - run: node tests/lint/no_content_logs_test.mjs && node tests/lint/no_content_logs.mjs
       - run: cd tests/sql && npm ci && node run.mjs
       - run: deno test --allow-env=APP_URL,MAILER_URL,MAILER_SECRET tests/moderation/moderation_test.ts tests/web/pw_test.ts tests/moderation/email_test.ts tests/web/export_test.ts tests/moderation/inactivity_test.ts tests/moderation/rules_test.ts
       - run: cd supabase/functions && deno check */index.ts
