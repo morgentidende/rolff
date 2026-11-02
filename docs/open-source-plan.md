@@ -38,14 +38,12 @@ GitHub kan ikke gøre dele af et repo offentligt. Muligheder:
 
 Indhold: `moderation/` (interface, validering, prompt – se risici), `rules/`, `retention/` (SQL + tests), `crypto/` (når lokal kryptering findes), `docs/dataflow.md`, `SECURITY.md`. **Ikke**: invitationer, farver, alias, UI.
 
-### Licens (beslutning: Nicolai)
-| Licens | Effekt for salg/white-label |
-|---|---|
-| Apache-2.0 | Maksimal tillid og genbrug; konkurrenter må bruge koden i lukkede produkter. Patentklausul. |
-| AGPL-3.0 | Ændringer i netværkstjenester skal deles; afskrækker lukket genbrug. Rolff (copyright-ejer) kan stadig dual-licensere til organisationer. |
-| Source-available (fx BSL 1.1 / PolyForm) | "Se, men ikke genbrug kommercielt". Ikke OSI open source → svagere signal over for nogle partnere. |
-
-Anbefaling: **Apache-2.0** for tillidskoden (den er ikke den kommercielle værdi; værdien er appen, driften og white-label-aftalen). Alternativt AGPL hvis Nicolai vil hindre konkurrenter. Kræver at al kode er skrevet af/tilhører Rolff (gælder i dag).
+### Licens – BESLUTTET: AGPL-3.0 (Nicolai, 2026-11-02)
+Den offentlige del (kryptering, retention/sletning, moderation) udgives under **AGPL-3.0-only**. Apache-2.0 er fravalgt.
+- Ændringer, der køres som netværkstjeneste, skal deles; lukket genbrug hindres. Rolff er copyright-ejer og kan stadig dual-licensere til organisationer (kræver CLA/DCO for eksterne bidrag, se CONTRIBUTING.md).
+- **LICENSE-fil:** fuld AGPL-3.0-tekst i roden af det offentlige repo `rolff-trust` (uændret tekst fra gnu.org), plus en kort `NOTICE` med copyright "© 2026 Rolff / Nicolai Petersen".
+- **SPDX-headers** øverst i hver offentlig fil: `// SPDX-License-Identifier: AGPL-3.0-only` og `// SPDX-FileCopyrightText: 2026 Rolff`. Gælder: `_shared/moderation.ts`, `_shared/rules.ts`, retention-/slette-migrationer og -funktioner (`delete-account`, `inactivity-sweep`, retention-job), den lokale krypteringsmodul (`apps/web/src/crypto*`) samt deres tests. CI-tjek i `rolff-trust`: fejl hvis en fil mangler SPDX-header (fx `reuse lint`).
+- **Ikke dækket:** den private forretningslogik (samtalefarver, invitationer, UI, mails, drift-konfiguration) forbliver i det private repo, er ikke AGPL-licenseret og udgives ikke. Det private repo importerer `rolff-trust` som afhængighed; da Rolff ejer begge, udløser det ingen deleforpligtelse for den private kode.
 
 ## 3. Oprydning før offentliggørelse
 
@@ -64,7 +62,7 @@ Tjekliste (gælder især hvis koden flyttes/udgives):
 - [ ] **Prompt** (`SYSTEM_PROMPT`): beslutning (Nicolai) – fuld, forkortet eller beskrevet. Se risici.
 - [ ] Rate limits/sikkerhedstærskler: flyt tal til konfiguration; publicér princippet, ikke nødvendigvis tallene.
 - [ ] CI uden secrets (er tilfældet i dag: kun dummy-værdier).
-- [ ] `LICENSE`, `SECURITY.md` (sikkerhedsadresse, svartid, ingen bounty), `CONTRIBUTING.md` (DCO/CLA hvis dual-licens).
+- [ ] `LICENSE` (AGPL-3.0) + SPDX-headers, `SECURITY.md` (sikkerhedsadresse, svartid, ingen bounty), `CONTRIBUTING.md` (DCO/CLA hvis dual-licens).
 - [ ] `docs/dataflow.md` med diagram (se `docs/gdpr-architecture.md`).
 - [ ] DPA/GDPR-note: underdatabehandlere, region, "udkast – skal gennemgås af jurist/DPO".
 - [ ] CI-test der fejler hvis beskedtekst logges (se GDPR-dokumentet).
@@ -77,7 +75,7 @@ Tjekliste (gælder især hvis koden flyttes/udgives):
 | 2 | Slet-knap, retention, sky-opt-in bygget og testet | 1 | Standardfrister |
 | 3 | Log-lint/test i CI | – | – |
 | 4 | OpenAI betalt projekt, EU data residency + ZDR **godkendt af OpenAI**, nøgle sat som secret, `MODERATION_PROVIDER=openai` | Nøgle mangler i dag | Ansøgning/kontrakt |
-| 5 | Udtræk `rolff-trust` med ren historik, tests, licens, SECURITY.md | 2, 3 | **Licens**, **prompt-synlighed** |
+| 5 | Udtræk `rolff-trust` med ren historik, tests, licens, SECURITY.md | 2, 3 | **Prompt-synlighed** (licens besluttet: AGPL-3.0) |
 | 6 | Uafhængig gennemlæsning (jurist/DPO + sikkerhed) | 5 | – |
 | 7 | Gør `rolff-trust` offentligt, link fra app/FAQ | 4, 6 | Go/no-go |
 
