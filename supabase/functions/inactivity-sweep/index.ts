@@ -23,6 +23,8 @@ Deno.serve(async (req) => {
       if (!p.error && !(await admin.auth.admin.deleteUser(r.user_id)).error) deleted++;
     }
   }
-  console.log(`inactivity-sweep: warned=${warned} deleted=${deleted} skipped=${skipped}`);
-  return json({ data: { warned, deleted, skipped } });
+  const rs = await admin.rpc("retention_sweep");
+  const expired = rs.error ? -1 : (rs.data as number);
+  console.log(`inactivity-sweep: warned=${warned} deleted=${deleted} skipped=${skipped} expired_messages=${expired}`);
+  return json({ data: { warned, deleted, skipped, expired } });
 });

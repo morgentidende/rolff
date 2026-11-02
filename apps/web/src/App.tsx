@@ -169,10 +169,11 @@ export const evidenceNote = (lang: Lang) => lang === "da"
 
 function PrivacyPanel({ lang }: { lang: Lang }) {
   const da = lang === "da";
-  const [p, setP] = useState<{ inactivity_delete: boolean; inactivity_days: number } | null>(null);
+  const [p, setP] = useState<{ inactivity_delete: boolean; inactivity_days: number; cloud_sync: boolean; retention: string } | null>(null);
   const [pw, setPw] = useState(""); const [ok, setOk] = useState(false); const [state, setState] = useState<"" | "busy" | "wrong" | "err">("");
   useEffect(() => { supabase.rpc("get_my_privacy").then(({ data }) => setP(((data as any[]) ?? [])[0] ?? null)); }, []);
-  const save = async (n: { inactivity_delete: boolean; inactivity_days: number }) => { setP(n); await supabase.rpc("set_my_privacy", { p_inactivity_delete: n.inactivity_delete, p_inactivity_days: n.inactivity_days }); };
+  const saveData = async (n: NonNullable<typeof p>) => { setP(n); await supabase.rpc("set_my_data_prefs", { p_cloud_sync: n.cloud_sync, p_retention: n.retention }); };
+  const save = async (n: NonNullable<typeof p>) => { setP(n); await supabase.rpc("set_my_privacy", { p_inactivity_delete: n.inactivity_delete, p_inactivity_days: n.inactivity_days }); };
   const del = async (e: React.FormEvent) => {
     e.preventDefault(); setState("busy");
     let r; try { r = await callFn("delete-account", { password: pw }); } catch { r = { status: 0, data: null as any }; }
@@ -183,6 +184,15 @@ function PrivacyPanel({ lang }: { lang: Lang }) {
   };
   return (
     <div>
+      <h3 id="data">{da ? "Opbevaring og synkronisering" : "Retention and sync"}</h3>
+      {p && <>
+        <label htmlFor="ret">{da ? "Behold mine beskeder i" : "Keep my messages for"}</label>
+        <select id="ret" value={p.retention} onChange={(e) => saveData({ ...p, retention: e.target.value })}>
+          <option value="1y">{da ? "1 år (standard)" : "1 year (default)"}</option><option value="5y">{da ? "5 år" : "5 years"}</option><option value="unlimited">{da ? "Ubegrænset" : "Unlimited"}</option></select>
+        <p className="meta">{da ? "Ældre beskeder skjules for dig med det samme og slettes fra serveren, når alle i samtalen har passeret deres egen grænse. Vælger modparten længere tid, beholder de deres kopi." : "Older messages are hidden for you at once and deleted from the server when everyone in the conversation has passed their own limit. If the other person chose longer, they keep their copy."}</p>
+        <label style={{ display: "flex", gap: 8 }}><input type="checkbox" style={{ width: 24, minHeight: 24 }} checked={p.cloud_sync} onChange={(e) => saveData({ ...p, cloud_sync: e.target.checked })} />
+          {da ? "Sky-synk (til flere enheder)" : "Cloud sync (for several devices)"}</label>
+        <p className="meta">{da ? "Valgfrit, slået fra som standard. Gemmes nu. I web-testversionen ligger beskederne altid på serveren (EU, Frankfurt), da browseren ikke er en sikker fast kopi. I mobilappen betyder “fra”, at serveren kun holder beskeden til den er leveret." : "Optional, off by default. Saved now. In the web test version messages always stay on the server (EU, Frankfurt) as the browser is not a safe permanent copy. In the mobile app “off” means the server only keeps a message until it is delivered."}</p></>}
       <h3 id="inactivity">{da ? "Automatisk sletning ved inaktivitet" : "Automatic deletion when inactive"}</h3>
       {p && <>
         <label style={{ display: "flex", gap: 8 }}><input type="checkbox" style={{ width: 24, minHeight: 24 }} checked={p.inactivity_delete} onChange={(e) => save({ ...p, inactivity_delete: e.target.checked })} />
