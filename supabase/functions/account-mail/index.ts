@@ -1,0 +1,52 @@
+// Forgot password + change e-mail. Mails go through our own PHP mailer (not Supabase SMTP).
+// POST {action:"recover", email}                 – no login; always answers {ok:true} (no account enumeration)
+// POST {action:"change_email", password, new_email} – logged in; re-auth with password, then mails
+//      a confirmation link to BOTH the current and the new address (both must be confirmed).
+// Links point to APP_URL?auth=<type>&th=<token_hash>; the app calls verifyOtp. Rate limited per address.
+// Outside APP_ENV=production only addresses matching TEST_MAIL_ALLOW get mail. Logs never contain addresses.
+import { createClient } from "jsr:@supabase/supabase-js@2";
+import { authed, cors, json } from "../_shared/http.ts";
+import { recoveryMail, emailChangeMail, sendMail } from "../_shared/email.ts";
+import { allowed, authLink, EMAIL } from "../_shared/authmail.ts";
+const sha = async (s: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s.trim().toLowerCase())))].map((b) => b.toString(16).padStart(2, "0")).join("");
+const admin = () => createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}").default, { auth: { persistSession: false } });
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
+  let i: any; try { i = await req.json(); } catch { return json({ error: "bad_request" }, 400); }
+  const env = Deno.env.get("APP_ENV") ?? "test", allow = Deno.env.get("TEST_MAIL_ALLOW") ?? "", app = Deno.env.get("APP_URL") ?? "";
+  if (i?.action === "recover") {
+    const email = String(i?.email ?? "").trim().toLowerCase();
+    if (!EMAIL.test(email) || email.length > 254) return json({ error: "bad_input" }, 400);
+    const a = admin();
+    const ok = await a.rpc("auth_mail_allow", { p_hash: await sha(email), p_kind: "recovery" });
+    if (ok.data === true && allowed(email, env, allow)) {
+      const g = await a.auth.admin.generateLink({ type: "recovery", email });
+      const h = g.data?.properties?.hashed_token;
+      if (h && !(await sendMail(email, recoveryMail({ link: authLink(app, "recovery", h) })))) console.log(JSON.stringify({ evt: "recovery_mail_failed" }));
+    }
+    return json({ data: { ok: true } }); // same answer whether or not the account exists
+  }
+  if (i?.action === "change_email") {
+    const u = await authed(req); if (u instanceof Response) return u;
+    const pw = String(i?.password ?? ""), next = String(i?.new_email ?? "").trim().toLowerCase();
+    if (!pw || !EMAIL.test(next) || next.length > 254) return json({ error: "bad_input" }, 400);
+    const { data: me } = await u.admin.auth.admin.getUserById(u.uid);
+    const cur = me.user?.email ?? "";
+    if (!cur || cur === next) return json({ error: "bad_input" }, 400);
+    const pub = Deno.env.get("SUPABASE_ANON_KEY") || JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS") ?? "{}").default;
+    const check = await createClient(Deno.env.get("SUPABASE_URL")!, pub, { auth: { persistSession: false } }).auth.signInWithPassword({ email: cur, password: pw });
+    if (check.error || check.data.user?.id !== u.uid) return json({ error: "wrong_password" }, 403);
+    if (!(await u.admin.rpc("auth_mail_allow", { p_hash: await sha(cur), p_kind: "email_change" })).data) return json({ error: "rate_limited" }, 429);
+    if (!allowed(cur, env, allow) || !allowed(next, env, allow)) return json({ error: "test_mail_blocked" }, 403);
+    const gc = await u.admin.auth.admin.generateLink({ type: "email_change_current", email: cur, newEmail: next });
+    const gn = await u.admin.auth.admin.generateLink({ type: "email_change_new", email: cur, newEmail: next });
+    const hc = gc.data?.properties?.hashed_token, hn = gn.data?.properties?.hashed_token;
+    if (!hc || !hn) return json({ error: /already|exists|registered/i.test(gn.error?.message ?? gc.error?.message ?? "") ? "email_taken" : "failed" }, 400);
+    const m1 = await sendMail(cur, emailChangeMail({ link: authLink(app, "email_change", hc), current: true, newEmail: next }));
+    const m2 = await sendMail(next, emailChangeMail({ link: authLink(app, "email_change", hn), current: false, newEmail: next }));
+    if (!m1 || !m2) { console.log(JSON.stringify({ evt: "email_change_mail_failed" })); return json({ error: "mail_failed" }, 502); }
+    return json({ data: { sent: true } });
+  }
+  return json({ error: "bad_input" }, 400);
+});
