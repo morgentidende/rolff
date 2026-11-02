@@ -31,8 +31,9 @@ Deno.test("godkendelsesmail: ingen navne, e-mails eller beskedindhold", async ()
 
 Deno.test("feedbackmail: escaping, kategori-whitelist, afsender", async () => {
   const { feedbackMail } = await import("../../supabase/functions/_shared/email.ts");
-  const m = feedbackMail({ category: "x\r\nBcc: evil@x.test", body: "<script>alert(1)</script> & \"hej\"", senderEmail: "a@x.test" });
+  const m = feedbackMail({ category: "x\r\nBcc: evil@x.test", body: "<script>alert(1)</script> & \"hej\"", senderName: "Mor <b>", senderId: "00000000-0000-0000-0000-000000000001" });
   if (m.subject !== "Rolff feedback: Andet" || /[\r\n]/.test(m.subject)) throw new Error("subject");
   if (m.html.includes("<script>") || !m.html.includes("&lt;script&gt;")) throw new Error("not escaped");
-  if (!m.html.includes("a@x.test") || !m.text.includes("a@x.test")) throw new Error("sender missing");
+  if (!m.html.includes("Mor &lt;b&gt;") || !m.text.includes("00000000-0000-0000-0000-000000000001")) throw new Error("sender missing");
+  if (feedbackMail({ category: "filter", body: "x", senderName: "a", senderId: "b" }).subject !== "Rolff feedback: Filter-feedback") throw new Error("cat");
 });

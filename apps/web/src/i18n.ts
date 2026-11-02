@@ -1,12 +1,12 @@
 export type Lang = "da" | "en";
 const da = {
-  tagline: "Rolig, praktisk kommunikation mellem forældre – for børnenes skyld.",
-  intro: "Rolff tjekker hver besked før afsendelse og stopper sårende formuleringer. Du bestemmer selv, hvornår du modtager nye beskeder.",
+  tagline: "Rolig, saglig kommunikation mellem mennesker i konflikt.",
+  intro: "Til skilsmisser, arvesager, ekskærester, venskaber, retssager og andre situationer, hvor det er svært at tale sammen. Rolff tjekker hver besked før afsendelse og stopper sårende formuleringer. Du bestemmer selv, hvornår du modtager nye beskeder.",
   ai: "AI-behandling: Din besked og op til 10 nyere beskeder sendes til en AI-tjeneste (testmiljø: Google Gemini, gratis niveau – kun opdigtede testbeskeder!).",
   aiAccept: "Jeg forstår og accepterer", email: "E-mail", password: "Adgangskode", name: "Visningsnavn",
   login: "Log ind", signup: "Opret konto", logout: "Log ud", authError: "Login mislykkedes. Tjek oplysningerne og prøv igen.",
   conversations: "Samtaler", newConv: "Ny samtale", title: "Titel (valgfri)", create: "Opret", join: "Tilslut med invitationskode", code: "Invitationskode",
-  invite: "Inviter den anden forælder", inviteHint: "Del koden privat. Den udløber", copy: "Kopiér", invalidInvite: "Invitationen er ugyldig eller udløbet.",
+  invite: "Inviter den anden part", inviteHint: "Del koden privat. Den udløber", copy: "Kopiér", invalidInvite: "Invitationen er ugyldig eller udløbet.",
   write: "Skriv en besked…", send: "Send", sending: "Tjekker…", accepted: "Rolff har accepteret beskeden.",
   blocked: "Beskeden blev ikke sendt. Den kan opfattes som sårende. Ret den og prøv igen.", flagged: "Markeret tekst",
   techError: "Teknisk fejl – beskeden er ikke sendt. Din tekst er gemt; prøv igen.", readOnly: "Du har kun læseadgang.", rateLimited: "For mange forsøg. Vent et øjeblik.",
@@ -17,13 +17,13 @@ const da = {
   testNotice: "TESTMILJØ – brug kun opdigtede beskeder og testkonti.",
 };
 const en: typeof da = {
-  tagline: "Calm, practical communication between parents – for the children's sake.",
-  intro: "Rolff checks every message before it is sent and stops hurtful wording. You decide when new messages reach you.",
+  tagline: "Calm, factual communication between people in conflict.",
+  intro: "For divorces, inheritance disputes, ex-partners, friendships, lawsuits and other situations where talking is hard. Rolff checks every message before it is sent and stops hurtful wording. You decide when new messages reach you.",
   ai: "AI processing: Your message and up to 10 recent messages are sent to an AI service (test environment: Google Gemini free tier – synthetic test messages only!).",
   aiAccept: "I understand and accept", email: "Email", password: "Password", name: "Display name",
   login: "Log in", signup: "Create account", logout: "Log out", authError: "Sign-in failed. Check your details and try again.",
   conversations: "Conversations", newConv: "New conversation", title: "Title (optional)", create: "Create", join: "Join with invitation code", code: "Invitation code",
-  invite: "Invite the other parent", inviteHint: "Share the code privately. It expires", copy: "Copy", invalidInvite: "The invitation is invalid or expired.",
+  invite: "Invite the other party", inviteHint: "Share the code privately. It expires", copy: "Copy", invalidInvite: "The invitation is invalid or expired.",
   write: "Write a message…", send: "Send", sending: "Checking…", accepted: "Rolff accepted the message.",
   blocked: "The message was not sent. It may come across as hurtful. Edit it and try again.", flagged: "Flagged text",
   techError: "Technical error – the message was not sent. Your text is kept; please retry.", readOnly: "You have read-only access.", rateLimited: "Too many attempts. Please wait.",

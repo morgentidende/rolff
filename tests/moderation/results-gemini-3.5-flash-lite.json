@@ -2,12 +2,12 @@
   "summary": {
     "provider": "gemini",
     "model": "gemini-3.5-flash-lite",
-    "date": "2026-10-31T23:30:22.617Z",
-    "total": 57,
-    "correct": 57,
+    "date": "2026-11-01T08:28:57.055Z",
+    "total": 73,
+    "correct": 66,
     "false_blocks": 0,
     "missed_blocks": 0,
-    "technical_errors": 0
+    "technical_errors": 7
   },
   "rows": [
     {
@@ -45,7 +45,7 @@
       "cat": "trussel",
       "expect": "block",
       "got": "block",
-      "reason": "threat_intimidation",
+      "reason": "emotional_blackmail",
       "spans": [
         "Hvis du ikke gør som jeg siger, sørger jeg for, at du aldrig ser børnene igen."
       ]
@@ -153,7 +153,8 @@
       "got": "block",
       "reason": "sarcasm_or_irony",
       "spans": [
-        "Fantastisk forældreskab at sende ham i skole uden madpakke igen. Bliv endelig ved."
+        "Fantastisk forældreskab",
+        "Bliv endelig ved"
       ]
     },
     {
@@ -165,7 +166,7 @@
       "reason": "sarcasm_or_irony",
       "spans": [
         "Tak for din altid så pålidelige indsats",
-        "Børnene ventede kun en time denne gang."
+        "Børnene ventede kun en time denne gang"
       ]
     },
     {
@@ -185,7 +186,7 @@
       "cat": "sarkasme",
       "expect": "block",
       "got": "block",
-      "reason": "sarcasm_or_irony",
+      "reason": "false_politeness",
       "spans": [
         "Selvfølgelig har du ikke tid. Det har du jo aldrig, når det handler om børnene."
       ]
@@ -240,7 +241,7 @@
       "cat": "skjult hån",
       "expect": "block",
       "got": "block",
-      "reason": "humiliation_mockery",
+      "reason": "personal_attack",
       "spans": [
         "Mon børnene kommer til at tage efter dig? Lad os håbe ikke."
       ]
@@ -522,8 +523,8 @@
       "lang": "da",
       "cat": "klart nej",
       "expect": "allow",
-      "got": "allow",
-      "reason": "none",
+      "got": "error",
+      "reason": "timeout",
       "spans": []
     },
     {
@@ -531,8 +532,8 @@
       "lang": "da",
       "cat": "faktuelt problem",
       "expect": "allow",
-      "got": "allow",
-      "reason": "none",
+      "got": "error",
+      "reason": "timeout",
       "spans": []
     },
     {
@@ -540,8 +541,8 @@
       "lang": "en",
       "cat": "logistics",
       "expect": "allow",
-      "got": "allow",
-      "reason": "none",
+      "got": "error",
+      "reason": "timeout",
       "spans": []
     },
     {
@@ -549,8 +550,8 @@
       "lang": "en",
       "cat": "disagreement",
       "expect": "allow",
-      "got": "allow",
-      "reason": "none",
+      "got": "error",
+      "reason": "timeout",
       "spans": []
     },
     {
@@ -558,8 +559,8 @@
       "lang": "en",
       "cat": "concern",
       "expect": "allow",
-      "got": "allow",
-      "reason": "none",
+      "got": "error",
+      "reason": "timeout",
       "spans": []
     },
     {
@@ -567,8 +568,8 @@
       "lang": "en",
       "cat": "boundary",
       "expect": "allow",
-      "got": "allow",
-      "reason": "none",
+      "got": "error",
+      "reason": "timeout",
       "spans": []
     },
     {
@@ -576,8 +577,8 @@
       "lang": "en",
       "cat": "factual",
       "expect": "allow",
-      "got": "allow",
-      "reason": "none",
+      "got": "error",
+      "reason": "timeout",
       "spans": []
     },
     {
@@ -597,6 +598,164 @@
       "got": "allow",
       "reason": "none",
       "spans": []
+    },
+    {
+      "id": "bred-1",
+      "lang": "da",
+      "cat": "arv",
+      "expect": "allow",
+      "got": "allow",
+      "reason": "none",
+      "spans": []
+    },
+    {
+      "id": "bred-2",
+      "lang": "da",
+      "cat": "arv",
+      "expect": "allow",
+      "got": "allow",
+      "reason": "none",
+      "spans": []
+    },
+    {
+      "id": "bred-3",
+      "lang": "da",
+      "cat": "arv",
+      "expect": "block",
+      "got": "block",
+      "reason": "false_politeness",
+      "spans": [
+        "Typisk dig at rage til dig af arven, før mor overhovedet var begravet."
+      ]
+    },
+    {
+      "id": "bred-4",
+      "lang": "da",
+      "cat": "ekskæreste",
+      "expect": "allow",
+      "got": "allow",
+      "reason": "none",
+      "spans": []
+    },
+    {
+      "id": "bred-5",
+      "lang": "da",
+      "cat": "ekskæreste",
+      "expect": "block",
+      "got": "block",
+      "reason": "personal_attack",
+      "spans": [
+        "Ingen undrer sig over, at du stadig er single."
+      ]
+    },
+    {
+      "id": "bred-6",
+      "lang": "da",
+      "cat": "venskab",
+      "expect": "allow",
+      "got": "allow",
+      "reason": "none",
+      "spans": []
+    },
+    {
+      "id": "bred-7",
+      "lang": "da",
+      "cat": "venskab",
+      "expect": "block",
+      "got": "block",
+      "reason": "emotional_blackmail",
+      "spans": []
+    },
+    {
+      "id": "bred-8",
+      "lang": "da",
+      "cat": "retssag",
+      "expect": "allow",
+      "got": "allow",
+      "reason": "none",
+      "spans": []
+    },
+    {
+      "id": "bred-9",
+      "lang": "da",
+      "cat": "retssag",
+      "expect": "block",
+      "got": "block",
+      "reason": "threat_intimidation",
+      "spans": [
+        "Du kommer til at fortryde, at du tog mig i retten. Jeg ved, hvor du bor."
+      ]
+    },
+    {
+      "id": "bred-10",
+      "lang": "da",
+      "cat": "nabo",
+      "expect": "block",
+      "got": "block",
+      "reason": "sarcasm_or_irony",
+      "spans": [
+        "Hvor er det imponerende, at du endelig fandt ud af, hvor skraldespanden står."
+      ]
+    },
+    {
+      "id": "bred-11",
+      "lang": "en",
+      "cat": "inheritance",
+      "expect": "allow",
+      "got": "allow",
+      "reason": "none",
+      "spans": []
+    },
+    {
+      "id": "bred-12",
+      "lang": "en",
+      "cat": "inheritance",
+      "expect": "block",
+      "got": "block",
+      "reason": "personal_attack",
+      "spans": [
+        "how greedy you've become"
+      ]
+    },
+    {
+      "id": "bred-13",
+      "lang": "en",
+      "cat": "ex-partner",
+      "expect": "allow",
+      "got": "allow",
+      "reason": "none",
+      "spans": []
+    },
+    {
+      "id": "bred-14",
+      "lang": "en",
+      "cat": "friendship",
+      "expect": "block",
+      "got": "block",
+      "reason": "sarcasm_or_irony",
+      "spans": [
+        "Wow, so brave of you to finally pay back what you owed. Only took a year."
+      ]
+    },
+    {
+      "id": "bred-15",
+      "lang": "en",
+      "cat": "lawsuit",
+      "expect": "allow",
+      "got": "allow",
+      "reason": "none",
+      "spans": []
+    },
+    {
+      "id": "bred-16",
+      "lang": "en",
+      "cat": "lawsuit",
+      "expect": "block",
+      "got": "block",
+      "reason": "threat_intimidation",
+      "spans": [
+        "Keep pushing this case and see what happens to your business."
+      ]
     }
   ]
 }

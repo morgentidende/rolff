@@ -1,6 +1,6 @@
 # Rolff
 
-Rolig chat for skilte forældre. Beskeder vurderes semantisk (inkl. ironi, sarkasme og falsk høflighed) på serveren **før** afsendelse, og modtageren styrer selv, hvornår nye beskeder bliver tilgængelige.
+Rolig, saglig chat for mennesker i konflikt – fx skilsmisse, arvesager, ekskærester, venskaber og retssager. Beskeder vurderes semantisk (inkl. ironi, sarkasme og falsk høflighed) på serveren **før** afsendelse, og modtageren styrer selv, hvornår nye beskeder bliver tilgængelige.
 
 > Status: tidlig vertikal skive (login → invitation → besked med moderation → modtagelse). Ikke produktionsklar.
 
@@ -25,7 +25,7 @@ På Googles gratis niveau må Google bruge input til at forbedre sine produkter.
 - Ingen klientadgang til `messages`/`message_deliveries`; kun RPC `get_messages`, som returnerer egne + frigivne beskeder fra eget `joined_at`. Ingen Realtime på beskeder (klienten poller), så ventende beskeder kan ikke lække via Realtime.
 - Ingen kvitterings-, online- eller skrivesignaler findes i skema eller svar. Afsender får kun "accepteret".
 - Modtagetider beregnes i Postgres med tz-databasen (sommertid, vinduer over midnat).
-- Invitationstokens gemmes kun som SHA-256; fejl er generiske. Ekstra medlemmer kræver samtykke fra alle aktive forældre, bundet til rolle og `member_version`.
+- Invitationstokens gemmes kun som SHA-256; fejl er generiske. Ekstra deltagere (læse eller læse/skrive) kræver samtykke fra alle aktive deltagere, bundet til rolle og `member_version`. Databasens rolle `parent` betyder teknisk "hoveddeltager" (navnet er bevaret for at undgå en risikabel omdøbning); UI siger aldrig forælder.
 - Ingen beskedtekst i logs. Service-role-nøglen findes kun i Edge Functions.
 - Ikke ende-til-ende-krypteret: klartekst ligger i Postgres (krypteret at rest hos Supabase) og sendes til AI-udbyderen ved vurdering.
 
