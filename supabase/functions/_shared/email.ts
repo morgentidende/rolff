@@ -88,3 +88,14 @@ export async function sendMail(to: string, m: { subject: string; html: string; t
     return r.ok;
   } catch { return false; }
 }
+
+export function inactivityMail(p: { link: string }) {
+  const subject = "Din Rolff-konto slettes snart på grund af inaktivitet";
+  const html = shell(subject, `<p style="margin:0 0 14px">Hej,</p>
+<p style="margin:0 0 14px">Du har ikke logget ind i Rolff i et stykke tid. Om 14 dage sletter vi din konto og dine egne data automatisk.</p>
+<p style="margin:0 0 22px">Vil du beholde kontoen, skal du bare logge ind. Du kan også slå automatisk sletning fra under ⋮ → Privatliv.</p>
+<table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="#016C72" style="border-radius:10px;background:#016C72"><a href="${esc(p.link)}" style="display:inline-block;padding:14px 26px;color:#ffffff;text-decoration:none;font-weight:600;font-size:16px">Log ind</a></td></tr></table>
+<p style="margin:22px 0 0;font-size:13px;color:#7a807e">Det, du har skrevet til andre, bliver hos dem – også efter sletning.</p>`);
+  const text = `Hej,\n\nDu har ikke logget ind i Rolff i et stykke tid. Om 14 dage sletter vi din konto og dine egne data automatisk. Log ind for at beholde den: ${p.link}\nDu kan slå automatisk sletning fra under ⋮ → Privatliv.\n\nDet, du har skrevet til andre, bliver hos dem – også efter sletning.`;
+  return { subject, html, text };
+}

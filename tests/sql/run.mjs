@@ -9,7 +9,7 @@ const db = new PGlite({ extensions: { pgcrypto } });
 await db.exec(`
   create role anon nologin; create role authenticated nologin; create role service_role nologin bypassrls;
   create schema auth; create schema extensions;
-  create table auth.users(id uuid primary key default gen_random_uuid(), email varchar(255), raw_user_meta_data jsonb default '{}');
+  create table auth.users(id uuid primary key default gen_random_uuid(), email varchar(255), raw_user_meta_data jsonb default '{}', created_at timestamptz default now(), last_sign_in_at timestamptz);
   create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.sub', true),'')::uuid $$;
   grant usage on schema auth, public, extensions to anon, authenticated, service_role;
   grant execute on function auth.uid() to anon, authenticated, service_role;
@@ -281,5 +281,65 @@ await t('Feedback: ugyldig kategori afvises', async () => rejects(as(A, `select 
 await t('Feedback: for lang tekst afvises', async () => rejects(as(A, `select submit_feedback('other',repeat('x',2001))`), /check|violat/));
 await t('Feedback: max 5 pr. døgn', async () => { for (let k = 0; k < 4; k++) await as(A, `select submit_feedback('other','ok')`); await rejects(as(A, `select submit_feedback('other','sjette')`), /rate_limited/); });
 await t('Feedback: anonym kan ikke indsende', async () => rejects(db.transaction(async (tx) => { await tx.exec(`set local role anon`); return tx.query(`select submit_feedback('other','x')`); }), /permission|denied/));
+
+// GDPR: deletion (art. 17) and inactivity
+const [P, Q, R] = (await db.query(`insert into auth.users(email) values ('p@test.invalid'),('q@test.invalid'),('r@test.invalid') returning id`)).rows.map(r => r.id);
+let pc, solo;
+await t('Sletning: opsætning (P og Q i samtale, P alene i en anden)', async () => {
+  pc = (await as(P, `select create_conversation('x') c`))[0].c;
+  const tk = (await as(P, `select * from create_invitation($1,'parent')`, [pc]))[0].token;
+  await as(Q, `select accept_invitation($1)`, [tk]);
+  solo = (await as(P, `select create_conversation('y') c`))[0].c;
+  for (const [txt, k] of [['Leveret fra P', 'key-del00001']]) { const id = (await svc(`select issue_approval($1,$2,$3,'test','m') id`, [P, pc, await hash(txt)]))[0].id; await svc(`select * from commit_message($1,$2,$3,$4,$5)`, [id, P, pc, txt, k]); }
+  await as(Q, `select * from get_messages($1)`, [pc]); // releases delivery
+  // undelivered message: Q receives never
+  await svc(`insert into receive_windows(user_id, weekday, start_min, end_min) select $1, (extract(isodow from now())::int % 7) + 1, 0, 1`, [Q]).catch(() => {});
+  await as(P, `select set_conversation_color($1,'rose')`, [pc]);
+  await as(P, `select set_contact_alias($1,'Q-alias')`, [Q]);
+  await as(P, `select submit_feedback('idea','slet mig')`);
+  await as(P, `select touch_seen()`);
+});
+await t('Klient kan ikke kalde purge_user_content / inactivity_sweep', async () => {
+  await rejects(as(P, `select purge_user_content($1)`, [Q]), /permission denied/);
+  await rejects(as(P, `select * from inactivity_sweep()`), /permission denied/);
+});
+let qBefore;
+await t('Sletning: modparten har skrevet og modtaget før sletning', async () => {
+  const id = (await svc(`select issue_approval($1,$2,$3,'test','m') id`, [Q, pc, await hash('Svar fra Q')]))[0].id;
+  await svc(`select * from commit_message($1,$2,$3,'Svar fra Q','key-del00002')`, [id, Q, pc]);
+  qBefore = await as(Q, `select * from get_messages($1)`, [pc]); assert.equal(qBefore.length, 2);
+});
+await t('Sletning: intet efterlades om brugeren', async () => {
+  await svc(`select purge_user_content($1)`, [P]);
+  await db.query(`delete from auth.users where id=$1`, [P]);
+  const tabs = (await db.query(`select c.table_name, c.column_name from information_schema.columns c join information_schema.tables t using (table_schema, table_name)
+     where c.table_schema='public' and t.table_type='BASE TABLE' and c.data_type='uuid' and c.column_name ~ '(user_id|sender_id|created_by|owner_id|recipient_id|accepted_by|declined_by|contact_user_id)$'`)).rows;
+  assert.ok(tabs.length >= 10);
+  for (const r of tabs) { const n = (await db.query(`select count(*)::int n from public.${r.table_name} where ${r.column_name}=$1`, [P])).rows[0].n; assert.equal(n, 0, `${r.table_name}.${r.column_name}`); }
+  assert.equal((await db.query(`select count(*)::int n from conversations where id=$1`, [solo])).rows[0].n, 0);
+});
+await t('Sletning: modpartens kopi er uændret (samme beskeder, tekst og tid; afsender "Slettet bruger")', async () => {
+  const r = await as(Q, `select * from get_messages($1)`, [pc]);
+  assert.deepEqual(r.map(x => [x.id, x.body, +x.created_at]), qBefore.map(x => [x.id, x.body, +x.created_at]));
+  assert.equal(r.length, 2); assert.ok(r.some(x => x.mine)); const p = r.find(x => !x.mine); assert.equal(p.sender_name, 'Slettet bruger'); assert.equal(p.sender_id, null);
+});
+await t('Privatliv: standard 90 dage, til, ingen sky, 1 år', async () => {
+  const r = (await as(Q, `select * from get_my_privacy()`))[0];
+  assert.deepEqual(r, { inactivity_delete: true, inactivity_days: 90, cloud_sync: false, retention: '1y' });
+});
+await t('Privatliv: frist uden for 30-90 afvises', async () => rejects(as(Q, `select set_my_privacy(true, 10)`), /check|violat/));
+await t('Privatliv: klient kan ikke læse user_privacy direkte', async () => rejects(as(Q, `select * from user_privacy`), /permission denied/));
+await t('Inaktivitet: advarsel, så sletning efter frist; fravalg respekteres; login annullerer', async () => {
+  await as(R, `select touch_seen()`);
+  await as(Q, `select set_my_privacy(false, 30)`);
+  await db.query(`update user_privacy set last_seen_at = now() - interval '100 days' where user_id = any($1)`, [[Q, R]]);
+  let s = await svc(`select * from inactivity_sweep()`);
+  assert.ok(s.some(x => x.user_id === R && x.action === 'warn')); assert.ok(!s.some(x => x.user_id === Q));
+  s = await svc(`select * from inactivity_sweep()`); assert.ok(!s.some(x => x.user_id === R)); // warned once only
+  await db.query(`update user_privacy set warned_at = now() - interval '15 days' where user_id=$1`, [R]);
+  s = await svc(`select * from inactivity_sweep()`); assert.ok(s.some(x => x.user_id === R && x.action === 'delete'));
+  await as(R, `select touch_seen()`);
+  s = await svc(`select * from inactivity_sweep()`); assert.ok(!s.some(x => x.user_id === R));
+});
 console.log(`\n${pass} bestået, ${fail} fejlet`);
 process.exit(fail ? 1 : 0);
