@@ -22,7 +22,7 @@ function readInviteToken(): string | null {
   return sessionStorage.getItem("invite");
 }
 
-type Sheet = "privacy" | "words" | null | "lang" | "theme" | "times" | "faq" | "feedback" | "invite" | "export" | "addMember" | "report";
+type Sheet = "privacy" | "words" | null | "lang" | "theme" | "times" | "faq" | "feedback" | "invite" | "export" | "addMember" | "name" | "report";
 export type MenuItem = { label: string; run: () => void; danger?: boolean };
 
 export function App() {
@@ -66,6 +66,7 @@ export function App() {
     { label: t.theme, run: () => setSheet("theme") },
     { label: t.windows, run: () => setSheet("times") },
     { label: "FAQ", run: () => setSheet("faq") },
+    { label: da ? "Visningsnavn" : "Display name", run: () => setSheet("name") },
     { label: da ? "Privatliv og sletning" : "Privacy and deletion", run: () => setSheet("privacy") },
     { label: "Feedback", run: () => setSheet("feedback") },
     { label: da ? "Inviter person" : "Invite person", run: () => setSheet("invite") },
@@ -88,6 +89,8 @@ export function App() {
       {sheet === "theme" && <SheetView title={t.theme} close={close} lang={lang}><Choice name="theme" value={theme} set={setTheme} opts={[["dark", t.dark], ["light", t.light], ["system", t.system]]} /></SheetView>}
       {sheet === "times" && <SheetView title={t.windows} close={close} lang={lang}><ReceiveSettings lang={lang} /></SheetView>}
       {sheet === "faq" && <SheetView title="FAQ" close={close} lang={lang}><Faq lang={lang} /></SheetView>}
+      {sheet === "name" && <SheetView title={da ? "Visningsnavn" : "Display name"} close={close} lang={lang}><PublicName lang={lang} /></SheetView>}
+      {session && !sheet && <NameHint lang={lang} open={() => setSheet("name")} />}
       {sheet === "privacy" && <SheetView title={da ? "Privatliv og sletning" : "Privacy and deletion"} close={close} lang={lang}><PrivacyPanel lang={lang} /></SheetView>}
       {sheet === "feedback" && <SheetView title="Feedback" close={close} lang={lang}><FeedbackForm lang={lang} /></SheetView>}
       {sheet === "invite" && <SheetView title={da ? "Inviter person" : "Invite person"} close={close} lang={lang}><InviteByEmail lang={lang} done={() => setHomeKey(homeKey + 1)} /></SheetView>}
@@ -142,6 +145,7 @@ function Faq({ lang }: { lang: Lang }) {
     ["Hvad bliver blokeret?", "Rolff stopper beskeder, der kan opfattes som sårende (tjekket af AI), beskeder med emojis (de misforstås let – skriv det med ord), beskeder skrevet med store bogstaver (opleves som råb) og den samme besked sendt igen. Du får at vide, hvorfor beskeden ikke blev sendt, og kan rette den."],
     ["Hvordan blokerer jeg en samtale?", "Tryk ⋮ i samtalen → “Blokér samtale”. Så kan de andre ikke længere sende beskeder i samtalen; de får kun at vide, at beskeden ikke kan sendes – ikke hvem eller hvornår. Blokeringen udløber aldrig af sig selv. Den ophører kun, når du selv trykker “Afblokér”."],
     ["Hvad er “Blokerede ord”?", "Et valgfrit filter (slået fra som standard): Under ⋮ → “Blokerede ord” kan du tilføje ord eller sætninger, som ikke må nå frem til dig. Listen er privat. Men rammer en besked et af dine ord, får afsenderen at vide præcis hvilket ord, og at modtageren har blokeret det. Derfor skal du bekræfte det for hvert ord, du tilføjer. Du kan fjerne ord igen når som helst."],
+    ["Hvad kan de andre se om mig?", "Du logger ind med din e-mail. Som udgangspunkt er din e-mail også det navn, de andre i samtalen ser. Du kan når som helst vælge et kaldenavn under ⋮ → Visningsnavn – så ser de kun kaldenavnet, også i eksisterende samtaler, og din e-mail udleveres ikke længere til dem. Hver person kan desuden give dig et privat kaldenavn, som kun de selv ser. Gendannelse af glemt adgangskode og ændring af e-mail findes endnu ikke i appen (planlagt) – skriv via Feedback indtil da. Sletning af konto: ⋮ → Privatliv og sletning."],
     ["Hvordan rapporterer jeg noget?", "Tryk ⋮ i samtalen → “Rapportér”. Du vælger kategori, skriver selv hvad der er sket og kan markere de beskeder, du vil vedhæfte. Du ser en forhåndsvisning, og intet sendes før du bekræfter. Rapporten mailes til Rolffs udvikler (kontakt: nicolaipetersen108@gmail.com) med dit kaldenavn og bruger-id. Rolff gemmer kun kategori, tidspunkt og antal vedhæftede beskeder (til at begrænse misbrug) – ikke teksten. Der er ingen døgnvagt og ingen garanti for svar eller handling. Ved akut fare: ring 112."],
     ["Er det her den rigtige app?", "Nej, det er et testmiljø. Skriv kun opdigtede beskeder. AI-tjekket kører på en gratis testtjeneste."],
   ] : [
@@ -152,6 +156,7 @@ function Faq({ lang }: { lang: Lang }) {
     ["What gets blocked?", "Rolff stops messages that may come across as hurtful (checked by AI), messages with emojis (easily misread – use words), messages in all caps (reads as shouting) and the same message sent twice. You are told why it was not sent and can edit it."],
     ["How do I block a conversation?", "Tap ⋮ in the conversation → “Block conversation”. The others can then no longer send messages there; they are only told the message cannot be sent – not who or when. A block never expires by itself. It only ends when you tap “Unblock”."],
     ["What are “Blocked words”?", "An optional filter (off by default): under ⋮ → “Blocked words” you can add words or phrases that must not reach you. The list is private. But if a message hits one of your words, the sender is told exactly which word and that the recipient blocked it. That is why you confirm each word you add. You can remove words at any time."],
+    ["What can others see about me?", "You log in with your e-mail. By default your e-mail is also the name others in the conversation see. You can choose a nickname at any time under ⋮ → Display name – then they only see the nickname, also in existing conversations, and your e-mail is no longer given to them. Each person can also give you a private nickname only they see. Password recovery and changing your e-mail are not in the app yet (planned) – use Feedback until then. Account deletion: ⋮ → Privacy and deletion."],
     ["How do I report something?", "Tap ⋮ in the conversation → “Report”. You choose a category, write what happened and can tick the messages you want to attach. You see a preview and nothing is sent until you confirm. The report is e-mailed to Rolff's developer (contact: nicolaipetersen108@gmail.com) with your nickname and user id. Rolff stores only category, time and number of attached messages (to limit abuse) – not the text. There is no 24/7 staff and no guarantee of a reply or action. In an emergency: call 112."],
     ["Is this the real app?", "No, this is a test environment. Write made-up messages only. The AI check runs on a free test service."],
   ];
@@ -228,6 +233,35 @@ function BlockedWords({ lang, conv }: { lang: Lang; conv: string }) {
   );
 }
 
+export const emailVisibleNote = (lang: Lang) => lang === "da"
+  ? "De andre i samtalen ser din e-mail som dit navn, indtil du vælger et kaldenavn (⋮ → Visningsnavn). Du logger altid ind med din e-mail."
+  : "Others in the conversation see your e-mail as your name until you choose a nickname (⋮ → Display name). You always log in with your e-mail.";
+function NameHint({ lang, open }: { lang: Lang; open: () => void }) {
+  const da = lang === "da";
+  const [show, setShow] = useState(false);
+  useEffect(() => { if (localStorage.getItem("nameHintSeen")) return; supabase.rpc("get_my_public_name").then(({ data, error }) => { if (!error && !data) setShow(true); }); }, []);
+  if (!show) return null;
+  const done = () => { localStorage.setItem("nameHintSeen", "1"); setShow(false); };
+  return <div className="notice" role="note">{emailVisibleNote(lang)} <div className="row end"><button className="ghost" onClick={done}>{da ? "OK" : "OK"}</button><button onClick={() => { done(); open(); }}>{da ? "Vælg kaldenavn" : "Choose nickname"}</button></div></div>;
+}
+function PublicName({ lang }: { lang: Lang }) {
+  const da = lang === "da";
+  const [v, setV] = useState(""); const [msg, setMsg] = useState("");
+  useEffect(() => { supabase.rpc("get_my_public_name").then(({ data }) => setV((data as string) ?? "")); }, []);
+  const save = async (name: string | null) => {
+    const r = await supabase.rpc("set_my_public_name", { p_name: name });
+    setMsg(r.error ? (da ? "Højst 40 tegn, uden @ og linjeskift." : "Max 40 characters, no @ or line breaks.") : (da ? "Gemt. Gælder straks i alle samtaler." : "Saved. Applies at once in all conversations."));
+    if (!r.error && name === null) setV("");
+  };
+  return (
+    <form onSubmit={(e) => { e.preventDefault(); save(v.trim() || null); }}>
+      <p className="meta">{da ? "Det navn, de andre ser. Står feltet tomt, ser de din e-mail. Din e-mail er stadig dit login." : "The name others see. If empty, they see your e-mail. Your e-mail is still your login."}</p>
+      <label htmlFor="pn">{da ? "Kaldenavn" : "Nickname"}</label>
+      <input id="pn" maxLength={40} value={v} onChange={(e) => setV(e.target.value)} />
+      <div className="row end"><button type="button" className="ghost" onClick={() => save(null)}>{da ? "Vis min e-mail" : "Show my e-mail"}</button><button type="submit">{da ? "Gem" : "Save"}</button></div>
+      {msg && <p className="meta" role="status">{msg}</p>}
+    </form>);
+}
 export const REPORT_CATS: [string, string, string][] = [["harassment", "Chikane/trusler", "Harassment/threats"], ["inappropriate", "Upassende indhold", "Inappropriate content"], ["child_safety", "Børns sikkerhed", "Child safety"], ["other", "Andet", "Other"]];
 export const reportHonesty = (da: boolean) => da
   ? "Rapporten sendes som en e-mail til Rolffs udvikler. Der er ingen døgnvagt og ingen garanti for svar eller handling. Er nogen i akut fare, så ring 112 eller kontakt politiet (114)."
@@ -310,7 +344,7 @@ function Auth({ lang, peek }: { lang: Lang; peek?: Peek | null }) {
   return (
     <div className="card">
       <div style={{ textAlign: "center" }}><img src="./icons/rolff-192.png" alt="Rolff logo" width={96} height={96} style={{ borderRadius: 22 }} /><h1 style={{ marginTop: 8 }}>Rolff</h1></div>
-      {peek ? <div className="notice"><strong>{lang === "da" ? `${peek.inviter_email} har inviteret dig.` : `${peek.inviter_email} invited you.`}</strong> {lang === "da" ? "Vælg en adgangskode for at komme ind i samtalen. Har du allerede en konto, så log ind." : "Choose a password to join. Already have an account? Log in."}<p className="meta" style={{ marginBottom: 0 }}>{evidenceNote(lang)}</p></div>
+      {peek ? <div className="notice"><strong>{lang === "da" ? `${peek.inviter_email} har inviteret dig.` : `${peek.inviter_email} invited you.`}</strong> {lang === "da" ? "Vælg en adgangskode for at komme ind i samtalen. Har du allerede en konto, så log ind." : "Choose a password to join. Already have an account? Log in."}<p className="meta" style={{ marginBottom: 0 }}>{evidenceNote(lang)} {emailVisibleNote(lang)}</p></div>
         : peek === null ? <div className="notice" role="alert">{lang === "da" ? "Invitationen er ugyldig, udløbet eller allerede brugt." : "The invitation is invalid, expired or already used."}</div> : null}
       {new URLSearchParams(location.search).has("deleted") && <div className="notice" role="status">{lang === "da" ? "Din konto er slettet." : "Your account has been deleted."}</div>}
       <p>{t.tagline}</p><p>{t.intro}</p>
@@ -320,7 +354,7 @@ function Auth({ lang, peek }: { lang: Lang; peek?: Peek | null }) {
         <PasswordInput id="p" lang={lang} value={pw} onChange={setPw} minLength={mode === "signup" ? 8 : 1} autoComplete={mode === "login" ? "current-password" : "new-password"} />
         {mode === "signup" && <><label htmlFor="p2">{pwText[lang].repeat}</label>
           <PasswordInput id="p2" lang={lang} value={pw2} onChange={(v) => { setPw2(v); setErr(""); }} minLength={8} autoComplete="new-password" invalid={pw2.length > 0 && !passwordsMatch(pw, pw2)} describedBy="pwerr" /></>}
-        {mode === "signup" && <p className="meta" role="note">{evidenceNote(lang)}</p>}
+        {mode === "signup" && <p className="meta" role="note">{evidenceNote(lang)} {emailVisibleNote(lang)}</p>}
         {mode === "signup" && <p><label style={{ display: "flex", gap: 8 }}><input type="checkbox" style={{ width: 24, minHeight: 24 }} checked={ai} onChange={(e) => setAi(e.target.checked)} required />{t.ai} {t.aiAccept}</label></p>}
         {err ? <p className="err" id="pwerr" role="alert">{err}</p>
           : mode === "signup" && pw2.length > 0 && !passwordsMatch(pw, pw2) ? <p className="err" id="pwerr" aria-live="polite">{pwText[lang].mismatch}</p> : null}
@@ -397,7 +431,7 @@ function InviteByEmail({ lang, done }: { lang: Lang; done: () => void }) {
       : r.data?.error === "bad_input" ? (da ? "Tjek e-mailadressen." : "Check the email address.") : (da ? "Mailen kunne ikke sendes. Prøv igen senere." : "The email could not be sent. Try again later.") });
   };
   return (
-    <form onSubmit={submit}><p className="meta" role="note">{evidenceNote(lang)}</p>
+    <form onSubmit={submit}><p className="meta" role="note">{evidenceNote(lang)} {emailVisibleNote(lang)}</p>
       <p className="meta">{da ? "Der oprettes en ny samtale mellem jer to. Den inviterede ser kun beskeder fra efter, hun eller han er kommet med." : "A new conversation is created for the two of you. The invitee only sees messages from after joining."}</p>
       <label htmlFor="ie">{da ? "E-mail" : "Email"}</label><input id="ie" type="email" required maxLength={254} value={email} onChange={(e) => setEmail(e.target.value)} />
       <div className="row end"><button type="submit" disabled={busy}>{busy ? (da ? "Sender…" : "Sending…") : "Send invitation"}</button></div>

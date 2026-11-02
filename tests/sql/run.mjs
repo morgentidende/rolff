@@ -359,6 +359,21 @@ await t('Blokering: ingen udløbskolonne', async () => assert.deepEqual((await d
 await t('Blokering: ophører kun når A afblokerer', async () => { await as(A, `select unblock_conversation($1)`, [conv]); await sendAs(B, 'Hej igen', 'key-blk00004'); });
 await t('Feedback: nye kategorier', async () => { await svc(`delete from feedback`); await as(B, `select submit_feedback('complaint','x')`); await as(B, `select submit_feedback('filter','y')`); });
 
+await t('Visningsnavn: standard er e-mail; kaldenavn skjuler e-mail i alle API-svar og slår igennem straks', async () => {
+  await db.query(`update auth.users set email='a-login@test.invalid' where id=$1`, [A]);
+  await svc(`delete from contact_aliases where owner_id=$1`, [B]);
+  const lbl = async () => (await as(B, `select others from list_my_conversations() where id=$1`, [conv]))[0].others.find(o => o.user_id === A).email;
+  assert.equal(await lbl(), 'a-login@test.invalid');
+  await as(A, `select set_my_public_name('Mor')`);
+  assert.equal(await lbl(), 'Mor');
+  const all = JSON.stringify([await as(B, `select * from list_my_conversations()`), await as(B, `select * from get_messages($1)`, [conv])]);
+  assert.ok(!all.includes('a-login@test.invalid'));
+  assert.ok((await as(B, `select * from get_messages($1)`, [conv])).filter(m => m.sender_id === A).every(m => m.sender_name === 'Mor'));
+  await rejects(as(B, `select * from profiles where user_id=$1`, [A]).then(r => { if (r.length) throw new Error('leak'); }).then(() => { throw new Error('ok-empty'); }), /ok-empty/);
+  await rejects(as(B, `select public_label_of($1)`, [A]), /permission|denied/);
+  await rejects(as(A, `select set_my_public_name('a@b')`), /bad_name/);
+  await as(A, `select set_my_public_name(null)`); assert.equal(await lbl(), 'a-login@test.invalid');
+});
 await t('Rapport: B rapporterer med valgte beskeder; kun metadata gemmes', async () => {
   const ms = await as(B, `select id from get_messages($1)`, [conv]);
   const r = await as(B, `select * from submit_report($1,'harassment',$2::uuid[])`, [conv, [ms[0].id]]);

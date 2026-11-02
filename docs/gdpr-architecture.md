@@ -81,6 +81,13 @@ Supabase (DB, auth, functions – Frankfurt), Hostinger (web + mail-relay), Open
 - Tests: to brugere med private data hver → eksporten indeholder kun egne rækker; alle tabeller med `user_id` er dækket (test over `information_schema`); ikke-leverede beskeder udelades.
 - Nævnes i FAQ og privatlivspolitik.
 
+## Login-e-mail vs. visningsnavn (besluttet 2026-11-02)
+- **Login-id = e-mail** (Supabase email+password; verificeret: signup/login bruger `signUp`/`signInWithPassword` med e-mail).
+- **Visningsnavn** (`profiles.public_name`, nullable): standard = e-mailen. Brugeren kan til enhver tid vælge et kaldenavn (⋮ → Visningsnavn; hint ved første login). Ingen `@`, ≤40 tegn.
+- **Hvem ser hvad:** modparten ser eget private alias for dig → ellers dit kaldenavn → ellers din e-mail. Er kaldenavn valgt, udleverer intet API (`list_my_conversations`, `get_messages`, `peek_invitation`, `consent_member_invitation`, invitationsmails) din e-mail til andre. `profiles` er self-only (RLS); ingen realtime-publikation. Navne beregnes ved læsning, så en ændring slår straks igennem i eksisterende samtaler. Invitationsmail til modtageren viser dit visningsnavn; modtagerens e-mail kender du allerede selv.
+- Oplyses tydeligt ved oprettelse, i invitationsformularen og på invitationssiden.
+- **Kontosletning:** ⋮ → Privatliv og sletning (adgangskode + bekræftelse), se ovenfor.
+- **Ændring af e-mail og gendannelse af adgangskode:** IKKE implementeret endnu (kræver Supabase auth-mails via vores egen SMTP/mailer, ikke den indbyggede). Planlagt; indtil da via Feedback. Krav: bekræftelse på både gammel og ny adresse; reset-link med kort levetid.
 ## Rapportering (besluttet 2026-11-02, Apple 1.2 / Google Play UGC)
 - Adgang: samtalens ⋮ → "Rapportér". Kontakt (nicolaipetersen108@gmail.com) står i FAQ.
 - Brugeren vælger selv indholdet: kategori (Chikane/trusler, Upassende indhold, Børns sikkerhed, Andet), egen tekst (≤2000 tegn) og højst 20 selvmarkerede beskeder. Forhåndsvisning + eksplicit bekræftelse; intet sendes automatisk.
