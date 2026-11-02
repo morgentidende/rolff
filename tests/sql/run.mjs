@@ -419,5 +419,12 @@ await t('Eksport: kun egne data, ingen andres aliaser/ord/feedback; rate limit',
   await rejects(svc(`select export_user_data($1)`, [B]), /rate_limited/);
   await rejects(as(A, `select export_user_data($1)`, [A]), /permission|denied/);
 });
+await t('Auth-mail rate limit: 3 pr. time pr. adresse+type; kun service', async () => {
+  const r = [];
+  for (let i = 0; i < 4; i++) r.push((await svc(`select auth_mail_allow('h1','recovery') ok`))[0].ok);
+  assert.deepEqual(r, [true, true, true, false]);
+  assert.equal((await svc(`select auth_mail_allow('h1','email_change') ok`))[0].ok, true);
+  await rejects(as(A, `select auth_mail_allow('h2','recovery')`), /permission|denied/);
+});
 console.log(`\n${pass} bestået, ${fail} fejlet`);
 process.exit(fail ? 1 : 0);

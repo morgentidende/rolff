@@ -111,3 +111,24 @@ export function reportMail(p: { category: string; body: string; senderName: stri
   const text = `Rolff rapport\n\nKategori: ${cat}\nFra: ${p.senderName} (${p.senderId})\nSamtale: ${p.conversationId}\n\n${p.body || "–"}\n\nVedhæftede beskeder (${p.messages.length}):\n` + p.messages.map((m) => `[${m.created_at}] ${m.sender_name}: ${m.body}`).join("\n") + "\n";
   return { subject, html, text };
 }
+
+const btn = (link: string, label: string) => `<table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="#016C72" style="border-radius:10px;background:#016C72"><a href="${esc(link)}" style="display:inline-block;padding:14px 26px;color:#ffffff;text-decoration:none;font-weight:600;font-size:16px">${esc(label)}</a></td></tr></table>`;
+export function recoveryMail(p: { link: string }) {
+  const subject = "Nulstil din adgangskode til Rolff";
+  const html = shell(subject, `<p style="margin:0 0 14px">Hej,</p>
+<p style="margin:0 0 22px">Nogen (forhåbentlig dig) har bedt om at nulstille adgangskoden til din Rolff-konto. Tryk på knappen for at vælge en ny. Linket virker én gang og udløber efter kort tid.</p>
+${btn(p.link, "Vælg ny adgangskode")}
+<p style="margin:22px 0 0;font-size:13px;color:#7a807e">Har du ikke bedt om det, kan du se bort fra denne mail. Din adgangskode ændres ikke.</p>`);
+  const text = `Hej,\n\nNogen (forhåbentlig dig) har bedt om at nulstille adgangskoden til din Rolff-konto. Vælg en ny her (virker én gang, udløber efter kort tid):\n${p.link}\n\nHar du ikke bedt om det, kan du se bort fra denne mail.`;
+  return { subject, html, text };
+}
+export function emailChangeMail(p: { link: string; current: boolean; newEmail: string }) {
+  const subject = "Bekræft ændring af e-mail i Rolff";
+  const what = p.current
+    ? `Der er bedt om at ændre e-mailen på din Rolff-konto til <strong>${esc(p.newEmail)}</strong>. Bekræft her fra din nuværende adresse. Ændringen sker først, når både den gamle og den nye adresse er bekræftet.`
+    : `Bekræft, at denne adresse skal bruges til din Rolff-konto. Ændringen sker først, når både den gamle og den nye adresse er bekræftet.`;
+  const html = shell(subject, `<p style="margin:0 0 14px">Hej,</p><p style="margin:0 0 22px">${what}</p>${btn(p.link, "Bekræft")}
+<p style="margin:22px 0 0;font-size:13px;color:#7a807e">Har du ikke bedt om det, så ignorer mailen og skift gerne din adgangskode.</p>`);
+  const text = `Hej,\n\n${what.replace(/<[^>]+>/g, "")}\n${p.link}\n\nHar du ikke bedt om det, så ignorer mailen og skift gerne din adgangskode.`;
+  return { subject, html, text };
+}

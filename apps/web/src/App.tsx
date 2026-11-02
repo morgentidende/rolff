@@ -22,7 +22,7 @@ function readInviteToken(): string | null {
   return sessionStorage.getItem("invite");
 }
 
-type Sheet = "privacy" | "words" | null | "lang" | "theme" | "times" | "faq" | "feedback" | "invite" | "export" | "addMember" | "name" | "report";
+type Sheet = "privacy" | "words" | null | "lang" | "theme" | "times" | "faq" | "feedback" | "invite" | "export" | "addMember" | "name" | "report" | "account" | "newpw";
 export type MenuItem = { label: string; run: () => void; danger?: boolean };
 
 export function App() {
@@ -60,6 +60,17 @@ export function App() {
         : (da ? "Invitationen kunne ikke bruges. Den kan være udløbet, brugt eller sendt til en anden e-mail." : "The invitation could not be used. It may be expired, used, or meant for another email."));
     });
   }, [session, inviteToken]);
+  useEffect(() => {
+    const q = new URLSearchParams(location.search), type = q.get("auth"), th = q.get("th");
+    if (!type || !th) return;
+    history.replaceState(null, "", location.pathname);
+    if (type !== "recovery" && type !== "email_change") return;
+    supabase.auth.verifyOtp({ token_hash: th, type }).then(({ error }) => {
+      if (error) { setInviteMsg(da ? "Linket er ugyldigt eller udløbet. Bed om et nyt." : "The link is invalid or expired. Request a new one."); return; }
+      if (type === "recovery") setSheet("newpw");
+      else setInviteMsg(da ? "Bekræftet. E-mailen skiftes, når både den gamle og den nye adresse er bekræftet." : "Confirmed. The email changes once both the old and the new address are confirmed.");
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (session) supabase.rpc("touch_seen").then(() => {}); }, [session]);
   const menu: MenuItem[] = [
     { label: t.lang, run: () => setSheet("lang") },
@@ -67,6 +78,7 @@ export function App() {
     { label: t.windows, run: () => setSheet("times") },
     { label: "FAQ", run: () => setSheet("faq") },
     { label: da ? "Visningsnavn" : "Display name", run: () => setSheet("name") },
+    { label: da ? "Konto (e-mail og adgangskode)" : "Account (email and password)", run: () => setSheet("account") },
     { label: da ? "Privatliv og sletning" : "Privacy and deletion", run: () => setSheet("privacy") },
     { label: da ? "Privatlivspolitik" : "Privacy policy", run: () => { window.open("./privatliv.html" + (da ? "" : "#en"), "_blank", "noopener"); } },
     { label: "Feedback", run: () => setSheet("feedback") },
@@ -92,6 +104,8 @@ export function App() {
       {sheet === "faq" && <SheetView title="FAQ" close={close} lang={lang}><Faq lang={lang} /></SheetView>}
       {sheet === "name" && <SheetView title={da ? "Visningsnavn" : "Display name"} close={close} lang={lang}><PublicName lang={lang} /></SheetView>}
       {session && !sheet && <NameHint lang={lang} open={() => setSheet("name")} />}
+      {sheet === "account" && <SheetView title={da ? "Konto" : "Account"} close={close} lang={lang}><AccountPanel lang={lang} /></SheetView>}
+      {sheet === "newpw" && session && <SheetView title={da ? "Vælg ny adgangskode" : "Choose a new password"} close={close} lang={lang}><NewPassword lang={lang} done={close} /></SheetView>}
       {sheet === "privacy" && <SheetView title={da ? "Privatliv og sletning" : "Privacy and deletion"} close={close} lang={lang}><PrivacyPanel lang={lang} /></SheetView>}
       {sheet === "feedback" && <SheetView title="Feedback" close={close} lang={lang}><FeedbackForm lang={lang} /></SheetView>}
       {sheet === "invite" && <SheetView title={da ? "Inviter person" : "Invite person"} close={close} lang={lang}><InviteByEmail lang={lang} done={() => setHomeKey(homeKey + 1)} /></SheetView>}
@@ -369,12 +383,13 @@ function FeedbackForm({ lang }: { lang: Lang }) {
 
 function Auth({ lang, peek }: { lang: Lang; peek?: Peek | null }) {
   const t = strings[lang];
-  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [mode, setMode] = useState<"login" | "signup" | "forgot">("login"); const [sent, setSent] = useState(false);
   const [email, setEmail] = useState(""); const [pw, setPw] = useState(""); const [pw2, setPw2] = useState("");
   useEffect(() => { if (peek) { setMode("signup"); setEmail(peek.invitee_email); } }, [peek]); const [ai, setAi] = useState(false);
   const [err, setErr] = useState(""); const [busy, setBusy] = useState(false);
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setErr("");
+    if (mode === "forgot") { setBusy(true); try { await callFn("account-mail", { action: "recover", email }); } catch { /* same message */ } setBusy(false); setSent(true); return; }
     if (mode === "signup" && !passwordsMatch(pw, pw2)) { setErr(pwText[lang].mismatch); return; }
     setBusy(true);
     const r = mode === "login" ? await supabase.auth.signInWithPassword({ email, password: pw })
@@ -389,7 +404,15 @@ function Auth({ lang, peek }: { lang: Lang; peek?: Peek | null }) {
         : peek === null ? <div className="notice" role="alert">{lang === "da" ? "Invitationen er ugyldig, udløbet eller allerede brugt." : "The invitation is invalid, expired or already used."}</div> : null}
       {new URLSearchParams(location.search).has("deleted") && <div className="notice" role="status">{lang === "da" ? "Din konto er slettet." : "Your account has been deleted."}</div>}
       <p>{t.tagline}</p><p>{t.intro}</p>
-      <form onSubmit={submit}>
+      {mode === "forgot" ? <form onSubmit={submit}>
+        <h2>{lang === "da" ? "Glemt adgangskode" : "Forgot password"}</h2>
+        {sent ? <p className="notice" role="status">{lang === "da" ? "Hvis der findes en konto med den e-mail, har vi sendt et link til at vælge en ny adgangskode. Tjek også spam." : "If an account exists for that email, we have sent a link to choose a new password. Check spam too."}</p>
+          : <><label htmlFor="fe">{t.email}</label><input id="fe" type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} /></>}
+        <div className="row" style={{ marginTop: 12 }}>
+          {!sent && <button type="submit" disabled={busy}>{lang === "da" ? "Send link" : "Send link"}</button>}
+          <button type="button" className="ghost" onClick={() => { setMode("login"); setSent(false); }}>{t.login}</button>
+        </div>
+      </form> : <form onSubmit={submit}>
         <label htmlFor="e">{t.email}</label><input id="e" type="email" required autoComplete="email" readOnly={!!peek} value={email} onChange={(e) => setEmail(e.target.value)} />
         <label htmlFor="p">{t.password}</label>
         <PasswordInput id="p" lang={lang} value={pw} onChange={setPw} minLength={mode === "signup" ? 8 : 1} autoComplete={mode === "login" ? "current-password" : "new-password"} />
@@ -403,7 +426,8 @@ function Auth({ lang, peek }: { lang: Lang; peek?: Peek | null }) {
           <button type="submit" disabled={busy}>{mode === "login" ? t.login : t.signup}</button>
           <button type="button" className="ghost" onClick={() => { setMode(mode === "login" ? "signup" : "login"); setPw2(""); setErr(""); }}>{mode === "login" ? t.signup : t.login}</button>
         </div>
-      </form>
+        {mode === "login" && !peek && <p><button type="button" className="linkish" onClick={() => { setMode("forgot"); setErr(""); }}>{lang === "da" ? "Glemt adgangskode?" : "Forgot password?"}</button></p>}
+      </form>}
     </div>
   );
 }
@@ -721,4 +745,72 @@ function ReceiveSettings({ lang }: { lang: Lang }) {
       <div className="row"><button className="ghost" onClick={() => setWs([...ws, { weekday: 1, start_minute: 17 * 60, end_minute: 20 * 60 }])}>+ {t.add}</button><span className="spacer" /><span className="meta" role="status">{msg}</span><button onClick={save}>{t.save}</button></div>
     </div>
   );
+}
+
+function NewPassword({ lang, done }: { lang: Lang; done: () => void }) {
+  const da = lang === "da";
+  const [pw, setPw] = useState(""); const [pw2, setPw2] = useState(""); const [msg, setMsg] = useState(""); const [ok, setOk] = useState(false);
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault(); if (!passwordsMatch(pw, pw2)) { setMsg(pwText[lang].mismatch); return; }
+    const r = await supabase.auth.updateUser({ password: pw });
+    if (r.error) setMsg(da ? "Adgangskoden kunne ikke gemmes. Den skal være mindst 8 tegn." : "The password could not be saved. It must be at least 8 characters.");
+    else { setOk(true); setMsg(da ? "Ny adgangskode gemt." : "New password saved."); }
+  };
+  if (ok) return <><p className="notice" role="status">{msg}</p><button type="button" onClick={done}>OK</button></>;
+  return (<form onSubmit={submit}>
+    <label htmlFor="np">{da ? "Ny adgangskode" : "New password"}</label><PasswordInput id="np" lang={lang} value={pw} onChange={setPw} minLength={8} autoComplete="new-password" />
+    <label htmlFor="np2">{pwText[lang].repeat}</label><PasswordInput id="np2" lang={lang} value={pw2} onChange={setPw2} minLength={8} autoComplete="new-password" />
+    {msg && <p className="err" role="alert">{msg}</p>}
+    <button type="submit" style={{ marginTop: 12 }}>{da ? "Gem" : "Save"}</button>
+  </form>);
+}
+
+function AccountPanel({ lang }: { lang: Lang }) {
+  const da = lang === "da";
+  const [email, setEmail] = useState("");
+  useEffect(() => { supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? "")); }, []);
+  const [cur, setCur] = useState(""); const [pw, setPw] = useState(""); const [pw2, setPw2] = useState(""); const [pwMsg, setPwMsg] = useState<[boolean, string] | null>(null);
+  const [ne, setNe] = useState(""); const [ep, setEp] = useState(""); const [eMsg, setEMsg] = useState<[boolean, string] | null>(null); const [busy, setBusy] = useState(false);
+  const changePw = async (e: React.FormEvent) => {
+    e.preventDefault(); setPwMsg(null);
+    if (!passwordsMatch(pw, pw2)) { setPwMsg([false, pwText[lang].mismatch]); return; }
+    setBusy(true);
+    const re = await supabase.auth.signInWithPassword({ email, password: cur });
+    if (re.error) { setBusy(false); setPwMsg([false, da ? "Nuværende adgangskode er forkert." : "Current password is wrong."]); return; }
+    const r = await supabase.auth.updateUser({ password: pw }); setBusy(false);
+    setPwMsg(r.error ? [false, da ? "Kunne ikke gemme. Mindst 8 tegn, og den skal være ny." : "Could not save. At least 8 characters, and it must be new."] : [true, da ? "Adgangskoden er skiftet." : "Password changed."]);
+    if (!r.error) { setCur(""); setPw(""); setPw2(""); }
+  };
+  const changeEmail = async (e: React.FormEvent) => {
+    e.preventDefault(); setEMsg(null); setBusy(true);
+    let r; try { r = await callFn("account-mail", { action: "change_email", password: ep, new_email: ne }); } catch { r = { status: 0, data: null as any }; }
+    setBusy(false);
+    const err = r.data?.error;
+    setEMsg(r.status === 200 ? [true, da ? `Vi har sendt et bekræftelseslink til både ${email} og ${ne}. E-mailen skiftes først, når begge er bekræftet.` : `We sent a confirmation link to both ${email} and ${ne}. The email changes once both are confirmed.`]
+      : [false, err === "wrong_password" ? (da ? "Adgangskoden er forkert." : "Wrong password.")
+        : err === "rate_limited" ? (da ? "For mange forsøg. Prøv igen om en time." : "Too many attempts. Try again in an hour.")
+        : err === "email_taken" ? (da ? "Den e-mail kan ikke bruges." : "That email cannot be used.")
+        : err === "test_mail_blocked" ? (da ? "I testversionen kan der kun sendes til godkendte testadresser." : "In the test version mail only goes to approved test addresses.")
+        : (da ? "Noget gik galt. Prøv igen." : "Something went wrong. Try again.")]);
+    if (r.status === 200) setEp("");
+  };
+  return (<>
+    <p className="meta">{da ? "Din e-mail: " : "Your email: "}<strong>{email}</strong></p>
+    <form onSubmit={changePw}>
+      <h2>{da ? "Skift adgangskode" : "Change password"}</h2>
+      <label htmlFor="cp">{da ? "Nuværende adgangskode" : "Current password"}</label><PasswordInput id="cp" lang={lang} value={cur} onChange={setCur} minLength={1} autoComplete="current-password" />
+      <label htmlFor="cp1">{da ? "Ny adgangskode" : "New password"}</label><PasswordInput id="cp1" lang={lang} value={pw} onChange={setPw} minLength={8} autoComplete="new-password" />
+      <label htmlFor="cp2">{pwText[lang].repeat}</label><PasswordInput id="cp2" lang={lang} value={pw2} onChange={setPw2} minLength={8} autoComplete="new-password" />
+      {pwMsg && <p className={pwMsg[0] ? "notice" : "err"} role={pwMsg[0] ? "status" : "alert"}>{pwMsg[1]}</p>}
+      <button type="submit" disabled={busy} style={{ marginTop: 12 }}>{da ? "Skift adgangskode" : "Change password"}</button>
+    </form>
+    <form onSubmit={changeEmail} style={{ marginTop: 24 }}>
+      <h2>{da ? "Skift e-mail" : "Change email"}</h2>
+      <label htmlFor="ne">{da ? "Ny e-mail" : "New email"}</label><input id="ne" type="email" required autoComplete="email" value={ne} onChange={(e) => setNe(e.target.value)} />
+      <label htmlFor="ep">{da ? "Din adgangskode" : "Your password"}</label><PasswordInput id="ep" lang={lang} value={ep} onChange={setEp} minLength={1} autoComplete="current-password" />
+      <p className="meta">{da ? "Vi sender et link til både den nuværende og den nye adresse. Begge skal bekræftes." : "We send a link to both the current and the new address. Both must be confirmed."}</p>
+      {eMsg && <p className={eMsg[0] ? "notice" : "err"} role={eMsg[0] ? "status" : "alert"}>{eMsg[1]}</p>}
+      <button type="submit" disabled={busy}>{da ? "Skift e-mail" : "Change email"}</button>
+    </form>
+  </>);
 }
