@@ -4,6 +4,7 @@
 - **Tekst** 49 kr./md.: tekstbeskeder. **Tekst + vedhæftninger** 79 kr./md.: også billeder/screenshots og PDF.
 - **Plan pr. bruger**, ikke pr. samtale: planen er afsenderens evne. To forældre kan have hver sin plan. At *sende* en vedhæftning kræver, at **afsenderen** har 79-planen; alle medlemmer (også læsere) kan altid *se* modtagne vedhæftninger.
 - Regel: opgradering gælder straks (ny periode starter). Nedgradering planlægges til periodens slut (`pending_plan`); indtil da beholdes vedhæftninger. Vælg nuværende plan = annullér planlagt skift. "Skift straks" ved nedgradering findes kun som testfunktion.
+- **Ekstra deltagere:** at invitere en ekstra person (ud over de to forældre) kræver, at **den inviterende** har 79-planen – tjekket i `create_member_invitation` (DB, `plan_required`) og i `invite-email` (HTTP 402). Andre deltagere og den inviterede må være på 49 og kan acceptere/deltage normalt. Den første modpart (oprettelse af samtalen, `create_invitation`) er tilladt på 49. Nedgradering fjerner ingen eksisterende deltagere.
 - Håndhævelse: `send-attachment` (402 `plan_required`) og igen i databasen i `commit_attachment_message` (`plan_required`).
 - Feature-flag: `app_flags.plan_test_switch`. `user_plans.source` er låst til `'test'`; rigtig betaling skal tilføje en ny kilde (fx `stripe`) og sætte planen fra en verificeret webhook, ikke fra klienten.
 

@@ -163,7 +163,10 @@ function Faq({ lang }: { lang: Lang }) {
     ["Hvem kan se og skrive i samtalen?", "Under ⋮ → “Deltagere og roller” ser du alle deltagere og deres rolle: Part, Læse og skrive eller Kun læse. Parterne kan fjerne ekstra deltagere eller gøre en skrivende deltager til kun læse. Skriveadgang kræver en ny invitation, som alle parter godkender. Alle kan forlade samtalen."],
     ["Hvad bliver blokeret?", "Rolff stopper beskeder, der kan opfattes som sårende (tjekket af AI), beskeder med emojis (de misforstås let – skriv det med ord), beskeder skrevet med store bogstaver (opleves som råb) og den samme besked sendt igen. Du får at vide, hvorfor beskeden ikke blev sendt, og kan rette den."],
     ["Hvordan blokerer jeg en samtale?", "Tryk ⋮ i samtalen → “Blokér samtale”. Så kan de andre ikke længere sende beskeder i samtalen; de får kun at vide, at beskeden ikke kan sendes – ikke hvem eller hvornår. Blokeringen udløber aldrig af sig selv. Den ophører kun, når du selv trykker “Afblokér”."],
-    ["Hvad er “Blokerede ord”?", "Et valgfrit filter (slået fra som standard): Under ⋮ → “Blokerede ord” kan du tilføje ord eller sætninger, som ikke må nå frem til dig. Listen er privat. Men rammer en besked et af dine ord, får afsenderen at vide præcis hvilket ord, og at modtageren har blokeret det. Derfor skal du bekræfte det for hvert ord, du tilføjer. Du kan fjerne ord igen når som helst."],
+    ["Hvad er “Blokerede ord”?", "Et valgfrit filter (slået fra som standard): Under ⋮ → “Blokerede ord” kan du tilføje enkeltord, udtryk på flere ord eller hele sætninger (op til 120 tegn), som ikke må nå frem til dig. Store/små bogstaver og accenter er ligegyldige (fx matcher “dårlig far” også “DÅRLIG FAR” og “darlig far”), og ordene skal stå i samme rækkefølge. Afslutter du med * (fx “pis*”), rammes også ord, der begynder sådan. Listen gælder den samtale, du står i, og er privat. Rammer en besked noget på listen, bliver den ikke leveret – afsenderen får at vide præcis hvilket ord eller udtryk, og at modtageren har blokeret det, og kan omformulere. Derfor skal du bekræfte det for hvert ord. Du kan fjerne ord igen når som helst."],
+    ["Kan jeg begrænse længden af beskeder fra en bestemt person?", "Ja. Under ⋮ → “Deltagere og roller” → “Indstillinger for denne person” vælger du maks. længde for beskeder fra den person til dig: ubegrænset (standard), 140, 250 eller et brugerdefineret tal fra 80 til 10.000 tegn (beskeder er dog altid højst 480 tegn). Grænsen gælder i alle dine samtaler med personen og kun nye beskeder. Er beskeden for lang, bliver den afvist før AI-tjekket, og afsenderen får at vide fx “X har sat en grænse på 140 tegn; din besked er 212”. Afsenderen ser kun selve grænsen. Er I flere, gælder den strengeste grænse. Ved vedhæftninger tæller kun billedteksten."],
+    ["Kan jeg begrænse hvor tit en person skriver?", "Ja, samme sted: højst 1 besked pr. minut, pr. 5 minutter, pr. time eller et brugerdefineret antal minutter (1 til 1.440 = 24 timer). Standard er ingen grænse. Det regnes fra personens seneste leverede besked til dig i alle jeres samtaler; afviste beskeder tæller ikke, vedhæftninger tæller som en besked. For tidlige beskeder gemmes ikke, og afsenderen får at vide, hvornår der kan sendes igen. Er I flere, gælder den strengeste grænse."],
+    ["Hvem kan tilføje en ekstra person til en samtale?", "At invitere den anden forælder, når du opretter en samtale, kan alle. At tilføje en ekstra person (fx advokat eller bedsteforælder) kræver, at DU som inviterer har planen “Tekst + vedhæftninger” (79 kr./md.). De andre deltagere og den inviterede må gerne have 49-planen. Nedgraderer du senere, bliver de nuværende deltagere."],
     ["Hvad kan de andre se om mig?", "Du logger ind med din e-mail. Som udgangspunkt er din e-mail også det navn, de andre i samtalen ser. Du kan når som helst vælge et kaldenavn under ⋮ → Visningsnavn – så ser de kun kaldenavnet, også i eksisterende samtaler, og din e-mail udleveres ikke længere til dem. Hver person kan desuden give dig et privat kaldenavn, som kun de selv ser. Glemt adgangskode: brug linket på login-siden. Skift e-mail eller adgangskode: ⋮ → Konto. Sletning af konto: ⋮ → Privatliv og sletning."],
     ["Hvordan rapporterer jeg noget?", "Tryk ⋮ i samtalen → “Rapportér”. Du vælger kategori, skriver selv hvad der er sket og kan markere de beskeder, du vil vedhæfte. Du ser en forhåndsvisning, og intet sendes før du bekræfter. Rapporten mailes til Rolffs udvikler (kontakt: nicolaipetersen108@gmail.com) med dit kaldenavn og bruger-id. Rolff gemmer kun kategori, tidspunkt og antal vedhæftede beskeder (til at begrænse misbrug) – ikke teksten. Der er ingen døgnvagt og ingen garanti for svar eller handling. Ved akut fare: ring 112."],
     ["Hvor ligger mine data, og hvor længe?", "På Supabase-servere i Frankfurt (EU). Du vælger selv opbevaring (1 år, 5 år eller ubegrænset) og sky-synk under ⋮ → Privatliv og sletning. Der kan du også downloade alle dine data (ZIP med JSON og CSV) og slette din konto. AI-tonetjekket bruger i testen OpenAI (USA/global behandling, ikke EU; ingen Zero Data Retention endnu; store:false). Læs mere i privatlivspolitikken (⋮ → Privatlivspolitik)."],
@@ -178,7 +181,10 @@ function Faq({ lang }: { lang: Lang }) {
     ["Who can read and write in the conversation?", "Under ⋮ → “Participants and roles” you see everyone and their role: Party, Read and write or Read only. Parties can remove extra participants or make a writer read only. Write access needs a new invitation approved by all parties. Anyone can leave."],
     ["What gets blocked?", "Rolff stops messages that may come across as hurtful (checked by AI), messages with emojis (easily misread – use words), messages in all caps (reads as shouting) and the same message sent twice. You are told why it was not sent and can edit it."],
     ["How do I block a conversation?", "Tap ⋮ in the conversation → “Block conversation”. The others can then no longer send messages there; they are only told the message cannot be sent – not who or when. A block never expires by itself. It only ends when you tap “Unblock”."],
-    ["What are “Blocked words”?", "An optional filter (off by default): under ⋮ → “Blocked words” you can add words or phrases that must not reach you. The list is private. But if a message hits one of your words, the sender is told exactly which word and that the recipient blocked it. That is why you confirm each word you add. You can remove words at any time."],
+    ["What are “Blocked words”?", "An optional filter (off by default): under ⋮ → “Blocked words” you can add single words, multi-word expressions or whole sentences (up to 120 characters) that must not reach you. Case and accents are ignored, and words must appear in the same order. Ending with * (e.g. “pis*”) also matches words starting that way. The list applies to the current conversation and is private. If a message hits it, it is not delivered – the sender is told exactly which word or phrase and that the recipient blocked it, and can rephrase. That is why you confirm each word. You can remove words at any time."],
+    ["Can I limit the length of messages from a specific person?", "Yes. Under ⋮ → “Participants and roles” → “Settings for this person”: unlimited (default), 140, 250 or a custom number from 80 to 10,000 characters (messages are at most 480 anyway). It applies in all your conversations with that person, to new messages only. Too-long messages are rejected before the AI check and the sender is told e.g. “X has set a limit of 140 characters; yours is 212”. The sender only sees the limit. With several recipients the strictest applies. For attachments only the caption counts."],
+    ["Can I limit how often a person writes?", "Yes, same place: at most 1 message per minute, per 5 minutes, per hour, or a custom number of minutes (1 to 1,440 = 24 hours). Default: no limit. It counts from the person's latest delivered message to you in any of your conversations; rejected messages do not count; attachments count as a message. Early messages are not stored and the sender is told when they can send again. With several recipients the strictest applies."],
+    ["Who can add an extra person to a conversation?", "Anyone can invite the other parent when creating a conversation. Adding an extra person (e.g. a lawyer) requires that YOU, the inviter, are on “Text + attachments” (79 DKK/month). Other members and the invitee may be on 49. If you downgrade later, existing members stay."],
     ["What can others see about me?", "You log in with your e-mail. By default your e-mail is also the name others in the conversation see. You can choose a nickname at any time under ⋮ → Display name – then they only see the nickname, also in existing conversations, and your e-mail is no longer given to them. Each person can also give you a private nickname only they see. Forgot password: use the link on the login page. Change e-mail or password: ⋮ → Account. Account deletion: ⋮ → Privacy and deletion."],
     ["How do I report something?", "Tap ⋮ in the conversation → “Report”. You choose a category, write what happened and can tick the messages you want to attach. You see a preview and nothing is sent until you confirm. The report is e-mailed to Rolff's developer (contact: nicolaipetersen108@gmail.com) with your nickname and user id. Rolff stores only category, time and number of attached messages (to limit abuse) – not the text. There is no 24/7 staff and no guarantee of a reply or action. In an emergency: call 112."],
     ["Where is my data, and for how long?", "On Supabase servers in Frankfurt (EU). You choose retention (1 year, 5 years or unlimited) and cloud sync under ⋮ → Privacy and deletion, where you can also download all your data (ZIP with JSON and CSV) and delete your account. The AI tone check uses OpenAI during testing (US/global processing, not EU; no Zero Data Retention yet; store:false). See the privacy policy (⋮ → Privacy policy)."],
@@ -287,7 +293,7 @@ function BlockedWords({ lang, conv }: { lang: Lang; conv: string }) {
         <ul className="words">{words.map((x) => <li key={x.id}><span>{x.word}</span><button className="ghost" onClick={async () => { await supabase.from("conversation_blocked_words").delete().eq("id", x.id); load(); }}>{da ? "Fjern" : "Remove"}</button></li>)}</ul>}
       <form onSubmit={add}>
         <label htmlFor="bw">{da ? "Tilføj ord eller sætning" : "Add word or phrase"}</label>
-        <input id="bw" maxLength={40} value={w} onChange={(e) => { setW(e.target.value); setAck(false); }} />
+        <input id="bw" maxLength={120} value={w} onChange={(e) => { setW(e.target.value); setAck(false); }} />
         <p className="notice" role="note">{da ? "Bemærk: Hvis en besked bliver stoppet af dette ord, får afsenderen at vide præcis hvilket ord eller hvilken sætning der ramte – og at det er dig/modtageren, der har blokeret det. Resten af din liste ser de aldrig." : "Note: if a message is stopped by this word, the sender is told exactly which word or phrase matched – and that the recipient blocked it. They never see the rest of your list."}</p>
         <label style={{ display: "flex", gap: 8 }}><input type="checkbox" style={{ width: 24, minHeight: 24 }} checked={ack} onChange={(e) => setAck(e.target.checked)} />{da ? "Jeg forstår, at afsenderen får ordet at se." : "I understand the sender will see the word."}</label>
         <div className="row end"><button type="submit" disabled={!ack || w.trim().length < 2}>{da ? "Tilføj" : "Add"}</button></div>
@@ -497,7 +503,7 @@ function Home({ lang, open, invite }: { lang: Lang; open: (c: Conv) => void; inv
 
 function InviteByEmail({ lang, done }: { lang: Lang; done: () => void }) {
   const da = lang === "da";
-  const [email, setEmail] = useState(""); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [email, setEmail] = useState(""); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState<{ ok: boolean; text: string; plan?: boolean } | null>(null);
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setBusy(true); setMsg(null);
     let r; try { r = await callFn("invite-email", { email }); } catch { r = { status: 0, data: null as any }; }
@@ -568,6 +574,16 @@ function Chat({ lang, conv, back, menu, openPlans, planKey }: { lang: Lang; conv
   const [text, setText] = useState(localStorage.getItem(draftKey) ?? "");
   const [status, setStatus] = useState<{ kind: string; spans?: string[]; blockedText?: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [lim, setLim] = useState<SendLimits | null>(null);
+  const loadLim = useCallback(async () => { const { data } = await supabase.rpc("get_my_send_limits", { conv: conv.id }); setLim((data as SendLimits[])?.[0] ?? null); }, [conv.id]);
+  useEffect(() => { loadLim(); }, [loadLim, msgs.length]);
+  const [, tick] = useState(0); useEffect(() => { const i = setInterval(() => tick((x) => x + 1), 15000); return () => clearInterval(i); }, []);
+  const who = (id?: string | null) => { const o = (others ?? []).find((x) => x.user_id === id); return o ? labelOf(o) : (da ? "Modtageren" : "The recipient"); };
+  const limitMsg = (d: any): string | null => {
+    if (d?.status === "length_limit") return da ? `Beskeden blev ikke sendt: ${who(d.by)} har sat en grænse på ${d.limit} tegn for beskeder fra dig; din besked er ${d.count} tegn.` : `Not sent: ${who(d.by)} has set a limit of ${d.limit} characters for messages from you; yours is ${d.count}.`;
+    if (d?.status === "frequency_limit") return da ? `Beskeden blev ikke sendt: ${who(d.by)} har sat en frekvensgrænse; du kan sende igen ${waitText(d.retry_after_s, true)}.` : `Not sent: ${who(d.by)} has set a frequency limit; you can send again ${waitText(d.retry_after_s, false)}.`;
+    return null;
+  };
   const [blocked, setBlocked] = useState(false);
   useEffect(() => { supabase.from("conversation_blocks").select("user_id").eq("conversation_id", conv.id).then(({ data }) => setBlocked((data ?? []).length > 0)); }, [conv.id]);
   const setBlock = async (on: boolean) => { const r = await supabase.rpc(on ? "block_conversation" : "unblock_conversation", { conv: conv.id }); if (!r.error) setBlocked(on); };
@@ -599,6 +615,7 @@ function Chat({ lang, conv, back, menu, openPlans, planKey }: { lang: Lang; conv
     else if (r.status === 200 && r.data?.status === "blocked") setStatus({ kind: "blocked", spans: r.data.spans ?? [], blockedText: text });
     else if (r.status === 200 && r.data?.status === "blocked_word") setStatus({ kind: "note", blockedText: da ? `Beskeden blev ikke sendt: Modtageren har blokeret ordet/sætningen "${r.data.word}". Ret beskeden og prøv igen.` : `The message was not sent: the recipient has blocked the word/phrase "${r.data.word}". Edit the message and try again.` });
     else if (r.status === 200 && r.data?.status === "rule") setStatus({ kind: "note", blockedText: ({ emoji: da ? "Beskeden blev ikke sendt: Emojis er ikke tilladt i Rolff. Skriv det med ord." : "Not sent: emojis are not allowed in Rolff. Use words.", caps: da ? "Beskeden blev ikke sendt: Den er skrevet med store bogstaver, som kan opfattes som råb." : "Not sent: all caps can read as shouting.", repeat: da ? "Beskeden blev ikke sendt: Du har lige sendt den samme besked." : "Not sent: you just sent the same message." } as Record<string, string>)[r.data.rule] ?? "" });
+    else if (r.status === 200 && limitMsg(r.data)) { setStatus({ kind: "note", blockedText: limitMsg(r.data)! }); loadLim(); }
     else if (r.status === 200 && r.data?.status === "cannot_deliver") setStatus({ kind: "note", blockedText: da ? "Beskeden kan ikke sendes i denne samtale." : "Messages cannot be sent in this conversation." });
     else if (r.data?.error === "read_only") setStatus({ kind: "readOnly" });
     else if (r.status === 429) setStatus({ kind: "rateLimited" });
@@ -650,22 +667,26 @@ function Chat({ lang, conv, back, menu, openPlans, planKey }: { lang: Lang; conv
       {conv.role !== "reader" ? (
         <div className="card composer">
           <textarea aria-label={t.write} placeholder={t.write} rows={3} value={text} onChange={(e) => setText(e.target.value)} />
-          <AttachBar lang={lang} conv={conv.id} plan={plan} openPlans={openPlans} caption={text} sent={() => { setText(""); load(); }} />
-          <div className="row"><span className="meta" style={{ color: n > MAX ? "crimson" : undefined }}>{n}/{MAX}</span><span className="spacer" /><button onClick={send} disabled={busy || !text.trim() || n > MAX}>{busy ? t.sending : t.send}</button></div>
+          <AttachBar lang={lang} conv={conv.id} plan={plan} openPlans={openPlans} caption={text} limitMsg={limitMsg} sent={() => { setText(""); load(); loadLim(); }} />
+          {(() => { const cap = lim?.max_chars && lim.max_chars < MAX ? lim.max_chars : MAX; const wait = lim?.next_at ? Math.ceil((new Date(lim.next_at).getTime() - Date.now()) / 1000) : 0; return (<>
+          {lim?.max_chars && lim.max_chars < MAX ? <p className="meta" id="lenlim" style={{ margin: "4px 0" }}>{da ? `Grænse for dine beskeder her: ${lim.max_chars} tegn${lim.multi ? " (den strengeste grænse blandt modtagerne gælder)" : ""}.` : `Limit for your messages here: ${lim.max_chars} characters${lim.multi ? " (the strictest limit among recipients applies)" : ""}.`}</p> : null}
+          {wait > 0 && <p className="meta" role="status" style={{ margin: "4px 0" }}>{da ? `Frekvensgrænse: du kan sende igen ${waitText(wait, true)}${lim?.multi ? " (den strengeste grænse blandt modtagerne gælder)" : ""}.` : `Frequency limit: you can send again ${waitText(wait, false)}${lim?.multi ? " (strictest among recipients applies)" : ""}.`}</p>}
+          <div className="row"><span className="meta" aria-live="polite" aria-describedby={cap < MAX ? "lenlim" : undefined} style={{ color: n > cap ? "crimson" : undefined }}>{n}/{cap}</span><span className="spacer" /><button onClick={send} disabled={busy || !text.trim() || n > MAX}>{busy ? t.sending : t.send}</button></div></>); })()}
         </div>) : <div className="notice" role="note">{t.readOnly}</div>}
       {blocked && <div className="notice" role="status">{da ? "Du har blokeret samtalen. De andre kan ikke sende beskeder her. " : "You blocked this conversation. The others cannot send messages here. "}<button className="ghost" onClick={() => setBlock(false)}>{da ? "Afblokér" : "Unblock"}</button></div>}
       {sheet === "report" && <SheetView title={da ? "Rapportér" : "Report"} close={() => setSheet(null)} lang={lang}><ReportForm lang={lang} conv={conv.id} msgs={msgs} /></SheetView>}
       {sheet === "words" && <SheetView title={da ? "Blokerede ord" : "Blocked words"} close={() => setSheet(null)} lang={lang}><BlockedWords lang={lang} conv={conv.id} /></SheetView>}
-      {sheet === "members" && <SheetView title={da ? "Deltagere og roller" : "Participants and roles"} close={() => setSheet(null)} lang={lang}><Members lang={lang} conv={conv.id} isParent={conv.role === "parent"} left={back} /></SheetView>}
+      {sheet === "members" && <SheetView title={da ? "Deltagere og roller" : "Participants and roles"} close={() => setSheet(null)} lang={lang}><Members lang={lang} conv={conv.id} isParent={conv.role === "parent"} left={back} openWords={() => setSheet("words")} /></SheetView>}
       {sheet === "export" && <SheetView title={da ? "Eksportér samtale" : "Export conversation"} close={() => setSheet(null)} lang={lang}><ExportPanel lang={lang} msgs={msgs} /></SheetView>}
-      {sheet === "addMember" && <SheetView title={da ? "Tilføj person" : "Add person"} close={() => setSheet(null)} lang={lang}><AddMember lang={lang} conv={conv.id} done={load} /></SheetView>}
+      {sheet === "addMember" && <SheetView title={da ? "Tilføj person" : "Add person"} close={() => setSheet(null)} lang={lang}><AddMember lang={lang} conv={conv.id} done={load} openPlans={openPlans} /></SheetView>}
     </>
   );
 }
 
 type Member = { user_id: string; label: string; role: string; me: boolean };
 export const roleName = (r: string, da: boolean) => r === "parent" ? (da ? "Part" : "Party") : r === "writer" ? (da ? "Læse og skrive" : "Read and write") : (da ? "Kun læse" : "Read only");
-function Members({ lang, conv, isParent, left }: { lang: Lang; conv: string; isParent: boolean; left: () => void }) {
+function Members({ lang, conv, isParent, left, openWords }: { lang: Lang; conv: string; isParent: boolean; left: () => void; openWords: () => void }) {
+  const [open, setOpen] = useState<string | null>(null);
   const da = lang === "da";
   const [ms, setMs] = useState<Member[] | null>(null); const [err, setErr] = useState("");
   const load = useCallback(async () => { const { data, error } = await supabase.rpc("list_conversation_members", { conv }); if (error) setErr(da ? "Kunne ikke hente deltagere." : "Could not load participants."); else setMs((data as Member[]) ?? []); }, [conv, da]);
@@ -686,6 +707,8 @@ function Members({ lang, conv, isParent, left }: { lang: Lang; conv: string; isP
           {m.role === "writer" && <button type="button" className="ghost" onClick={() => act("set_member_role", { p_user: m.user_id, p_role: "reader" }, da ? `Gør ${m.label} til "Kun læse"?` : `Make ${m.label} read only?`)}>{da ? "Gør til kun læse" : "Make read only"}</button>}
           <button type="button" className="ghost danger" onClick={() => act("remove_member", { p_user: m.user_id }, da ? `Fjern ${m.label} fra samtalen? Personen kan ikke længere se nye eller gamle beskeder her.` : `Remove ${m.label}? They can no longer see messages here.`)}>{da ? "Fjern" : "Remove"}</button>
         </span>}
+        {!m.me && <button type="button" className="ghost" aria-expanded={open === m.user_id} onClick={() => setOpen(open === m.user_id ? null : m.user_id)}>{da ? "Indstillinger for denne person" : "Settings for this person"}</button>}
+        {open === m.user_id && <PersonSettings lang={lang} sender={m.user_id} label={m.label} openWords={openWords} />}
       </li>)}</ul>
       <p className="meta">{da ? "Parterne kan fjerne ekstra deltagere eller gøre en skrivende deltager til kun læse. At give skriveadgang kræver en ny invitation, som alle parter skal godkende." : "Parties can remove extra participants or make a writer read only. Granting write access needs a new invitation that all parties approve."}</p>
       {me && <div className="row end"><button type="button" className="danger" onClick={() => act("leave_conversation", {}, da ? "Forlad samtalen? Du kan kun komme ind igen via en ny invitation. Det, du har skrevet, bliver hos de andre." : "Leave the conversation? You can only return with a new invitation. What you wrote stays with the others.")}>{da ? "Forlad samtalen" : "Leave conversation"}</button></div>}
@@ -693,14 +716,15 @@ function Members({ lang, conv, isParent, left }: { lang: Lang; conv: string; isP
     </div>);
 }
 
-function AddMember({ lang, conv, done }: { lang: Lang; conv: string; done: () => void }) {
+function AddMember({ lang, conv, done, openPlans }: { lang: Lang; conv: string; done: () => void; openPlans: () => void }) {
   const da = lang === "da";
-  const [email, setEmail] = useState(""); const [role, setRole] = useState("reader"); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [email, setEmail] = useState(""); const [role, setRole] = useState("reader"); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState<{ ok: boolean; text: string; plan?: boolean } | null>(null);
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setBusy(true); setMsg(null);
     let r; try { r = await callFn("invite-email", { action: "member", conversation_id: conv, email, role }); } catch { r = { status: 0, data: null as any }; }
     setBusy(false);
     if (r.status === 200) { setMsg({ ok: true, text: r.data?.data?.status === "sent" ? (da ? `Invitationen er sendt til ${email}.` : `Invitation sent to ${email}.`) : (da ? "Anmodningen er sendt. De øvrige i samtalen skal godkende, før personen inviteres." : "Request sent. The others must approve before the person is invited.") }); setEmail(""); done(); }
+    else if (r.data?.error === "plan_required") setMsg({ ok: false, text: da ? "Kun brugere på planen Tekst + vedhæftninger (79 kr./md.) kan tilføje ekstra personer. Du kan skifte plan under Abonnement (testfunktion – ingen betaling)." : "Only users on Text + attachments (79 DKK/month) can add extra people. You can switch under Plan (test feature – no payment).", plan: true });
     else setMsg({ ok: false, text: r.data?.error === "rate_limited" ? (da ? "Du har sendt mange invitationer i dag." : "Too many invitations today.") : r.data?.error === "bad_input" ? (da ? "Tjek e-mailadressen. Personen må ikke allerede være med." : "Check the email. The person must not already be a member.") : (da ? "Invitationen kunne ikke oprettes." : "The invitation could not be created.") });
   };
   return (
@@ -711,6 +735,7 @@ function AddMember({ lang, conv, done }: { lang: Lang; conv: string; done: () =>
       <Choice name="role" value={role} set={setRole} opts={[["reader", da ? "Kun læse" : "Read only"], ["writer", da ? "Læse og skrive" : "Read and write"]]} />
       <div className="row end"><button type="submit" disabled={busy}>{busy ? (da ? "Sender…" : "Sending…") : (da ? "Send til godkendelse" : "Send for approval")}</button></div>
       {msg && <p className={msg.ok ? "meta" : "err"} role={msg.ok ? "status" : "alert"}>{msg.text}</p>}
+      {msg?.plan && <div className="row end"><button type="button" onClick={openPlans}>{da ? "Se planer" : "See plans"}</button></div>}
     </form>
   );
 }
@@ -866,8 +891,8 @@ function AccountPanel({ lang }: { lang: Lang }) {
 
 // ---------- Plans (TEST FEATURE: no payment) ----------
 export const PLANS = [
-  { id: "text", price: 49, da: ["Tekst", "Tekstbeskeder med AI-tonetjek. Du kan se vedhæftninger, som andre sender."], en: ["Text", "Text messages with AI tone check. You can view attachments others send."] },
-  { id: "text_attachments", price: 79, da: ["Tekst + vedhæftninger", "Alt i Tekst, og du kan sende screenshots, billeder og PDF'er (tjekket af AI før afsendelse)."], en: ["Text + attachments", "Everything in Text, plus sending screenshots, images and PDFs (checked by AI before sending)."] },
+  { id: "text", price: 49, da: ["Tekst", "Tekstbeskeder med AI-tonetjek og samtale med den anden forælder. Du kan se vedhæftninger og deltage, når andre tilføjer dig."], en: ["Text", "Text messages with AI tone check. You can view attachments others send."] },
+  { id: "text_attachments", price: 79, da: ["Tekst + vedhæftninger", "Alt i Tekst, og du kan sende screenshots, billeder og PDF'er (tjekket af AI før afsendelse) og tilføje ekstra personer til samtaler."], en: ["Text + attachments", "Everything in Text, plus sending screenshots, images and PDFs (checked by AI before sending) and adding extra people to conversations."] },
 ] as const;
 function Plans({ lang }: { lang: Lang }) {
   const da = lang === "da";
@@ -909,7 +934,7 @@ function Plans({ lang }: { lang: Lang }) {
 // ---------- Attachments ----------
 const ACCEPT = "image/png,image/jpeg,image/webp,image/gif,application/pdf";
 const MAX_FILE = 4 * 1024 * 1024;
-function AttachBar({ lang, conv, plan, openPlans, caption, sent }: { lang: Lang; conv: string; plan: string; openPlans: () => void; caption: string; sent: () => void }) {
+function AttachBar({ lang, conv, plan, openPlans, caption, sent, limitMsg }: { lang: Lang; conv: string; plan: string; openPlans: () => void; caption: string; sent: () => void; limitMsg: (d: any) => string | null }) {
   const da = lang === "da";
   const [file, setFile] = useState<File | null>(null); const [alt, setAlt] = useState(""); const [busy, setBusy] = useState(false);
   const [out, setOut] = useState<{ ok: boolean; text: string } | null>(null); const [locked, setLocked] = useState(false);
@@ -925,6 +950,7 @@ function AttachBar({ lang, conv, plan, openPlans, caption, sent }: { lang: Lang;
     let r; try { r = await callFn("send-attachment", { conversation_id: conv, idempotency_key: crypto.randomUUID(), file_b64: btoa(bin), file_name: file.name, caption: caption.trim(), alt: alt.trim() }); } catch { r = { status: 0, data: null as any }; }
     setBusy(false); const d = r.data ?? {};
     if (r.status === 200 && d.status === "accepted") { setFile(null); setAlt(""); setOut({ ok: true, text: da ? "Vedhæftningen er sendt." : "Attachment sent." }); sent(); }
+    else if (limitMsg(d)) setOut({ ok: false, text: limitMsg(d)! });
     else if (d.status === "blocked") setOut({ ok: false, text: (da ? "Filen blev ikke sendt: " : "Not sent: ") + (reasons[d.reason_code] ?? reasons.other_harmful) + "." + ((d.spans ?? []).length ? (da ? " Markeret: “" : " Flagged: “") + d.spans.join("”, “") + "”" : "") });
     else if (d.status === "blocked_word") setOut({ ok: false, text: da ? `Filen blev ikke sendt: Modtageren har blokeret ordet/sætningen "${d.word}", og det står i ${d.where === "caption" ? "din tekst" : "filen"}.` : `Not sent: the recipient blocked "${d.word}", which appears in ${d.where === "caption" ? "your text" : "the file"}.` });
     else if (d.status === "rule") setOut({ ok: false, text: da ? "Filen blev ikke sendt: Din tekst overholder ikke reglerne (emojis, store bogstaver eller gentagelse)." : "Not sent: your text breaks the rules (emoji, caps or repetition)." });
@@ -962,4 +988,51 @@ function AttachmentView({ lang, m }: { lang: Lang; m: Msg }) {
       : <button className="ghost" onClick={open}>{isPdf ? (da ? `Åbn PDF: ${m.att_name} (${m.att_pages} s.)` : `Open PDF: ${m.att_name} (${m.att_pages} p.)`) : (da ? `Vis billede: ${m.att_name}` : `Show image: ${m.att_name}`)}</button>}
     {err && <p className="meta" role="alert">{da ? "Vedhæftningen kunne ikke hentes." : "Could not load the attachment."}</p>}
   </div>);
+}
+
+type SendLimits = { max_chars: number | null; chars_by: string | null; next_at: string | null; next_by: string | null; multi: boolean };
+function waitText(secs: number, da: boolean) {
+  if (secs < 60) return da ? `om ${secs} sek.` : `in ${secs} s`;
+  const m = Math.ceil(secs / 60); if (m < 120) return da ? `om ${m} min` : `in ${m} min`;
+  const h = Math.floor(m / 60), r = m % 60; return da ? `om ${h} t${r ? ` ${r} min` : ""}` : `in ${h} h${r ? ` ${r} min` : ""}`;
+}
+export const LEN_MIN = 80, LEN_MAX = 10000, FREQ_MAX = 1440;
+function PersonSettings({ lang, sender, label, openWords }: { lang: Lang; sender: string; label: string; openWords: () => void }) {
+  const da = lang === "da"; const id = sender.slice(0, 8);
+  const [len, setLen] = useState("none"); const [lenC, setLenC] = useState(""); const [fr, setFr] = useState("none"); const [frC, setFrC] = useState("");
+  const [cur, setCur] = useState<{ max_chars: number | null; interval_min: number | null } | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null); const [busy, setBusy] = useState(false);
+  const apply = (r: { max_chars: number | null; interval_min: number | null }) => {
+    setCur(r); const l = r.max_chars, f = r.interval_min;
+    if (l == null) setLen("none"); else if (l === 140 || l === 250) setLen(String(l)); else { setLen("custom"); setLenC(String(l)); }
+    if (f == null) setFr("none"); else if ([1, 5, 60].includes(f)) setFr(String(f)); else { setFr("custom"); setFrC(String(f)); }
+  };
+  useEffect(() => { supabase.from("person_limits").select("max_chars,interval_min").eq("sender_id", sender).maybeSingle().then(({ data }) => apply(data ?? { max_chars: null, interval_min: null })); }, [sender]);
+  const desc = (r: { max_chars: number | null; interval_min: number | null }) => (da ? `Længde: ${r.max_chars ? `${r.max_chars} tegn` : "ubegrænset"}. Frekvens: ${r.interval_min ? `højst 1 besked pr. ${r.interval_min} min` : "ingen grænse"}.` : `Length: ${r.max_chars ? `${r.max_chars} characters` : "unlimited"}. Frequency: ${r.interval_min ? `at most 1 message per ${r.interval_min} min` : "no limit"}.`);
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault(); setMsg(null);
+    let mc: number | null = len === "none" ? null : len === "custom" ? Number(lenC) : Number(len);
+    let iv: number | null = fr === "none" ? null : fr === "custom" ? Number(frC) : Number(fr);
+    if (mc !== null && (!Number.isInteger(mc) || mc < LEN_MIN || mc > LEN_MAX)) { setMsg({ ok: false, text: da ? `Længdegrænsen skal være et helt tal fra ${LEN_MIN} til ${LEN_MAX} tegn.` : `The length limit must be a whole number from ${LEN_MIN} to ${LEN_MAX}.` }); return; }
+    if (iv !== null && (!Number.isInteger(iv) || iv < 1 || iv > FREQ_MAX)) { setMsg({ ok: false, text: da ? `Intervallet skal være et helt antal minutter fra 1 til ${FREQ_MAX} (24 timer).` : `The interval must be whole minutes from 1 to ${FREQ_MAX} (24 hours).` }); return; }
+    setBusy(true); const { error } = await supabase.rpc("set_person_limit", { p_sender: sender, p_max_chars: mc, p_interval_min: iv }); setBusy(false);
+    if (error) { setMsg({ ok: false, text: da ? "Indstillingen kunne ikke gemmes." : "Could not save." }); return; }
+    apply({ max_chars: mc, interval_min: iv }); setMsg({ ok: true, text: (da ? "Gemt. Gælder nye beskeder fra " : "Saved. Applies to new messages from ") + label + ". " + desc({ max_chars: mc, interval_min: iv }) });
+  };
+  return (<form className="card" onSubmit={save} aria-label={(da ? "Indstillinger for " : "Settings for ") + label} style={{ marginTop: 6 }}>
+    <p className="meta" style={{ marginTop: 0 }}>{da ? `Gælder beskeder fra ${label} til dig – i alle jeres samtaler. ${label} ser kun selve grænsen, når den rammer.` : `Applies to messages from ${label} to you – in all your conversations. ${label} only sees the limit when it applies.`}</p>
+    {cur && <p role="status"><strong>{da ? "Nu: " : "Now: "}</strong>{desc(cur)}</p>}
+    <fieldset><legend>{da ? "Maks. længde på beskeder" : "Max message length"}</legend>
+      <Choice name={`len-${id}`} value={len} set={setLen} opts={[["none", da ? "Ubegrænset (standard)" : "Unlimited (default)"], ["140", "140 " + (da ? "tegn" : "characters")], ["250", "250 " + (da ? "tegn" : "characters")], ["custom", da ? "Brugerdefineret" : "Custom"]]} />
+      {len === "custom" && <><label htmlFor={`lenc-${id}`}>{da ? `Antal tegn (${LEN_MIN}–${LEN_MAX})` : `Characters (${LEN_MIN}–${LEN_MAX})`}</label><input id={`lenc-${id}`} type="number" inputMode="numeric" min={LEN_MIN} max={LEN_MAX} step={1} required value={lenC} onChange={(e) => setLenC(e.target.value)} /></>}
+    </fieldset>
+    <fieldset><legend>{da ? "Hvor ofte må der komme en besked" : "How often messages may arrive"}</legend>
+      <Choice name={`fr-${id}`} value={fr} set={setFr} opts={[["none", da ? "Ingen grænse (standard)" : "No limit (default)"], ["1", da ? "1 pr. minut" : "1 per minute"], ["5", da ? "1 pr. 5 minutter" : "1 per 5 minutes"], ["60", da ? "1 pr. time" : "1 per hour"], ["custom", da ? "Brugerdefineret" : "Custom"]]} />
+      {fr === "custom" && <><label htmlFor={`frc-${id}`}>{da ? `Minutter mellem beskeder (1–${FREQ_MAX})` : `Minutes between messages (1–${FREQ_MAX})`}</label><input id={`frc-${id}`} type="number" inputMode="numeric" min={1} max={FREQ_MAX} step={1} required value={frC} onChange={(e) => setFrC(e.target.value)} /></>}
+    </fieldset>
+    <p className="meta">{da ? "Er I flere i samtalen, gælder den strengeste grænse blandt modtagerne for afsenderen. Vedhæftninger tæller som en besked; kun billedteksten tæller med i længden. Ændringer gælder kun nye beskeder." : "With several recipients, the strictest limit applies to the sender. Attachments count as one message; only the caption counts toward length. Changes apply to new messages only."}</p>
+    <p className="meta">{da ? "Blokerede ord og sætninger gælder for hele denne samtale: " : "Blocked words and phrases apply to this whole conversation: "}<button type="button" className="linkish" onClick={openWords}>{da ? "Blokerede ord" : "Blocked words"}</button></p>
+    <div className="row end"><button type="submit" disabled={busy}>{busy ? (da ? "Gemmer…" : "Saving…") : (da ? "Gem" : "Save")}</button></div>
+    {msg && <p className={msg.ok ? "notice" : "err"} role={msg.ok ? "status" : "alert"}>{msg.text}</p>}
+  </form>);
 }

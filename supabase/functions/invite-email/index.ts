@@ -5,7 +5,7 @@
 import { authed, cors, json } from "../_shared/http.ts";
 import { approvalMail, copyMail, inviteMail, memberInviteMail, sendMail } from "../_shared/email.ts";
 
-const errCode = (m: string) => /rate_limited/.test(m) ? "rate_limited" : /bad_email|bad_role/.test(m) ? "bad_input" : /forbidden/.test(m) ? "forbidden" : /stale/.test(m) ? "stale" : /not_found/.test(m) ? "not_found" : "invite_failed";
+const errCode = (m: string) => /plan_required/.test(m) ? "plan_required" : /rate_limited/.test(m) ? "rate_limited" : /bad_email|bad_role/.test(m) ? "bad_input" : /forbidden/.test(m) ? "forbidden" : /stale/.test(m) ? "stale" : /not_found/.test(m) ? "not_found" : "invite_failed";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
@@ -27,7 +27,7 @@ Deno.serve(async (req) => {
   if (action === "member") {
     const role = i?.role === "writer" ? "writer" : i?.role === "reader" ? "reader" : "";
     const r = await a.user.rpc("create_member_invitation", { conv: String(i?.conversation_id ?? ""), p_email: String(i?.email ?? ""), p_role: role || "parent" });
-    if (r.error) return json({ error: errCode(r.error.message) }, 400);
+    if (r.error) { const code = errCode(r.error.message); return json({ error: code }, code === "plan_required" ? 402 : 400); }
     const d = r.data[0];
     if (d.complete) {
       const ok = await mailParticipant(d, role);

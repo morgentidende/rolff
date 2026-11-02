@@ -28,3 +28,13 @@ Deno.test("validateFileResult is strict and fails closed", () => {
   assertThrows(() => validateFileResult('{"decision":"allow","reason_code":"none","spans":[]}', ""));
   assertThrows(() => validateFileResult("not json", ""));
 });
+
+import { findBlockedWord } from "../../supabase/functions/_shared/rules.ts";
+Deno.test("blocked phrases: multi-word, whole sentences, case/diacritics incl. Æ/Ø/Å", () => {
+  assertEquals(findBlockedWord("Du er en DÅRLIG FAR, ærligt.", ["dårlig far"]), "DÅRLIG FAR");
+  assertEquals(findBlockedWord("du er en darlig   far", ["Dårlig far"]), "darlig   far");
+  assertEquals(findBlockedWord("ØV, Æbler er gode", ["øv æbler"]), "ØV, Æbler");
+  assertEquals(findBlockedWord("Det er altid din skyld at Emil er ked af det!", ["det er altid din skyld"]), "Det er altid din skyld");
+  assertEquals(findBlockedWord("dårligfar", ["dårlig far"]), null);
+  assertEquals(findBlockedWord("far er dårlig", ["dårlig far"]), null);
+});
