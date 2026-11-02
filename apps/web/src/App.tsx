@@ -23,7 +23,7 @@ function readInviteToken(): string | null {
   return sessionStorage.getItem("invite");
 }
 
-type Sheet = "privacy" | "words" | null | "lang" | "theme" | "times" | "faq" | "feedback" | "invite" | "export" | "addMember" | "name" | "report" | "account" | "newpw";
+type Sheet = "members" | "privacy" | "words" | null | "lang" | "theme" | "times" | "faq" | "feedback" | "invite" | "export" | "addMember" | "name" | "report" | "account" | "newpw";
 export type MenuItem = { label: string; run: () => void; danger?: boolean };
 
 export function App() {
@@ -155,28 +155,30 @@ function Faq({ lang }: { lang: Lang }) {
   const da = lang === "da";
   const qa: [string, string][] = da ? [
     ["Kan den anden se, om jeg har læst en besked eller er online?", "Nej. Rolff har ingen læsekvitteringer, ingen online-status og ingen “skriver…”-indikator."],
-    ["Hvad gør AI-tonetjekket?", "Før en besked sendes, vurderer en AI-tjeneste tonen. Kan beskeden opfattes som sårende, bliver den ikke sendt, og du kan rette den. Beskeden og op til 10 nyere beskeder sendes til tjenesten."],
+    ["Hvad gør AI-tonetjekket?", "Før en besked sendes, vurderer en AI-tjeneste tonen. Kan beskeden opfattes som sårende, bliver den ikke sendt, og du kan rette den. Beskeden og korte uddrag (højst 300 tegn) af op til 5 tidligere beskeder sendes til tjenesten."],
     ["Hvad er modtagetider?", "Du kan vælge, hvornår på ugen nye beskeder når frem til dig. Beskeder, der kommer uden for dine tider, venter, til næste modtagetid – eller til du selv trykker “Modtag beskeder nu”."],
     ["Hvordan kommer man ind i en samtale?", "Kun via invitation på e-mail. Ekstra deltagere (fx advokat eller sagsbehandler) får først adgang, når alle i samtalen har godkendt, og de ser ingen beskeder fra før, de kom med."],
+    ["Hvem kan se og skrive i samtalen?", "Under ⋮ → “Deltagere og roller” ser du alle deltagere og deres rolle: Part, Læse og skrive eller Kun læse. Parterne kan fjerne ekstra deltagere eller gøre en skrivende deltager til kun læse. Skriveadgang kræver en ny invitation, som alle parter godkender. Alle kan forlade samtalen."],
     ["Hvad bliver blokeret?", "Rolff stopper beskeder, der kan opfattes som sårende (tjekket af AI), beskeder med emojis (de misforstås let – skriv det med ord), beskeder skrevet med store bogstaver (opleves som råb) og den samme besked sendt igen. Du får at vide, hvorfor beskeden ikke blev sendt, og kan rette den."],
     ["Hvordan blokerer jeg en samtale?", "Tryk ⋮ i samtalen → “Blokér samtale”. Så kan de andre ikke længere sende beskeder i samtalen; de får kun at vide, at beskeden ikke kan sendes – ikke hvem eller hvornår. Blokeringen udløber aldrig af sig selv. Den ophører kun, når du selv trykker “Afblokér”."],
     ["Hvad er “Blokerede ord”?", "Et valgfrit filter (slået fra som standard): Under ⋮ → “Blokerede ord” kan du tilføje ord eller sætninger, som ikke må nå frem til dig. Listen er privat. Men rammer en besked et af dine ord, får afsenderen at vide præcis hvilket ord, og at modtageren har blokeret det. Derfor skal du bekræfte det for hvert ord, du tilføjer. Du kan fjerne ord igen når som helst."],
-    ["Hvad kan de andre se om mig?", "Du logger ind med din e-mail. Som udgangspunkt er din e-mail også det navn, de andre i samtalen ser. Du kan når som helst vælge et kaldenavn under ⋮ → Visningsnavn – så ser de kun kaldenavnet, også i eksisterende samtaler, og din e-mail udleveres ikke længere til dem. Hver person kan desuden give dig et privat kaldenavn, som kun de selv ser. Gendannelse af glemt adgangskode og ændring af e-mail findes endnu ikke i appen (planlagt) – skriv via Feedback indtil da. Sletning af konto: ⋮ → Privatliv og sletning."],
+    ["Hvad kan de andre se om mig?", "Du logger ind med din e-mail. Som udgangspunkt er din e-mail også det navn, de andre i samtalen ser. Du kan når som helst vælge et kaldenavn under ⋮ → Visningsnavn – så ser de kun kaldenavnet, også i eksisterende samtaler, og din e-mail udleveres ikke længere til dem. Hver person kan desuden give dig et privat kaldenavn, som kun de selv ser. Glemt adgangskode: brug linket på login-siden. Skift e-mail eller adgangskode: ⋮ → Konto. Sletning af konto: ⋮ → Privatliv og sletning."],
     ["Hvordan rapporterer jeg noget?", "Tryk ⋮ i samtalen → “Rapportér”. Du vælger kategori, skriver selv hvad der er sket og kan markere de beskeder, du vil vedhæfte. Du ser en forhåndsvisning, og intet sendes før du bekræfter. Rapporten mailes til Rolffs udvikler (kontakt: nicolaipetersen108@gmail.com) med dit kaldenavn og bruger-id. Rolff gemmer kun kategori, tidspunkt og antal vedhæftede beskeder (til at begrænse misbrug) – ikke teksten. Der er ingen døgnvagt og ingen garanti for svar eller handling. Ved akut fare: ring 112."],
     ["Hvor ligger mine data, og hvor længe?", "På Supabase-servere i Frankfurt (EU). Du vælger selv opbevaring (1 år, 5 år eller ubegrænset) og sky-synk under ⋮ → Privatliv og sletning. Der kan du også downloade alle dine data (ZIP med JSON og CSV) og slette din konto. AI-tonetjekket bruger i testen OpenAI (USA/global behandling, ikke EU; ingen Zero Data Retention endnu; store:false). Læs mere i privatlivspolitikken (⋮ → Privatlivspolitik)."],
-    ["Er det her den rigtige app?", "Nej, det er et testmiljø. Skriv kun opdigtede beskeder. AI-tjekket kører på en gratis testtjeneste."],
+    ["Er det her den rigtige app?", "Nej, det er et testmiljø. Skriv kun opdigtede beskeder. AI-tjekket kører hos OpenAI (se ovenfor)."],
   ] : [
     ["Can the other person see if I read a message or am online?", "No. Rolff has no read receipts, no online status and no typing indicator."],
-    ["What does the AI tone check do?", "Before a message is sent, an AI service assesses its tone. If it may come across as hurtful, it is not sent and you can edit it. The message and up to 10 recent messages are sent to the service."],
+    ["What does the AI tone check do?", "Before a message is sent, an AI service assesses its tone. If it may come across as hurtful, it is not sent and you can edit it. The message and short excerpts (max 300 characters) of up to 5 earlier messages are sent to the service."],
     ["What are receive times?", "You choose when during the week new messages reach you. Messages arriving outside your times wait until the next receive time – or until you tap “Receive messages now”."],
     ["How do people join a conversation?", "Only by e-mail invitation. Extra participants (e.g. a lawyer or caseworker) only get access when everyone in the conversation has approved, and they see no messages from before they joined."],
+    ["Who can read and write in the conversation?", "Under ⋮ → “Participants and roles” you see everyone and their role: Party, Read and write or Read only. Parties can remove extra participants or make a writer read only. Write access needs a new invitation approved by all parties. Anyone can leave."],
     ["What gets blocked?", "Rolff stops messages that may come across as hurtful (checked by AI), messages with emojis (easily misread – use words), messages in all caps (reads as shouting) and the same message sent twice. You are told why it was not sent and can edit it."],
     ["How do I block a conversation?", "Tap ⋮ in the conversation → “Block conversation”. The others can then no longer send messages there; they are only told the message cannot be sent – not who or when. A block never expires by itself. It only ends when you tap “Unblock”."],
     ["What are “Blocked words”?", "An optional filter (off by default): under ⋮ → “Blocked words” you can add words or phrases that must not reach you. The list is private. But if a message hits one of your words, the sender is told exactly which word and that the recipient blocked it. That is why you confirm each word you add. You can remove words at any time."],
-    ["What can others see about me?", "You log in with your e-mail. By default your e-mail is also the name others in the conversation see. You can choose a nickname at any time under ⋮ → Display name – then they only see the nickname, also in existing conversations, and your e-mail is no longer given to them. Each person can also give you a private nickname only they see. Password recovery and changing your e-mail are not in the app yet (planned) – use Feedback until then. Account deletion: ⋮ → Privacy and deletion."],
+    ["What can others see about me?", "You log in with your e-mail. By default your e-mail is also the name others in the conversation see. You can choose a nickname at any time under ⋮ → Display name – then they only see the nickname, also in existing conversations, and your e-mail is no longer given to them. Each person can also give you a private nickname only they see. Forgot password: use the link on the login page. Change e-mail or password: ⋮ → Account. Account deletion: ⋮ → Privacy and deletion."],
     ["How do I report something?", "Tap ⋮ in the conversation → “Report”. You choose a category, write what happened and can tick the messages you want to attach. You see a preview and nothing is sent until you confirm. The report is e-mailed to Rolff's developer (contact: nicolaipetersen108@gmail.com) with your nickname and user id. Rolff stores only category, time and number of attached messages (to limit abuse) – not the text. There is no 24/7 staff and no guarantee of a reply or action. In an emergency: call 112."],
     ["Where is my data, and for how long?", "On Supabase servers in Frankfurt (EU). You choose retention (1 year, 5 years or unlimited) and cloud sync under ⋮ → Privacy and deletion, where you can also download all your data (ZIP with JSON and CSV) and delete your account. The AI tone check uses OpenAI during testing (US/global processing, not EU; no Zero Data Retention yet; store:false). See the privacy policy (⋮ → Privacy policy)."],
-    ["Is this the real app?", "No, this is a test environment. Write made-up messages only. The AI check runs on a free test service."],
+    ["Is this the real app?", "No, this is a test environment. Write made-up messages only. The AI check runs at OpenAI (see above)."],
   ];
   return <div className="faq">{qa.map(([q, a]) => <details key={q}><summary>{q}</summary><p>{a}</p></details>)}</div>;
 }
@@ -607,7 +609,8 @@ function Chat({ lang, conv, back, menu }: { lang: Lang; conv: Conv; back: () => 
         <div role="heading" aria-level={2} className="chattitle">{others.length ? others.map((o) => <AliasEdit key={o.user_id} lang={lang} other={o} saved={(a) => { setOthers(others.map((x) => x.user_id === o.user_id ? { ...x, alias: a } : x)); load(); }} />) : convLabel(conv, da)}</div>
         <button className="icon" aria-label={da ? "Søg i samtalen" : "Search conversation"} aria-pressed={q !== null} onClick={() => { setQ(q === null ? "" : null); setCur(0); }}><Icon d={<><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></>} /></button>
         {conv.role === "parent" && <button className="icon" aria-label={da ? "Tilføj person" : "Add person"} onClick={() => setSheet("addMember")}><Icon d={<><circle cx="9" cy="8" r="4" /><path d="M2 21c0-4 3-6 7-6s7 2 7 6" /><path d="M19 8v6M16 11h6" /></>} /></button>}
-        <Menu lang={lang} items={[{ label: da ? "Eksportér samtale" : "Export conversation", run: () => setSheet("export") },
+        <Menu lang={lang} items={[{ label: da ? "Deltagere og roller" : "Participants and roles", run: () => setSheet("members") },
+          { label: da ? "Eksportér samtale" : "Export conversation", run: () => setSheet("export") },
           { label: da ? "Blokerede ord" : "Blocked words", run: () => setSheet("words") },
           { label: da ? "Rapportér" : "Report", run: () => setSheet("report") },
           blocked ? { label: da ? "Afblokér samtale" : "Unblock conversation", run: () => setBlock(false) } : { label: da ? "Blokér samtale" : "Block conversation", run: () => { if (confirm(da ? "Blokér samtalen? De andre kan ikke sende dig beskeder her, før du selv afblokerer. De får ikke at vide, at du har blokeret." : "Block this conversation? The others cannot send messages here until you unblock. They are not told that you blocked.")) setBlock(true); }, danger: true }, ...menu]} />
@@ -640,14 +643,45 @@ function Chat({ lang, conv, back, menu }: { lang: Lang; conv: Conv; back: () => 
         <div className="card composer">
           <textarea aria-label={t.write} placeholder={t.write} rows={3} value={text} onChange={(e) => setText(e.target.value)} />
           <div className="row"><span className="meta" style={{ color: n > MAX ? "crimson" : undefined }}>{n}/{MAX}</span><span className="spacer" /><button onClick={send} disabled={busy || !text.trim() || n > MAX}>{busy ? t.sending : t.send}</button></div>
-        </div>) : <p className="meta">{t.readOnly}</p>}
+        </div>) : <div className="notice" role="note">{t.readOnly}</div>}
       {blocked && <div className="notice" role="status">{da ? "Du har blokeret samtalen. De andre kan ikke sende beskeder her. " : "You blocked this conversation. The others cannot send messages here. "}<button className="ghost" onClick={() => setBlock(false)}>{da ? "Afblokér" : "Unblock"}</button></div>}
       {sheet === "report" && <SheetView title={da ? "Rapportér" : "Report"} close={() => setSheet(null)} lang={lang}><ReportForm lang={lang} conv={conv.id} msgs={msgs} /></SheetView>}
       {sheet === "words" && <SheetView title={da ? "Blokerede ord" : "Blocked words"} close={() => setSheet(null)} lang={lang}><BlockedWords lang={lang} conv={conv.id} /></SheetView>}
+      {sheet === "members" && <SheetView title={da ? "Deltagere og roller" : "Participants and roles"} close={() => setSheet(null)} lang={lang}><Members lang={lang} conv={conv.id} isParent={conv.role === "parent"} left={back} /></SheetView>}
       {sheet === "export" && <SheetView title={da ? "Eksportér samtale" : "Export conversation"} close={() => setSheet(null)} lang={lang}><ExportPanel lang={lang} msgs={msgs} /></SheetView>}
       {sheet === "addMember" && <SheetView title={da ? "Tilføj person" : "Add person"} close={() => setSheet(null)} lang={lang}><AddMember lang={lang} conv={conv.id} done={load} /></SheetView>}
     </>
   );
+}
+
+type Member = { user_id: string; label: string; role: string; me: boolean };
+export const roleName = (r: string, da: boolean) => r === "parent" ? (da ? "Part" : "Party") : r === "writer" ? (da ? "Læse og skrive" : "Read and write") : (da ? "Kun læse" : "Read only");
+function Members({ lang, conv, isParent, left }: { lang: Lang; conv: string; isParent: boolean; left: () => void }) {
+  const da = lang === "da";
+  const [ms, setMs] = useState<Member[] | null>(null); const [err, setErr] = useState("");
+  const load = useCallback(async () => { const { data, error } = await supabase.rpc("list_conversation_members", { conv }); if (error) setErr(da ? "Kunne ikke hente deltagere." : "Could not load participants."); else setMs((data as Member[]) ?? []); }, [conv, da]);
+  useEffect(() => { load(); }, [load]);
+  const act = async (fn: string, args: Record<string, unknown>, q: string) => {
+    if (!confirm(q)) return; setErr("");
+    const { error } = await supabase.rpc(fn, { conv, ...args });
+    if (error) { setErr(da ? "Handlingen mislykkedes." : "The action failed."); return; }
+    if (fn === "leave_conversation") left(); else load();
+  };
+  if (!ms) return <p className="meta" role="status">{err || (da ? "Henter…" : "Loading…")}</p>;
+  const me = ms.find((m) => m.me);
+  return (
+    <div>
+      <ul className="words">{ms.map((m) => <li key={m.user_id}>
+        <span>{m.me ? (da ? "Dig" : "You") : m.label} · <strong>{roleName(m.role, da)}</strong></span>
+        {isParent && !m.me && m.role !== "parent" && <span className="row">
+          {m.role === "writer" && <button type="button" className="ghost" onClick={() => act("set_member_role", { p_user: m.user_id, p_role: "reader" }, da ? `Gør ${m.label} til "Kun læse"?` : `Make ${m.label} read only?`)}>{da ? "Gør til kun læse" : "Make read only"}</button>}
+          <button type="button" className="ghost danger" onClick={() => act("remove_member", { p_user: m.user_id }, da ? `Fjern ${m.label} fra samtalen? Personen kan ikke længere se nye eller gamle beskeder her.` : `Remove ${m.label}? They can no longer see messages here.`)}>{da ? "Fjern" : "Remove"}</button>
+        </span>}
+      </li>)}</ul>
+      <p className="meta">{da ? "Parterne kan fjerne ekstra deltagere eller gøre en skrivende deltager til kun læse. At give skriveadgang kræver en ny invitation, som alle parter skal godkende." : "Parties can remove extra participants or make a writer read only. Granting write access needs a new invitation that all parties approve."}</p>
+      {me && <div className="row end"><button type="button" className="danger" onClick={() => act("leave_conversation", {}, da ? "Forlad samtalen? Du kan kun komme ind igen via en ny invitation. Det, du har skrevet, bliver hos de andre." : "Leave the conversation? You can only return with a new invitation. What you wrote stays with the others.")}>{da ? "Forlad samtalen" : "Leave conversation"}</button></div>}
+      {err && <p className="err" role="alert">{err}</p>}
+    </div>);
 }
 
 function AddMember({ lang, conv, done }: { lang: Lang; conv: string; done: () => void }) {
