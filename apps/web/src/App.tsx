@@ -4,6 +4,7 @@ import type { Session } from "@supabase/supabase-js";
 import { callFn, supabase } from "./supabase";
 import { detectLang, strings, type Lang } from "./i18n";
 import { passwordsMatch, pwText, toggleLabel } from "./pw";
+import { cacheClear, cacheGet, cacheSet } from "./localStore";
 import { exportFileName, makeZip, myDataFiles, findHits, toCsv, type Row } from "./exportUtil";
 
 type Other = { user_id: string; email: string; alias: string | null };
@@ -71,7 +72,7 @@ export function App() {
     { label: da ? "Privatlivspolitik" : "Privacy policy", run: () => { window.open("./privatliv.html" + (da ? "" : "#en"), "_blank", "noopener"); } },
     { label: "Feedback", run: () => setSheet("feedback") },
     { label: da ? "Inviter person" : "Invite person", run: () => setSheet("invite") },
-    { label: t.logout, run: () => { setConv(null); setSheet(null); supabase.auth.signOut(); }, danger: true },
+    { label: t.logout, run: () => { setConv(null); setSheet(null); cacheClear().finally(() => supabase.auth.signOut()); }, danger: true },
   ];
   const close = () => setSheet(null);
   return (
@@ -538,7 +539,10 @@ function Chat({ lang, conv, back, menu }: { lang: Lang; conv: Conv; back: () => 
   const [q, setQ] = useState<string | null>(null); const [cur, setCur] = useState(0);
   const endRef = useRef<HTMLDivElement>(null); const listRef = useRef<HTMLDivElement>(null);
   const load = useCallback(async () => {
-    const { data } = await supabase.rpc("get_messages", { conv: conv.id }); if (data) setMsgs(data as Msg[]);
+    const { data, error } = await supabase.rpc("get_messages", { conv: conv.id });
+    const uid = (await supabase.auth.getSession()).data.session?.user.id;
+    if (data) { setMsgs(data as Msg[]); if (uid) cacheSet(uid, conv.id, data); }
+    else if (error && uid) { const c = await cacheGet<Msg[]>(uid, conv.id); if (c) setMsgs(c); }
     const p = await supabase.rpc("my_pending_count"); setPending((p.data as number) ?? 0);
     const i = await supabase.rpc("list_pending_invitations", { conv: conv.id }); setInvs((i.data as Pending[]) ?? []);
   }, [conv.id]);
