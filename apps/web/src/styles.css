@@ -68,3 +68,5 @@ button.icon:focus-visible,button:focus-visible{outline:2px solid var(--accent);o
 .composer{padding:10px}
 .topbar.chat:has(form){flex-wrap:wrap}.chattitle:has(form){white-space:normal;overflow:visible;flex-basis:100%;order:9}
 .wrow select.tsel{text-align:center;text-align-last:center;font-variant-numeric:tabular-nums;padding:8px 2px}
+button.danger{background:#c0392b;color:#fff;border-color:#c0392b}button.danger:disabled{opacity:.5}
+#inactivity,#delete{margin:18px 0 6px;font-size:1rem}

@@ -22,7 +22,7 @@ function readInviteToken(): string | null {
   return sessionStorage.getItem("invite");
 }
 
-type Sheet = null | "lang" | "theme" | "times" | "faq" | "feedback" | "invite" | "export" | "addMember";
+type Sheet = "privacy" | null | "lang" | "theme" | "times" | "faq" | "feedback" | "invite" | "export" | "addMember";
 export type MenuItem = { label: string; run: () => void; danger?: boolean };
 
 export function App() {
@@ -60,11 +60,13 @@ export function App() {
         : (da ? "Invitationen kunne ikke bruges. Den kan være udløbet, brugt eller sendt til en anden e-mail." : "The invitation could not be used. It may be expired, used, or meant for another email."));
     });
   }, [session, inviteToken]);
+  useEffect(() => { if (session) supabase.rpc("touch_seen").then(() => {}); }, [session]);
   const menu: MenuItem[] = [
     { label: t.lang, run: () => setSheet("lang") },
     { label: t.theme, run: () => setSheet("theme") },
     { label: t.windows, run: () => setSheet("times") },
     { label: "FAQ", run: () => setSheet("faq") },
+    { label: da ? "Privatliv og sletning" : "Privacy and deletion", run: () => setSheet("privacy") },
     { label: "Feedback", run: () => setSheet("feedback") },
     { label: da ? "Inviter person" : "Invite person", run: () => setSheet("invite") },
     { label: t.logout, run: () => { setConv(null); setSheet(null); supabase.auth.signOut(); }, danger: true },
@@ -86,6 +88,7 @@ export function App() {
       {sheet === "theme" && <SheetView title={t.theme} close={close} lang={lang}><Choice name="theme" value={theme} set={setTheme} opts={[["dark", t.dark], ["light", t.light], ["system", t.system]]} /></SheetView>}
       {sheet === "times" && <SheetView title={t.windows} close={close} lang={lang}><ReceiveSettings lang={lang} /></SheetView>}
       {sheet === "faq" && <SheetView title="FAQ" close={close} lang={lang}><Faq lang={lang} /></SheetView>}
+      {sheet === "privacy" && <SheetView title={da ? "Privatliv og sletning" : "Privacy and deletion"} close={close} lang={lang}><PrivacyPanel lang={lang} /></SheetView>}
       {sheet === "feedback" && <SheetView title="Feedback" close={close} lang={lang}><FeedbackForm lang={lang} /></SheetView>}
       {sheet === "invite" && <SheetView title={da ? "Inviter person" : "Invite person"} close={close} lang={lang}><InviteByEmail lang={lang} done={() => setHomeKey(homeKey + 1)} /></SheetView>}
     </div>
@@ -147,6 +150,48 @@ function Faq({ lang }: { lang: Lang }) {
   return <div className="faq">{qa.map(([q, a]) => <details key={q}><summary>{q}</summary><p>{a}</p></details>)}</div>;
 }
 
+export const evidenceNote = (lang: Lang) => lang === "da"
+  ? "Vigtigt: Rolff er lavet til at kunne bruges som dokumentation. Det, du skriver og modtager, bliver hos de andre i samtalen – også hvis du senere sletter din konto. Du kan slette din egen kopi, men ikke kræve de andres slettet."
+  : "Important: Rolff is designed to serve as a record. What you write and receive stays with the others in the conversation – even if you later delete your account. You can delete your own copy, but you cannot require the others' copy to be deleted.";
+
+function PrivacyPanel({ lang }: { lang: Lang }) {
+  const da = lang === "da";
+  const [p, setP] = useState<{ inactivity_delete: boolean; inactivity_days: number } | null>(null);
+  const [pw, setPw] = useState(""); const [ok, setOk] = useState(false); const [state, setState] = useState<"" | "busy" | "wrong" | "err">("");
+  useEffect(() => { supabase.rpc("get_my_privacy").then(({ data }) => setP(((data as any[]) ?? [])[0] ?? null)); }, []);
+  const save = async (n: { inactivity_delete: boolean; inactivity_days: number }) => { setP(n); await supabase.rpc("set_my_privacy", { p_inactivity_delete: n.inactivity_delete, p_inactivity_days: n.inactivity_days }); };
+  const del = async (e: React.FormEvent) => {
+    e.preventDefault(); setState("busy");
+    let r; try { r = await callFn("delete-account", { password: pw }); } catch { r = { status: 0, data: null as any }; }
+    if (r.status !== 200) { setState(r.status === 403 ? "wrong" : "err"); return; }
+    try { localStorage.clear(); sessionStorage.clear(); if ("caches" in window) for (const k of await caches.keys()) await caches.delete(k);
+      const dbs = (indexedDB as any).databases ? await (indexedDB as any).databases() : []; for (const d of dbs) if (d.name) indexedDB.deleteDatabase(d.name); } catch { /* best effort */ }
+    await supabase.auth.signOut({ scope: "local" }); location.replace(location.pathname + "?deleted=1");
+  };
+  return (
+    <div>
+      <h3 id="inactivity">{da ? "Automatisk sletning ved inaktivitet" : "Automatic deletion when inactive"}</h3>
+      {p && <>
+        <label style={{ display: "flex", gap: 8 }}><input type="checkbox" style={{ width: 24, minHeight: 24 }} checked={p.inactivity_delete} onChange={(e) => save({ ...p, inactivity_delete: e.target.checked })} />
+          {da ? "Slet min konto, hvis jeg ikke logger ind i" : "Delete my account if I do not log in for"}</label>
+        <select aria-label={da ? "Antal dage" : "Days"} disabled={!p.inactivity_delete} value={p.inactivity_days} onChange={(e) => save({ ...p, inactivity_days: +e.target.value })}>
+          {[30, 60, 90].map((d) => <option key={d} value={d}>{d} {da ? "dage" : "days"}</option>)}</select>
+        <p className="meta">{da ? "Du får en mail 14 dage før. Mailen indeholder ingen beskeder." : "You get an email 14 days before. It contains no messages."}</p></>}
+      <h3 id="delete">{da ? "Slet min konto" : "Delete my account"}</h3>
+      <p>{da ? "Sletter din konto, dine indstillinger, kaldenavne, farver og feedback på serveren samt alt, Rolff har gemt på denne enhed. Det kan ikke fortrydes." : "Deletes your account, settings, aliases, colours and feedback on the server, plus everything Rolff stored on this device. This cannot be undone."}</p>
+      <p className="notice">{evidenceNote(lang)}</p>
+      <form onSubmit={del}>
+        <label htmlFor="delpw">{da ? "Bekræft med din adgangskode" : "Confirm with your password"}</label>
+        <PasswordInput id="delpw" lang={lang} value={pw} onChange={(v) => { setPw(v); setState(""); }} minLength={1} autoComplete="current-password" />
+        <label style={{ display: "flex", gap: 8 }}><input type="checkbox" style={{ width: 24, minHeight: 24 }} checked={ok} onChange={(e) => setOk(e.target.checked)} />{da ? "Jeg forstår, at sletningen er endelig." : "I understand that deletion is final."}</label>
+        <div className="row end"><button type="submit" className="danger" disabled={!ok || !pw || state === "busy"}>{da ? "Slet min konto permanent" : "Delete my account permanently"}</button></div>
+        {state === "wrong" && <p className="err" role="alert">{da ? "Forkert adgangskode." : "Wrong password."}</p>}
+        {state === "err" && <p className="err" role="alert">{da ? "Sletningen mislykkedes. Prøv igen." : "Deletion failed. Please try again."}</p>}
+      </form>
+    </div>
+  );
+}
+
 function FeedbackForm({ lang }: { lang: Lang }) {
   const da = lang === "da";
   const [cat, setCat] = useState("idea"); const [body, setBody] = useState(""); const [state, setState] = useState<"" | "busy" | "ok" | "err" | "limit">("");
@@ -188,8 +233,9 @@ function Auth({ lang, peek }: { lang: Lang; peek?: Peek | null }) {
   return (
     <div className="card">
       <div style={{ textAlign: "center" }}><img src="./icons/rolff-192.png" alt="Rolff logo" width={96} height={96} style={{ borderRadius: 22 }} /><h1 style={{ marginTop: 8 }}>Rolff</h1></div>
-      {peek ? <div className="notice"><strong>{lang === "da" ? `${peek.inviter_email} har inviteret dig.` : `${peek.inviter_email} invited you.`}</strong> {lang === "da" ? "Vælg en adgangskode for at komme ind i samtalen. Har du allerede en konto, så log ind." : "Choose a password to join. Already have an account? Log in."}</div>
+      {peek ? <div className="notice"><strong>{lang === "da" ? `${peek.inviter_email} har inviteret dig.` : `${peek.inviter_email} invited you.`}</strong> {lang === "da" ? "Vælg en adgangskode for at komme ind i samtalen. Har du allerede en konto, så log ind." : "Choose a password to join. Already have an account? Log in."}<p className="meta" style={{ marginBottom: 0 }}>{evidenceNote(lang)}</p></div>
         : peek === null ? <div className="notice" role="alert">{lang === "da" ? "Invitationen er ugyldig, udløbet eller allerede brugt." : "The invitation is invalid, expired or already used."}</div> : null}
+      {new URLSearchParams(location.search).has("deleted") && <div className="notice" role="status">{lang === "da" ? "Din konto er slettet." : "Your account has been deleted."}</div>}
       <p>{t.tagline}</p><p>{t.intro}</p>
       <form onSubmit={submit}>
         <label htmlFor="e">{t.email}</label><input id="e" type="email" required autoComplete="email" readOnly={!!peek} value={email} onChange={(e) => setEmail(e.target.value)} />
@@ -197,6 +243,7 @@ function Auth({ lang, peek }: { lang: Lang; peek?: Peek | null }) {
         <PasswordInput id="p" lang={lang} value={pw} onChange={setPw} minLength={mode === "signup" ? 8 : 1} autoComplete={mode === "login" ? "current-password" : "new-password"} />
         {mode === "signup" && <><label htmlFor="p2">{pwText[lang].repeat}</label>
           <PasswordInput id="p2" lang={lang} value={pw2} onChange={(v) => { setPw2(v); setErr(""); }} minLength={8} autoComplete="new-password" invalid={pw2.length > 0 && !passwordsMatch(pw, pw2)} describedBy="pwerr" /></>}
+        {mode === "signup" && <p className="meta" role="note">{evidenceNote(lang)}</p>}
         {mode === "signup" && <p><label style={{ display: "flex", gap: 8 }}><input type="checkbox" style={{ width: 24, minHeight: 24 }} checked={ai} onChange={(e) => setAi(e.target.checked)} required />{t.ai} {t.aiAccept}</label></p>}
         {err ? <p className="err" id="pwerr" role="alert">{err}</p>
           : mode === "signup" && pw2.length > 0 && !passwordsMatch(pw, pw2) ? <p className="err" id="pwerr" aria-live="polite">{pwText[lang].mismatch}</p> : null}
@@ -273,7 +320,7 @@ function InviteByEmail({ lang, done }: { lang: Lang; done: () => void }) {
       : r.data?.error === "bad_input" ? (da ? "Tjek e-mailadressen." : "Check the email address.") : (da ? "Mailen kunne ikke sendes. Prøv igen senere." : "The email could not be sent. Try again later.") });
   };
   return (
-    <form onSubmit={submit}>
+    <form onSubmit={submit}><p className="meta" role="note">{evidenceNote(lang)}</p>
       <p className="meta">{da ? "Der oprettes en ny samtale mellem jer to. Den inviterede ser kun beskeder fra efter, hun eller han er kommet med." : "A new conversation is created for the two of you. The invitee only sees messages from after joining."}</p>
       <label htmlFor="ie">{da ? "E-mail" : "Email"}</label><input id="ie" type="email" required maxLength={254} value={email} onChange={(e) => setEmail(e.target.value)} />
       <div className="row end"><button type="submit" disabled={busy}>{busy ? (da ? "Sender…" : "Sending…") : "Send invitation"}</button></div>
