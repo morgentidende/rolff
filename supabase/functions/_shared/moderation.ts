@@ -157,7 +157,8 @@ export function providerFromEnv(env: ModerationEnv): ModerationProvider {
     const k = env.get("OPENAI_API_KEY"); if (!k) throw new ModerationTechnicalError("missing_key");
     const base = env.get("OPENAI_BASE_URL") ?? "https://eu.api.openai.com/v1";
     if (!/^https:\/\/([a-z0-9-]+\.)*openai\.com\/v1\/?$/.test(base)) throw new ModerationTechnicalError("bad_base_url");
-    return new OpenAIProvider(k, env.get("OPENAI_MODEL") ?? "gpt-5.4-nano", base);
+    return new OpenAIProvider(k, env.get("OPENAI_MODEL") ?? "gpt-6-luna", base);
+    // Kendt fallback: sæt OPENAI_MODEL=gpt-5.4-nano (udfases af OpenAI 2027-04-01).
   }
   throw new ModerationTechnicalError("unknown_provider");
 }
