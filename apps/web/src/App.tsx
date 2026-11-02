@@ -4,7 +4,7 @@ import type { Session } from "@supabase/supabase-js";
 import { callFn, supabase } from "./supabase";
 import { detectLang, strings, type Lang } from "./i18n";
 import { passwordsMatch, pwText, toggleLabel } from "./pw";
-import { exportFileName, findHits, toCsv, type Row } from "./exportUtil";
+import { exportFileName, makeZip, myDataFiles, findHits, toCsv, type Row } from "./exportUtil";
 
 type Other = { user_id: string; email: string; alias: string | null };
 type Conv = { id: string; role: string; members: number; others: Other[]; color: string | null };
@@ -167,6 +167,33 @@ export const evidenceNote = (lang: Lang) => lang === "da"
   ? "Vigtigt: Rolff er lavet til at kunne bruges som dokumentation. Det, du skriver og modtager, bliver hos de andre i samtalen – også hvis du senere sletter din konto. Du kan slette din egen kopi, men ikke kræve de andres slettet."
   : "Important: Rolff is designed to serve as a record. What you write and receive stays with the others in the conversation – even if you later delete your account. You can delete your own copy, but you cannot require the others' copy to be deleted.";
 
+function MyDataExport({ lang }: { lang: Lang }) {
+  const da = lang === "da";
+  const [pw, setPw] = useState(""); const [st, setSt] = useState<"" | "busy" | "ok" | "wrong" | "limit" | "err">("");
+  const go = async (e: React.FormEvent) => {
+    e.preventDefault(); setSt("busy");
+    let r; try { r = await callFn("export-data", { password: pw }); } catch { r = { status: 0, data: null as any }; }
+    setPw("");
+    if (r.status !== 200) { setSt(r.status === 403 ? "wrong" : r.status === 429 ? "limit" : "err"); return; }
+    const zip = makeZip(myDataFiles(r.data.data));
+    const url = URL.createObjectURL(new Blob([zip as BlobPart], { type: "application/zip" }));
+    const a = document.createElement("a"); a.href = url; a.download = `rolff-mine-data-${new Date().toISOString().slice(0, 10)}.zip`; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000); setSt("ok");
+  };
+  return (
+    <form onSubmit={go}>
+      <h3 id="export">{da ? "Download mine data" : "Download my data"}</h3>
+      <p className="meta">{da ? "En ZIP med JSON og CSV: konto, indstillinger, dine samtaler (det du selv kan se), egne kaldenavne, blokerede ord, invitationer, samtykker, feedback og metadata. Filen laves på din enhed. Højst 3 gange i døgnet." : "A ZIP with JSON and CSV: account, settings, your conversations (what you can see), own nicknames, blocked words, invitations, consents, feedback and metadata. Built on your device. At most 3 times a day."}</p>
+      <label htmlFor="xpw">{da ? "Bekræft med din adgangskode" : "Confirm with your password"}</label>
+      <input id="xpw" type="password" autoComplete="current-password" value={pw} onChange={(e) => setPw(e.target.value)} required />
+      <div className="row end"><button type="submit" disabled={st === "busy" || !pw}>{da ? "Download" : "Download"}</button></div>
+      {st === "ok" && <p className="meta" role="status">{da ? "Downloadet." : "Downloaded."}</p>}
+      {st === "wrong" && <p className="err" role="alert">{da ? "Forkert adgangskode." : "Wrong password."}</p>}
+      {st === "limit" && <p className="err" role="alert">{da ? "Højst 3 gange i døgnet." : "At most 3 times a day."}</p>}
+      {st === "err" && <p className="err" role="alert">{da ? "Kunne ikke hente data." : "Could not fetch data."}</p>}
+    </form>);
+}
+
 function PrivacyPanel({ lang }: { lang: Lang }) {
   const da = lang === "da";
   const [p, setP] = useState<{ inactivity_delete: boolean; inactivity_days: number; cloud_sync: boolean; retention: string } | null>(null);
@@ -193,6 +220,7 @@ function PrivacyPanel({ lang }: { lang: Lang }) {
         <label style={{ display: "flex", gap: 8 }}><input type="checkbox" style={{ width: 24, minHeight: 24 }} checked={p.cloud_sync} onChange={(e) => saveData({ ...p, cloud_sync: e.target.checked })} />
           {da ? "Sky-synk (til flere enheder)" : "Cloud sync (for several devices)"}</label>
         <p className="meta">{da ? "Valgfrit, slået fra som standard. Gemmes nu. I web-testversionen ligger beskederne altid på serveren (EU, Frankfurt), da browseren ikke er en sikker fast kopi. I mobilappen betyder “fra”, at serveren kun holder beskeden til den er leveret." : "Optional, off by default. Saved now. In the web test version messages always stay on the server (EU, Frankfurt) as the browser is not a safe permanent copy. In the mobile app “off” means the server only keeps a message until it is delivered."}</p></>}
+      <MyDataExport lang={lang} />
       <h3 id="inactivity">{da ? "Automatisk sletning ved inaktivitet" : "Automatic deletion when inactive"}</h3>
       {p && <>
         <label style={{ display: "flex", gap: 8 }}><input type="checkbox" style={{ width: 24, minHeight: 24 }} checked={p.inactivity_delete} onChange={(e) => save({ ...p, inactivity_delete: e.target.checked })} />
