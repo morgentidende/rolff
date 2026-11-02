@@ -80,3 +80,10 @@ Supabase (DB, auth, functions – Frankfurt), Hostinger (web + mail-relay), Open
 - Filen bygges **på enheden**: JSON + ZIP med CSV-filer (UTF-8 BOM, formel-escape via `exportUtil.csvCell`). Serveren logger intet indhold.
 - Tests: to brugere med private data hver → eksporten indeholder kun egne rækker; alle tabeller med `user_id` er dækket (test over `information_schema`); ikke-leverede beskeder udelades.
 - Nævnes i FAQ og privatlivspolitik.
+
+## Rapportering (besluttet 2026-11-02, Apple 1.2 / Google Play UGC)
+- Adgang: samtalens ⋮ → "Rapportér". Kontakt (nicolaipetersen108@gmail.com) står i FAQ.
+- Brugeren vælger selv indholdet: kategori (Chikane/trusler, Upassende indhold, Børns sikkerhed, Andet), egen tekst (≤2000 tegn) og højst 20 selvmarkerede beskeder. Forhåndsvisning + eksplicit bekræftelse; intet sendes automatisk.
+- Modtager: mail via samme PHP-mailer som feedback til `FEEDBACK_TO`. Ingen moderationsteam, ingen døgnvagt, ingen garanti for svar/handling; ved akut fare 112/politi.
+- Server: `report` Edge Function (kun indlogget, validering) → `submit_report` RPC tjekker medlemskab, at hver vedhæftet besked er synlig for rapportøren (get_messages-regler) og rate limit 3/døgn.
+- Opbevaring: kun `report_log` (bruger, samtale, kategori, antal vedhæftede, tidspunkt). Ingen tekst gemmes og ingen tekst logges; indholdet findes kun i mailen. Slettes med kontoen (cascade).
