@@ -4,7 +4,7 @@
 // atomic consume + store (commit_message, idempotent). Fail closed on any error.
 import { authed, cors, json } from "../_shared/http.ts";
 import { checkRules } from "../_shared/rules.ts";
-import { charCount, MAX_CHARS, moderate, ModerationTechnicalError, providerFromEnv } from "../_shared/moderation.ts";
+import { charCount, MAX_CHARS, moderate, ModerationTechnicalError, providerFromEnv, timeoutFromEnv } from "../_shared/moderation.ts";
 
 async function sha256Hex(s: string) {
   const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
     return json({ status: "technical_error", detail: (e as Error).message === "free_tier_forbidden_in_production" ? "config" : "unavailable" }, 503);
   }
   let res;
-  try { res = await moderate(provider, body, ctx); }
+  try { res = await moderate(provider, body, ctx, timeoutFromEnv({ get: (k) => Deno.env.get(k) })); }
   catch (e) {
     await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "error", p_reason: e instanceof ModerationTechnicalError ? e.message : "unknown" });
     // No message text in logs.

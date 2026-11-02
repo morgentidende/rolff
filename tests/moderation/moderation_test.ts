@@ -13,3 +13,12 @@ Deno.test("prefilter fanger entydigt skældsord", () => assertEquals(prefilter("
 Deno.test("prefilter lader neutral tekst passere til AI", () => assertEquals(prefilter("Kan du hente kl. 16?"), null));
 Deno.test("produktion med gratis niveau nægtes", () => { assertThrows(() => providerFromEnv({ get: (k) => ({ APP_ENV: "production", MODERATION_TIER: "free", GEMINI_API_KEY: "x" } as any)[k] }), ModerationTechnicalError, "free_tier_forbidden_in_production"); });
 Deno.test("tegnoptælling er Unicode-kodepunkter", () => assertEquals(charCount("æøå👍"), 4));
+
+Deno.test("timeoutFromEnv clamps and defaults", async () => {
+  const { timeoutFromEnv } = await import("../../supabase/functions/_shared/moderation.ts");
+  const e = (v?: string) => ({ get: (_: string) => v });
+  if (timeoutFromEnv(e()) !== 15000) throw new Error("default");
+  if (timeoutFromEnv(e("100")) !== 3000) throw new Error("min");
+  if (timeoutFromEnv(e("99999")) !== 30000) throw new Error("max");
+  if (timeoutFromEnv(e("abc")) !== 15000) throw new Error("nan");
+});
