@@ -71,7 +71,7 @@ await t('Udløbet godkendelse afvises', async () => {
 await t('B (ingen modtagetider) modtager beskeden', async () => { const r = await as(B, `select * from get_messages($1)`, [conv]); assert.equal(r.length, 1); assert.equal(r[0].body, body); });
 await t('Svar indeholder ingen kvitterings-/statusfelter', async () => {
   const r = await as(A, `select * from get_messages($1)`, [conv]);
-  assert.deepEqual(Object.keys(r[0]).sort(), ['body', 'created_at', 'id', 'mine', 'sender_id', 'sender_name']);
+  assert.deepEqual(Object.keys(r[0]).sort(), ['att_alt', 'att_mime', 'att_name', 'att_pages', 'body', 'created_at', 'id', 'mine', 'sender_id', 'sender_name']);
 });
 
 // Receive windows
@@ -426,6 +426,41 @@ await t('Auth-mail rate limit: 3 pr. time pr. adresse+type; kun service', async 
   assert.deepEqual(r, [true, true, true, false]);
   assert.equal((await svc(`select auth_mail_allow('h1','email_change') ok`))[0].ok, true);
   await rejects(as(A, `select auth_mail_allow('h2','recovery')`), /permission|denied/);
+});
+
+// ---------- Plans + attachments ----------
+await t('Standardplan er Tekst; test-skift op gælder straks', async () => {
+  const [U] = (await db.query(`insert into auth.users(raw_user_meta_data) values ('{}') returning id`)).rows.map(r => r.id);
+  assert.equal((await as(U, `select plan from get_my_plan()`))[0].plan, 'text');
+  assert.equal((await as(U, `select plan from set_my_plan_test('text_attachments')`))[0].plan, 'text_attachments');
+  const d = (await as(U, `select plan, pending_plan from set_my_plan_test('text')`))[0];
+  assert.equal(d.plan, 'text_attachments'); assert.equal(d.pending_plan, 'text');
+  await db.query(`update user_plans set period_end = now() - interval '1 second' where user_id=$1`, [U]);
+  assert.equal((await as(U, `select plan from get_my_plan()`))[0].plan, 'text');
+  assert.equal((await as(U, `select plan from set_my_plan_test('text_attachments')`))[0].plan, 'text_attachments');
+  assert.equal((await as(U, `select plan from set_my_plan_test('text', true)`))[0].plan, 'text');
+  await rejects(as(U, `select * from set_my_plan_test('gratis')`), /bad_plan/);
+  await db.query(`update app_flags set value=false where key='plan_test_switch'`);
+  await rejects(as(U, `select * from set_my_plan_test('text_attachments')`), /plan_switch_disabled/);
+  await db.query(`update app_flags set value=true where key='plan_test_switch'`);
+});
+await t('Vedhæftning kræver afsenders 79-plan; tabeller er lukkede for klienter', async () => {
+  const [P, Q] = (await db.query(`insert into auth.users(raw_user_meta_data) values ('{}'),('{}') returning id`)).rows.map(r => r.id);
+  const cv = (await db.query(`insert into conversations(created_by) values ($1) returning id`, [P])).rows[0].id;
+  await db.query(`insert into memberships(conversation_id,user_id,role) values ($1,$2,'parent'),($1,$3,'parent')`, [cv, P, Q]);
+  const data = new Uint8Array([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a,0]);
+  const h = (await db.query(`select encode(extensions.digest($1 || E'\n' || encode(extensions.digest($2::bytea,'sha256'),'hex'),'sha256'),'hex') h`, ['Vedhæftning: a.png', data])).rows[0].h;
+  const ap = async () => (await svc(`select issue_approval($1,$2,$3,'openai','m') id`, [P, cv, h]))[0].id;
+  const commit = async (k) => svc(`select * from commit_attachment_message($1,$2,$3,'Vedhæftning: a.png',$4,'image/png','a.png','alt',null,$5::bytea)`, [await ap(), P, cv, k, data]);
+  await rejects(commit('key-att-0001'), /plan_required/);
+  await as(P, `select * from set_my_plan_test('text_attachments')`);
+  const mid = (await commit('key-att-0002'))[0].message_id;
+  await rejects(as(Q, `select * from message_attachments`), /permission|denied/);
+  await rejects(as(Q, `select * from user_plans where user_id='${P}'`).then(r => { if (r.length) throw new Error('leak'); throw new Error('denied'); }), /denied/);
+  const g = await as(Q, `select att_mime from get_messages($1) where id=$2`, [cv, mid]);
+  assert.equal(g[0]?.att_mime, 'image/png');
+  assert.equal((await as(Q, `select mime from get_attachment($1)`, [mid]))[0].mime, 'image/png');
+  await rejects(as(X, `select * from get_attachment($1)`, [mid]), /not_found/);
 });
 console.log(`\n${pass} bestået, ${fail} fejlet`);
 process.exit(fail ? 1 : 0);

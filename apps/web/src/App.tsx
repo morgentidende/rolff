@@ -11,7 +11,7 @@ type Other = { user_id: string; email: string; alias: string | null };
 type Conv = { id: string; role: string; members: number; others: Other[]; color: string | null };
 const labelOf = (o: Other) => o.alias || o.email;
 const convLabel = (c: Conv, da: boolean) => c.others?.length ? c.others.map(labelOf).join(", ") : (da ? "Venter på den anden part" : "Waiting for the other party");
-type Msg = { id: string; sender_id: string; sender_name: string | null; body: string; created_at: string; mine: boolean };
+type Msg = { id: string; sender_id: string; sender_name: string | null; body: string; created_at: string; mine: boolean; att_mime?: string | null; att_name?: string | null; att_alt?: string | null; att_pages?: number | null };
 const MAX = 480;
 const count = (s: string) => [...s].length;
 
@@ -23,7 +23,7 @@ function readInviteToken(): string | null {
   return sessionStorage.getItem("invite");
 }
 
-type Sheet = "members" | "privacy" | "words" | null | "lang" | "theme" | "times" | "faq" | "feedback" | "invite" | "export" | "addMember" | "name" | "report" | "account" | "newpw";
+type Sheet = "members" | "privacy" | "words" | null | "lang" | "theme" | "times" | "faq" | "feedback" | "invite" | "export" | "addMember" | "name" | "report" | "account" | "newpw" | "plans";
 export type MenuItem = { label: string; run: () => void; danger?: boolean };
 
 export function App() {
@@ -78,6 +78,7 @@ export function App() {
     { label: t.theme, run: () => setSheet("theme") },
     { label: t.windows, run: () => setSheet("times") },
     { label: "FAQ", run: () => setSheet("faq") },
+    { label: da ? "Abonnement" : "Plan", run: () => setSheet("plans") },
     { label: da ? "Visningsnavn" : "Display name", run: () => setSheet("name") },
     { label: da ? "Konto (e-mail og adgangskode)" : "Account (email and password)", run: () => setSheet("account") },
     { label: da ? "Privatliv og sletning" : "Privacy and deletion", run: () => setSheet("privacy") },
@@ -97,11 +98,12 @@ export function App() {
       <div className="notice" role="note">{t.testNotice}</div>
       {inviteMsg && <div className="notice" role="status">{inviteMsg}</div>}
       {!session ? <Auth lang={lang} peek={inviteToken ? peek : undefined} />
-        : conv ? <Chat lang={lang} conv={conv} back={() => setConv(null)} menu={menu} />
+        : conv ? <Chat lang={lang} conv={conv} back={() => setConv(null)} menu={menu} openPlans={() => setSheet("plans")} planKey={sheet} />
         : <Home key={homeKey} lang={lang} open={setConv} invite={() => setSheet("invite")} />}
       {sheet === "lang" && <SheetView title={t.lang} close={close} lang={lang}><Choice name="lang" value={lang} set={(v) => setLang(v as Lang)} opts={[["da", "Dansk"], ["en", "English"]]} /></SheetView>}
       {sheet === "theme" && <SheetView title={t.theme} close={close} lang={lang}><Choice name="theme" value={theme} set={setTheme} opts={[["dark", t.dark], ["light", t.light], ["system", t.system]]} /></SheetView>}
       {sheet === "times" && <SheetView title={t.windows} close={close} lang={lang}><ReceiveSettings lang={lang} /></SheetView>}
+      {sheet === "plans" && <SheetView title={da ? "Abonnement" : "Plan"} close={close} lang={lang}><Plans lang={lang} /></SheetView>}
       {sheet === "faq" && <SheetView title="FAQ" close={close} lang={lang}><Faq lang={lang} /></SheetView>}
       {sheet === "name" && <SheetView title={da ? "Visningsnavn" : "Display name"} close={close} lang={lang}><PublicName lang={lang} /></SheetView>}
       {session && !sheet && <NameHint lang={lang} open={() => setSheet("name")} />}
@@ -165,6 +167,8 @@ function Faq({ lang }: { lang: Lang }) {
     ["Hvad kan de andre se om mig?", "Du logger ind med din e-mail. Som udgangspunkt er din e-mail også det navn, de andre i samtalen ser. Du kan når som helst vælge et kaldenavn under ⋮ → Visningsnavn – så ser de kun kaldenavnet, også i eksisterende samtaler, og din e-mail udleveres ikke længere til dem. Hver person kan desuden give dig et privat kaldenavn, som kun de selv ser. Glemt adgangskode: brug linket på login-siden. Skift e-mail eller adgangskode: ⋮ → Konto. Sletning af konto: ⋮ → Privatliv og sletning."],
     ["Hvordan rapporterer jeg noget?", "Tryk ⋮ i samtalen → “Rapportér”. Du vælger kategori, skriver selv hvad der er sket og kan markere de beskeder, du vil vedhæfte. Du ser en forhåndsvisning, og intet sendes før du bekræfter. Rapporten mailes til Rolffs udvikler (kontakt: nicolaipetersen108@gmail.com) med dit kaldenavn og bruger-id. Rolff gemmer kun kategori, tidspunkt og antal vedhæftede beskeder (til at begrænse misbrug) – ikke teksten. Der er ingen døgnvagt og ingen garanti for svar eller handling. Ved akut fare: ring 112."],
     ["Hvor ligger mine data, og hvor længe?", "På Supabase-servere i Frankfurt (EU). Du vælger selv opbevaring (1 år, 5 år eller ubegrænset) og sky-synk under ⋮ → Privatliv og sletning. Der kan du også downloade alle dine data (ZIP med JSON og CSV) og slette din konto. AI-tonetjekket bruger i testen OpenAI (USA/global behandling, ikke EU; ingen Zero Data Retention endnu; store:false). Læs mere i privatlivspolitikken (⋮ → Privatlivspolitik)."],
+    ["Kan jeg sende billeder og PDF'er?", "Ja, med planen “Tekst + vedhæftninger” (79 kr./md.). Du kan sende PNG, JPG, WebP, GIF (ikke animeret) og PDF (højst 4 MB og 5 sider). Før filen sendes, tjekker AI (OpenAI, gpt-6-luna) både billedet og al tekst i det – samme regler som beskeder. Er bare én linje sårende, eller er billedet upassende, bliver filen ikke sendt, og du får at vide hvorfor. Modtagerens blokerede ord gælder også tekst i filen. Alle i samtalen kan se vedhæftninger, de modtager, uanset plan. Læsere kan ikke sende filer."],
+    ["Hvad koster Rolff?", "Der er to planer: “Tekst” 49 kr./md. og “Tekst + vedhæftninger” 79 kr./md. Planen gælder dig som afsender, så to forældre kan have hver sin plan. Opgradering gælder straks, nedgradering fra næste periode. I testversionen er skiftet en testfunktion uden betaling."],
     ["Er det her den rigtige app?", "Nej, det er et testmiljø. Skriv kun opdigtede beskeder. AI-tjekket kører hos OpenAI (se ovenfor)."],
   ] : [
     ["Can the other person see if I read a message or am online?", "No. Rolff has no read receipts, no online status and no typing indicator."],
@@ -178,6 +182,8 @@ function Faq({ lang }: { lang: Lang }) {
     ["What can others see about me?", "You log in with your e-mail. By default your e-mail is also the name others in the conversation see. You can choose a nickname at any time under ⋮ → Display name – then they only see the nickname, also in existing conversations, and your e-mail is no longer given to them. Each person can also give you a private nickname only they see. Forgot password: use the link on the login page. Change e-mail or password: ⋮ → Account. Account deletion: ⋮ → Privacy and deletion."],
     ["How do I report something?", "Tap ⋮ in the conversation → “Report”. You choose a category, write what happened and can tick the messages you want to attach. You see a preview and nothing is sent until you confirm. The report is e-mailed to Rolff's developer (contact: nicolaipetersen108@gmail.com) with your nickname and user id. Rolff stores only category, time and number of attached messages (to limit abuse) – not the text. There is no 24/7 staff and no guarantee of a reply or action. In an emergency: call 112."],
     ["Where is my data, and for how long?", "On Supabase servers in Frankfurt (EU). You choose retention (1 year, 5 years or unlimited) and cloud sync under ⋮ → Privacy and deletion, where you can also download all your data (ZIP with JSON and CSV) and delete your account. The AI tone check uses OpenAI during testing (US/global processing, not EU; no Zero Data Retention yet; store:false). See the privacy policy (⋮ → Privacy policy)."],
+    ["Can I send images and PDFs?", "Yes, with the “Text + attachments” plan (79 DKK/month). PNG, JPG, WebP, GIF (not animated) and PDF (max 4 MB, 5 pages). Before sending, AI (OpenAI, gpt-6-luna) checks the image and all text in it with the same rules as messages. If one line is hurtful or the image is inappropriate, it is not sent and you are told why. The recipient's blocked words also apply to text in the file. Everyone can view attachments they receive, whatever their plan. Readers cannot send files."],
+    ["What does Rolff cost?", "Two plans: “Text” 49 DKK/month and “Text + attachments” 79 DKK/month. The plan applies to you as sender, so two parents may have different plans. Upgrades apply immediately, downgrades from the next period. In the test version switching is a test feature without payment."],
     ["Is this the real app?", "No, this is a test environment. Write made-up messages only. The AI check runs at OpenAI (see above)."],
   ];
   return <div className="faq">{qa.map(([q, a]) => <details key={q}><summary>{q}</summary><p>{a}</p></details>)}</div>;
@@ -551,7 +557,9 @@ function markAll(text: string, q: string, current: boolean): (string | React.Rea
 
 const Icon = ({ d }: { d: React.ReactNode }) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">{d}</svg>;
 
-function Chat({ lang, conv, back, menu }: { lang: Lang; conv: Conv; back: () => void; menu: MenuItem[] }) {
+function Chat({ lang, conv, back, menu, openPlans, planKey }: { lang: Lang; conv: Conv; back: () => void; menu: MenuItem[]; openPlans: () => void; planKey: Sheet }) {
+  const [plan, setPlan] = useState<string>("text");
+  useEffect(() => { supabase.rpc("get_my_plan").then(({ data }) => { if (data?.[0]) setPlan(data[0].plan); }); }, [planKey]);
   const [others, setOthers] = useState<Other[]>(conv.others ?? []); const [color, setColor] = useState<string | null>(conv.color);
   const t = strings[lang]; const da = lang === "da";
   const draftKey = `draft:${conv.id}`;
@@ -633,7 +641,7 @@ function Chat({ lang, conv, back, menu }: { lang: Lang; conv: Conv; back: () => 
       {pending > 0 && <div className="notice row"><span>{t.pending(pending)}</span><span className="spacer" /><button onClick={receiveNow}>{t.receiveNow}</button></div>}
       <div className="card msgs" aria-live="polite" ref={listRef}>
         {msgs.length === 0 && <p className="meta">{t.empty}</p>}
-        {msgs.map((m, i) => <div key={m.id} data-i={i} className={`msg ${m.mine ? "mine" : "theirs"}${i === curIdx ? " hit" : ""}`}><div className="meta">{m.mine ? t.you : m.sender_name} · {new Date(m.created_at).toLocaleString(lang, { dateStyle: "short", timeStyle: "short" })}</div>{q ? markAll(m.body, q, i === curIdx) : m.body}</div>)}
+        {msgs.map((m, i) => <div key={m.id} data-i={i} className={`msg ${m.mine ? "mine" : "theirs"}${i === curIdx ? " hit" : ""}`}><div className="meta">{m.mine ? t.you : m.sender_name} · {new Date(m.created_at).toLocaleString(lang, { dateStyle: "short", timeStyle: "short" })}</div>{q ? markAll(m.body, q, i === curIdx) : m.body}{m.att_mime && <AttachmentView lang={lang} m={m} />}</div>)}
         <div ref={endRef} />
       </div>
       {status?.kind === "blocked" && <div className="notice" role="alert"><p style={{ margin: 0 }}>{t.blocked}</p>{status.spans!.length > 0 && <p className="meta" style={{ marginBottom: 0 }}>{t.flagged}: {highlight(status.blockedText!, status.spans!)}</p>}</div>}
@@ -642,6 +650,7 @@ function Chat({ lang, conv, back, menu }: { lang: Lang; conv: Conv; back: () => 
       {conv.role !== "reader" ? (
         <div className="card composer">
           <textarea aria-label={t.write} placeholder={t.write} rows={3} value={text} onChange={(e) => setText(e.target.value)} />
+          <AttachBar lang={lang} conv={conv.id} plan={plan} openPlans={openPlans} caption={text} sent={() => { setText(""); load(); }} />
           <div className="row"><span className="meta" style={{ color: n > MAX ? "crimson" : undefined }}>{n}/{MAX}</span><span className="spacer" /><button onClick={send} disabled={busy || !text.trim() || n > MAX}>{busy ? t.sending : t.send}</button></div>
         </div>) : <div className="notice" role="note">{t.readOnly}</div>}
       {blocked && <div className="notice" role="status">{da ? "Du har blokeret samtalen. De andre kan ikke sende beskeder her. " : "You blocked this conversation. The others cannot send messages here. "}<button className="ghost" onClick={() => setBlock(false)}>{da ? "Afblokér" : "Unblock"}</button></div>}
@@ -853,4 +862,104 @@ function AccountPanel({ lang }: { lang: Lang }) {
       <button type="submit" disabled={busy}>{da ? "Skift e-mail" : "Change email"}</button>
     </form>
   </>);
+}
+
+// ---------- Plans (TEST FEATURE: no payment) ----------
+export const PLANS = [
+  { id: "text", price: 49, da: ["Tekst", "Tekstbeskeder med AI-tonetjek. Du kan se vedhæftninger, som andre sender."], en: ["Text", "Text messages with AI tone check. You can view attachments others send."] },
+  { id: "text_attachments", price: 79, da: ["Tekst + vedhæftninger", "Alt i Tekst, og du kan sende screenshots, billeder og PDF'er (tjekket af AI før afsendelse)."], en: ["Text + attachments", "Everything in Text, plus sending screenshots, images and PDFs (checked by AI before sending)."] },
+] as const;
+function Plans({ lang }: { lang: Lang }) {
+  const da = lang === "da";
+  const [p, setP] = useState<{ plan: string; pending_plan: string | null; period_end: string | null; test_switch: boolean } | null>(null);
+  const [msg, setMsg] = useState(""); const [busy, setBusy] = useState(false);
+  const load = () => supabase.rpc("get_my_plan").then(({ data }) => setP(data?.[0] ?? null));
+  useEffect(() => { load(); }, []);
+  const change = async (plan: string, now = false) => {
+    setBusy(true); setMsg("");
+    const r = await supabase.rpc("set_my_plan_test", { p_plan: plan, p_now: now }); setBusy(false);
+    if (r.error) { setMsg(da ? "Planen kunne ikke skiftes. Prøv igen." : "Could not change plan. Try again."); return; }
+    const d = r.data?.[0]; await load();
+    setMsg(d?.pending_plan ? (da ? `Skiftet er planlagt og gælder fra ${new Date(d.period_end).toLocaleDateString("da")}.` : `The change is scheduled from ${new Date(d.period_end).toLocaleDateString("en")}.`)
+      : (da ? "Planen er skiftet." : "Plan changed."));
+  };
+  if (!p) return <p className="meta" role="status">{da ? "Henter…" : "Loading…"}</p>;
+  const name = (id: string) => (PLANS.find((x) => x.id === id)![da ? "da" : "en"])[0];
+  return (<div>
+    <div className="notice" role="note"><strong>{da ? "TESTFUNKTION – ingen betaling." : "TEST FEATURE – no payment."}</strong> {da ? "Du kan skifte frit for at prøve planerne. Der trækkes ingen penge, og der er ikke koblet betaling på endnu." : "Switch freely to try the plans. Nothing is charged; no payment is connected yet."}</div>
+    <div className="plans" role="list">
+      {PLANS.map((x) => { const cur = p.plan === x.id; const [title, desc] = x[da ? "da" : "en"]; return (
+        <section key={x.id} role="listitem" className={`card plan${cur ? " current" : ""}`} aria-current={cur ? "true" : undefined} aria-labelledby={`plan-${x.id}`}>
+          <h3 id={`plan-${x.id}`}>{title}</h3>
+          <p className="price"><strong>{x.price} kr.</strong> / {da ? "md." : "month"}</p>
+          <p className="meta">{desc}</p>
+          {cur ? <p className="badge">{da ? "Din nuværende plan" : "Your current plan"}</p>
+            : <button disabled={busy || !p.test_switch} onClick={() => change(x.id)}>{x.id === "text_attachments" ? (da ? "Opgradér (test)" : "Upgrade (test)") : (da ? "Nedgradér (test)" : "Downgrade (test)")}</button>}
+          {p.pending_plan === x.id && <p className="meta">{da ? "Skifter hertil ved næste periode." : "Switches here next period."}</p>}
+        </section>); })}
+    </div>
+    {p.pending_plan && <div className="row"><button className="ghost" disabled={busy} onClick={() => change(p.plan)}>{da ? `Behold ${name(p.plan)}` : `Keep ${name(p.plan)}`}</button>
+      <button className="ghost" disabled={busy} onClick={() => change(p.pending_plan!, true)}>{da ? "Skift straks (kun test)" : "Switch now (test only)"}</button></div>}
+    <p className="meta">{da ? "Regel: Opgradering gælder straks. Nedgradering gælder fra næste periode (indtil da beholder du vedhæftninger). Planen gælder dig som afsender – den anden forælder kan have en anden plan. Alle kan altid se vedhæftninger, de modtager." : "Rule: upgrades apply immediately. Downgrades apply from the next period. The plan applies to you as sender – the other parent may have another plan. Everyone can always view attachments they receive."}</p>
+    {p.period_end && <p className="meta">{da ? "Periode slutter" : "Period ends"}: {new Date(p.period_end).toLocaleDateString(lang)}</p>}
+    {msg && <p className="notice" role="status">{msg}</p>}
+  </div>);
+}
+
+// ---------- Attachments ----------
+const ACCEPT = "image/png,image/jpeg,image/webp,image/gif,application/pdf";
+const MAX_FILE = 4 * 1024 * 1024;
+function AttachBar({ lang, conv, plan, openPlans, caption, sent }: { lang: Lang; conv: string; plan: string; openPlans: () => void; caption: string; sent: () => void }) {
+  const da = lang === "da";
+  const [file, setFile] = useState<File | null>(null); const [alt, setAlt] = useState(""); const [busy, setBusy] = useState(false);
+  const [out, setOut] = useState<{ ok: boolean; text: string } | null>(null); const [locked, setLocked] = useState(false);
+  const ref = useRef<HTMLInputElement>(null);
+  const reasons: Record<string, string> = da ? { inappropriate_image: "billedet kan opfattes som upassende", personal_attack: "teksten indeholder et personangreb", sarcasm_or_irony: "teksten er sarkastisk på en sårende måde", humiliation_mockery: "teksten er nedgørende", threat_intimidation: "teksten kan opfattes som en trussel", emotional_blackmail: "teksten lægger pres", false_politeness: "teksten er falsk høflig", slur_discrimination: "teksten er diskriminerende", other_harmful: "teksten kan opfattes som sårende eller aggressiv" }
+    : { inappropriate_image: "the image may be inappropriate", personal_attack: "the text contains a personal attack", sarcasm_or_irony: "the text is hurtfully sarcastic", humiliation_mockery: "the text is belittling", threat_intimidation: "the text may read as a threat", emotional_blackmail: "the text applies pressure", false_politeness: "the text is falsely polite", slur_discrimination: "the text is discriminatory", other_harmful: "the text may come across as hurtful or aggressive" };
+  const errs: Record<string, string> = da ? { too_large: "Filen er for stor (højst 4 MB).", bad_type: "Kun PNG, JPG, WebP, GIF (ikke animeret) og PDF.", animated: "Animerede billeder kan ikke sendes.", too_many_pages: "PDF'en må højst have 5 sider.", encrypted_pdf: "Krypterede PDF'er kan ikke sendes.", empty: "Filen er tom.", read_only: "Du har rollen “Kun læse” og kan ikke sende.", rate_limited: "Du har sendt mange filer. Vent lidt og prøv igen.", plan_required: "Vedhæftninger kræver planen Tekst + vedhæftninger (79 kr./md.).", length: "Teksten er for lang (højst 300 tegn med vedhæftning)." }
+    : { too_large: "File too large (max 4 MB).", bad_type: "Only PNG, JPG, WebP, GIF (not animated) and PDF.", animated: "Animated images cannot be sent.", too_many_pages: "PDF max 5 pages.", encrypted_pdf: "Encrypted PDFs cannot be sent.", empty: "The file is empty.", read_only: "You are read-only.", rate_limited: "Too many files. Wait and try again.", plan_required: "Attachments require the Text + attachments plan (79 DKK/month).", length: "Text too long (max 300 characters with an attachment)." };
+  const pick = (f: File | null) => { setOut(null); if (!f) return; if (f.size > MAX_FILE) { setOut({ ok: false, text: errs.too_large }); return; } setFile(f); };
+  const send = async () => {
+    if (!file) return; setBusy(true); setOut(null);
+    const buf = new Uint8Array(await file.arrayBuffer()); let bin = ""; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+    let r; try { r = await callFn("send-attachment", { conversation_id: conv, idempotency_key: crypto.randomUUID(), file_b64: btoa(bin), file_name: file.name, caption: caption.trim(), alt: alt.trim() }); } catch { r = { status: 0, data: null as any }; }
+    setBusy(false); const d = r.data ?? {};
+    if (r.status === 200 && d.status === "accepted") { setFile(null); setAlt(""); setOut({ ok: true, text: da ? "Vedhæftningen er sendt." : "Attachment sent." }); sent(); }
+    else if (d.status === "blocked") setOut({ ok: false, text: (da ? "Filen blev ikke sendt: " : "Not sent: ") + (reasons[d.reason_code] ?? reasons.other_harmful) + "." + ((d.spans ?? []).length ? (da ? " Markeret: “" : " Flagged: “") + d.spans.join("”, “") + "”" : "") });
+    else if (d.status === "blocked_word") setOut({ ok: false, text: da ? `Filen blev ikke sendt: Modtageren har blokeret ordet/sætningen "${d.word}", og det står i ${d.where === "caption" ? "din tekst" : "filen"}.` : `Not sent: the recipient blocked "${d.word}", which appears in ${d.where === "caption" ? "your text" : "the file"}.` });
+    else if (d.status === "rule") setOut({ ok: false, text: da ? "Filen blev ikke sendt: Din tekst overholder ikke reglerne (emojis, store bogstaver eller gentagelse)." : "Not sent: your text breaks the rules (emoji, caps or repetition)." });
+    else if (d.status === "cannot_deliver") setOut({ ok: false, text: da ? "Der kan ikke sendes i denne samtale." : "Cannot send in this conversation." });
+    else if (d.error && errs[d.error]) { setOut({ ok: false, text: errs[d.error] }); if (d.error === "plan_required") setLocked(true); }
+    else setOut({ ok: false, text: da ? "Teknisk fejl: Filen blev ikke tjekket og derfor ikke sendt. Prøv igen senere." : "Technical error: the file was not checked and therefore not sent." });
+  };
+  if (plan !== "text_attachments" || locked) return (<div className="row attach">
+    <button className="ghost" aria-describedby="att-lock" onClick={openPlans}>{da ? "Vedhæft (låst)" : "Attach (locked)"}</button>
+    <span id="att-lock" className="meta">{da ? "Kræver planen Tekst + vedhæftninger (79 kr./md.)." : "Requires Text + attachments (79 DKK/month)."} <button className="linkish" onClick={openPlans}>{da ? "Se planer" : "See plans"}</button></span>
+    {out && <div className="notice" role="alert">{out.text}</div>}</div>);
+  return (<div className="attach">
+    <input ref={ref} id={`file-${conv}`} type="file" accept={ACCEPT} hidden onChange={(e) => pick(e.target.files?.[0] ?? null)} />
+    {!file ? <button className="ghost" onClick={() => ref.current?.click()} aria-label={da ? "Vedhæft billede eller PDF" : "Attach image or PDF"}>{da ? "Vedhæft" : "Attach"}</button> : <div>
+      <p className="meta" style={{ margin: "4px 0" }}>{file.name} · {Math.ceil(file.size / 1024)} kB</p>
+      <label htmlFor={`alt-${conv}`}>{da ? "Kort beskrivelse af filen (alt-tekst, hjælper skærmlæsere)" : "Short description (alt text, helps screen readers)"}</label>
+      <input id={`alt-${conv}`} maxLength={300} value={alt} onChange={(e) => setAlt(e.target.value)} />
+      <p className="meta">{da ? "Filen og teksten i den tjekkes af AI (OpenAI) før afsendelse. Teksten i beskedfeltet sendes med som billedtekst." : "The file and its text are checked by AI (OpenAI) before sending. The message text is sent as a caption."}</p>
+      <div className="row"><button className="ghost" disabled={busy} onClick={() => { setFile(null); setOut(null); }}>{da ? "Fjern fil" : "Remove file"}</button><span className="spacer" /><button disabled={busy} onClick={send}>{busy ? (da ? "Tjekker fil…" : "Checking file…") : (da ? "Send fil" : "Send file")}</button></div>
+    </div>}
+    {out && <div className={out.ok ? "notice" : "notice"} role={out.ok ? "status" : "alert"}>{out.text}</div>}
+  </div>);
+}
+function AttachmentView({ lang, m }: { lang: Lang; m: Msg }) {
+  const da = lang === "da"; const [url, setUrl] = useState<string | null>(null); const [err, setErr] = useState(false);
+  const isPdf = m.att_mime === "application/pdf"; const alt = m.att_alt || (da ? `Vedhæftet billede: ${m.att_name}` : `Attached image: ${m.att_name}`);
+  const open = async () => {
+    const { data, error } = await supabase.rpc("get_attachment", { p_message: m.id });
+    if (error || !data?.[0]) { setErr(true); return; }
+    const bin = atob(data[0].data_b64); const b = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
+    const u = URL.createObjectURL(new Blob([b], { type: data[0].mime })); if (isPdf) window.open(u, "_blank", "noopener"); else setUrl(u);
+  };
+  return (<div className="att">
+    {url ? <img src={url} alt={alt} style={{ maxWidth: "100%", borderRadius: 8 }} />
+      : <button className="ghost" onClick={open}>{isPdf ? (da ? `Åbn PDF: ${m.att_name} (${m.att_pages} s.)` : `Open PDF: ${m.att_name} (${m.att_pages} p.)`) : (da ? `Vis billede: ${m.att_name}` : `Show image: ${m.att_name}`)}</button>}
+    {err && <p className="meta" role="alert">{da ? "Vedhæftningen kunne ikke hentes." : "Could not load the attachment."}</p>}
+  </div>);
 }
