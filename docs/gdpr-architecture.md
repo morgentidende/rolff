@@ -57,7 +57,7 @@ Tests: efter sletning må ingen rækker med brugerens id findes i nogen tabel (g
 
 ## 5. AI-leverandør
 
-- Interface findes (`ModerationProvider`). OpenAI-provider skal bruge base-URL fra env: `https://eu.api.openai.com` (kræver **nyt projekt med Europe data residency**, og MAM/ZDR-berettigelse via OpenAI sales; jf. https://developers.openai.com/api/docs/guides/your-data, verificeret 2026-11-02, nævner `eu.api.openai.com` og `gpt-5.4-nano`), model `gpt-5.4-nano`, `store:false`.
+- Interface findes (`ModerationProvider`). OpenAI-provider skal bruge base-URL fra env: `https://eu.api.openai.com` (kræver **nyt projekt med Europe data residency**, og MAM/ZDR-berettigelse via OpenAI sales; jf. https://developers.openai.com/api/docs/guides/your-data, verificeret 2026-11-02, nævner `eu.api.openai.com`), model `gpt-6-luna`, `store:false`.
 - Feature-flag `MODERATION_PROVIDER=openai|gemini`; Gemini gratis kun når `APP_ENV!=production` (findes i dag).
 - **OpenAI-nøgle mangler** (`/workspace/.secrets/openai_api_key` findes ikke). ZDR omtales i UI kun som "under godkendelse", indtil Nicolai bekræfter.
 
