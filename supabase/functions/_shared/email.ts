@@ -14,19 +14,19 @@ function shell(title: string, inner: string) {
 <td width="48" style="width:48px;padding-right:14px;vertical-align:middle"><img src="${logoUrl()}" width="48" height="48" alt="Rolff logo" style="display:block;width:48px;height:48px;border:0;border-radius:11px;background:#016C72;color:#ffffff;font-size:12px"></td>
 <td style="vertical-align:middle;color:#ffffff;font-size:22px;font-weight:700;letter-spacing:.3px">Rolff<div style="font-size:13px;font-weight:400;opacity:.85;margin-top:2px">Rolig, saglig kommunikation i konflikter</div></td>
 </tr></table></td></tr>
+<tr><td style="padding:14px 28px;background:#fff4d6;border-bottom:1px solid #f0dfa8;font-size:14px;line-height:1.45;color:#5a4300" role="note"><strong>⚠ Dette er en testversion af Rolff</strong> – brug den ikke til rigtige sager eller følsomme oplysninger.</td></tr>
 <tr><td style="padding:28px;font-size:16px;line-height:1.55">${inner}</td></tr>
 <tr><td style="padding:16px 28px 24px;font-size:12px;color:#7a807e;border-top:1px solid #eeeae3"><strong>Testversion.</strong> Skriv ikke rigtige eller følsomme oplysninger. Beskeder tjekkes af OpenAI (USA/global behandling, ikke EU; ingen Zero Data Retention endnu; gemning slået fra). Ingen garanti for drift, og data kan blive slettet.<br><em>Test version. Do not enter real or sensitive information. Messages are checked by OpenAI (US/global processing, not EU; no Zero Data Retention yet; storage turned off). No uptime guarantee; data may be deleted.</em></td></tr>
 </table></td></tr></table></body></html>`;
 }
 
-export function inviteMail(p: { inviterEmail: string; link: string; expires: string }) {
+export function inviteMail(p: { inviterEmail: string; link: string; expires: string; inviteeEmail?: string }) {
   const subject = `${p.inviterEmail} har inviteret dig til Rolff`;
   const html = shell(subject, `<p style="margin:0 0 14px">Hej,</p>
 <p style="margin:0 0 14px"><strong>${esc(p.inviterEmail)}</strong> har inviteret dig til en fælles samtale i Rolff – en rolig chat, hvor beskeder bliver tjekket for tonen, før de sendes.</p>
 <p style="margin:0 0 22px">Tryk på knappen for at vælge en adgangskode og komme ind i samtalen.</p>
-<table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="#016C72" style="border-radius:10px;background:#016C72"><a href="${esc(p.link)}" style="display:inline-block;padding:14px 26px;color:#ffffff;text-decoration:none;font-weight:600;font-size:16px">Åbn invitationen</a></td></tr></table>
-<p style="margin:22px 0 0;font-size:13px;color:#7a807e">Linket virker én gang og udløber ${esc(fmt(p.expires))}. Kun denne e-mailadresse kan bruge det. Kender du ikke afsenderen, kan du bare slette mailen.</p>`);
-  const text = `Hej,\n\n${p.inviterEmail} har inviteret dig til en fælles samtale i Rolff.\n\nÅbn invitationen: ${p.link}\n\nLinket virker én gang og udløber ${fmt(p.expires)}. Kun denne e-mailadresse kan bruge det.\n\nRolff (testversion): Skriv ikke rigtige eller følsomme oplysninger. Beskeder tjekkes af OpenAI (USA/global behandling, ikke EU; ingen Zero Data Retention endnu; gemning slået fra). Ingen garanti for drift; data kan blive slettet. / Test version: do not enter real or sensitive information; messages are checked by OpenAI (US/global processing, not EU; no Zero Data Retention yet; storage turned off); no uptime guarantee; data may be deleted.`;
+${inviteBlock(p.link, p.inviteeEmail, p.expires)}`);
+  const text = `${TESTWARN}Hej,\n\n${p.inviterEmail} har inviteret dig til en fælles samtale i Rolff.\n\nÅbn invitationen: ${p.link}\n\nInvitationen er sendt til ${p.inviteeEmail ?? ""}. Linket virker én gang og udløber ${fmt(p.expires)} (3 dage). Kun denne e-mailadresse kan bruge det.\n\nRolff (testversion): Skriv ikke rigtige eller følsomme oplysninger. Beskeder tjekkes af OpenAI (USA/global behandling, ikke EU; ingen Zero Data Retention endnu; gemning slået fra). Ingen garanti for drift; data kan blive slettet. / Test version: do not enter real or sensitive information; messages are checked by OpenAI (US/global processing, not EU; no Zero Data Retention yet; storage turned off); no uptime guarantee; data may be deleted.`;
   return { subject, html, text };
 }
 
@@ -35,11 +35,16 @@ export function copyMail(p: { inviteeEmail: string; expires: string }) {
   const html = shell(subject, `<p style="margin:0 0 14px">Hej,</p>
 <p style="margin:0 0 14px">Din invitation til <strong>${esc(p.inviteeEmail)}</strong> er sendt. Når invitationen er taget imod, finder I samtalen i Rolff.</p>
 <p style="margin:0;font-size:13px;color:#7a807e">Af sikkerhedshensyn er linket kun med i modtagerens mail. Invitationen udløber ${esc(fmt(p.expires))}.</p>`);
-  const text = `Hej,\n\nDin invitation til ${p.inviteeEmail} er sendt. Linket er kun med i modtagerens mail. Udløber ${fmt(p.expires)}.\n\nRolff (testversion): Skriv ikke rigtige eller følsomme oplysninger. Beskeder tjekkes af OpenAI (USA/global behandling, ikke EU; ingen Zero Data Retention endnu; gemning slået fra). Ingen garanti for drift; data kan blive slettet. / Test version: do not enter real or sensitive information; messages are checked by OpenAI (US/global processing, not EU; no Zero Data Retention yet; storage turned off); no uptime guarantee; data may be deleted.`;
+  const text = `${TESTWARN}Hej,\n\nDin invitation til ${p.inviteeEmail} er sendt. Linket er kun med i modtagerens mail. Udløber ${fmt(p.expires)}.\n\nRolff (testversion): Skriv ikke rigtige eller følsomme oplysninger. Beskeder tjekkes af OpenAI (USA/global behandling, ikke EU; ingen Zero Data Retention endnu; gemning slået fra). Ingen garanti for drift; data kan blive slettet. / Test version: do not enter real or sensitive information; messages are checked by OpenAI (US/global processing, not EU; no Zero Data Retention yet; storage turned off); no uptime guarantee; data may be deleted.`;
   return { subject, html, text };
 }
 
 
+const TESTWARN = "!! Dette er en testversion af Rolff – brug den ikke til rigtige sager eller følsomme oplysninger. !!\n\n";
+/** Button + plain text link + who it is for. Used by every invitation mail. */
+const inviteBlock = (link: string, invitee: string | undefined, expires: string) => `${button(link, "Åbn invitationen")}
+<p style="margin:18px 0 0;font-size:13px;color:#4d5351">Virker knappen ikke? Kopiér dette link ind i din browser:<br><a href="${esc(link)}" style="color:#016C72;word-break:break-all">${esc(link)}</a></p>
+<p style="margin:14px 0 0;font-size:13px;color:#4d5351">Invitationen er sendt til <strong>${esc(invitee ?? "")}</strong>. Linket virker <strong>én gang</strong> og udløber <strong>${esc(fmt(expires))}</strong> (3 dage). Kender du ikke afsenderen, kan du bare slette mailen.</p>`;
 const roleDa = (r: string) => r === "reader" ? "kun læse" : "læse og skrive";
 const button = (link: string, label: string) => `<table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="#016C72" style="border-radius:10px;background:#016C72"><a href="${esc(link)}" style="display:inline-block;padding:14px 26px;color:#ffffff;text-decoration:none;font-weight:600;font-size:16px">${esc(label)}</a></td></tr></table>`;
 
@@ -51,20 +56,19 @@ export function approvalMail(p: { role: string; appUrl: string }) {
 <p style="margin:0 0 22px">Den nye deltager får først adgang, når alle i samtalen har godkendt. Ét afslag stopper invitationen. Deltageren ser ingen beskeder fra før, hun eller han kom med.</p>
 ${button(p.appUrl, "Åbn Rolff for at svare")}
 <p style="margin:22px 0 0;font-size:13px;color:#7a807e">Log ind og åbn samtalen for at se, hvem det drejer sig om, og for at godkende eller afvise.</p>`);
-  const text = `Hej,\n\nEt medlem af en af dine samtaler i Rolff vil gerne tilføje en ny deltager (${roleDa(p.role)}). Deltageren får først adgang, når alle har godkendt. Ét afslag stopper invitationen.\n\nÅbn Rolff for at svare: ${p.appUrl}\n\nRolff (testversion): Skriv ikke rigtige eller følsomme oplysninger. Beskeder tjekkes af OpenAI (USA/global behandling, ikke EU; ingen Zero Data Retention endnu; gemning slået fra). Ingen garanti for drift; data kan blive slettet. / Test version: do not enter real or sensitive information; messages are checked by OpenAI (US/global processing, not EU; no Zero Data Retention yet; storage turned off); no uptime guarantee; data may be deleted.`;
+  const text = `${TESTWARN}Hej,\n\nEt medlem af en af dine samtaler i Rolff vil gerne tilføje en ny deltager (${roleDa(p.role)}). Deltageren får først adgang, når alle har godkendt. Ét afslag stopper invitationen.\n\nÅbn Rolff for at svare: ${p.appUrl}\n\nRolff (testversion): Skriv ikke rigtige eller følsomme oplysninger. Beskeder tjekkes af OpenAI (USA/global behandling, ikke EU; ingen Zero Data Retention endnu; gemning slået fra). Ingen garanti for drift; data kan blive slettet. / Test version: do not enter real or sensitive information; messages are checked by OpenAI (US/global processing, not EU; no Zero Data Retention yet; storage turned off); no uptime guarantee; data may be deleted.`;
   return { subject, html, text };
 }
 
 /** To the extra participant after unanimous approval. */
-export function memberInviteMail(p: { inviterEmail: string; link: string; expires: string; role: string }) {
+export function memberInviteMail(p: { inviterEmail: string; link: string; expires: string; role: string; inviteeEmail?: string }) {
   const verb = p.role === "reader" ? "læse med" : "deltage";
   const subject = `${p.inviterEmail} har inviteret dig til at ${verb} i en samtale i Rolff`;
   const html = shell(subject, `<p style="margin:0 0 14px">Hej,</p>
 <p style="margin:0 0 14px"><strong>${esc(p.inviterEmail)}</strong> har inviteret dig til at <strong>${verb}</strong> i en samtale i Rolff (adgang: ${roleDa(p.role)}). Alle i samtalen har godkendt invitationen.</p>
 <p style="margin:0 0 22px">Du ser kun beskeder fra efter, du er kommet med.</p>
-${button(p.link, "Åbn invitationen")}
-<p style="margin:22px 0 0;font-size:13px;color:#7a807e">Linket virker én gang og udløber ${esc(fmt(p.expires))}. Kun denne e-mailadresse kan bruge det. Kender du ikke afsenderen, kan du bare slette mailen.</p>`);
-  const text = `Hej,\n\n${p.inviterEmail} har inviteret dig til at ${verb} i en samtale i Rolff (adgang: ${roleDa(p.role)}).\n\nÅbn invitationen: ${p.link}\n\nLinket virker én gang og udløber ${fmt(p.expires)}. Kun denne e-mailadresse kan bruge det.\n\nRolff (testversion): Skriv ikke rigtige eller følsomme oplysninger. Beskeder tjekkes af OpenAI (USA/global behandling, ikke EU; ingen Zero Data Retention endnu; gemning slået fra). Ingen garanti for drift; data kan blive slettet. / Test version: do not enter real or sensitive information; messages are checked by OpenAI (US/global processing, not EU; no Zero Data Retention yet; storage turned off); no uptime guarantee; data may be deleted.`;
+${inviteBlock(p.link, p.inviteeEmail, p.expires)}`);
+  const text = `${TESTWARN}Hej,\n\n${p.inviterEmail} har inviteret dig til at ${verb} i en samtale i Rolff (adgang: ${roleDa(p.role)}).\n\nÅbn invitationen: ${p.link}\n\nInvitationen er sendt til ${p.inviteeEmail ?? ""}. Linket virker én gang og udløber ${fmt(p.expires)} (3 dage). Kun denne e-mailadresse kan bruge det.\n\nRolff (testversion): Skriv ikke rigtige eller følsomme oplysninger. Beskeder tjekkes af OpenAI (USA/global behandling, ikke EU; ingen Zero Data Retention endnu; gemning slået fra). Ingen garanti for drift; data kan blive slettet. / Test version: do not enter real or sensitive information; messages are checked by OpenAI (US/global processing, not EU; no Zero Data Retention yet; storage turned off); no uptime guarantee; data may be deleted.`;
   return { subject, html, text };
 }
 

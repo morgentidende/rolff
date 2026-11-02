@@ -22,7 +22,7 @@ Deno.serve(async (req) => {
   };
   const mailParticipant = async (d: { token: string; invitee_email: string; inviter_email: string }, role: string) => {
     const exp = new Date(Date.now() + 72 * 3600e3).toISOString();
-    return sendMail(d.invitee_email, memberInviteMail({ inviterEmail: d.inviter_email, link: inviteLink(d.token), expires: exp, role }));
+    return sendMail(d.invitee_email, memberInviteMail({ inviterEmail: d.inviter_email, link: inviteLink(d.token), expires: exp, role, inviteeEmail: d.invitee_email }));
   };
 
   if (action === "member") {
@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
   const d = r.data[0];
   const link = inviteLink(d.token);
   const email = String(i.email).trim().toLowerCase();
-  const sentInvitee = await sendMail(email, inviteMail({ inviterEmail: (await a.admin.rpc("public_label_of", { uid: a.uid })).data ?? d.inviter_email, link, expires: d.expires_at }));
+  const sentInvitee = await sendMail(email, inviteMail({ inviterEmail: (await a.admin.rpc("public_label_of", { uid: a.uid })).data ?? d.inviter_email, link, expires: d.expires_at, inviteeEmail: email }));
   const sentCopy = sentInvitee ? await sendMail(d.inviter_email, copyMail({ inviteeEmail: email, expires: d.expires_at })) : false;
   if (!sentInvitee) await a.user.rpc("revoke_invitation", { inv: d.invitation_id });
   return json({ data: { conversation_id: d.conversation_id, sent: sentInvitee, copy_sent: sentCopy } }, sentInvitee ? 200 : 502);

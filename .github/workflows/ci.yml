@@ -11,7 +11,7 @@ jobs:
         with: { deno-version: v2.x }
       - run: node tests/lint/no_content_logs_test.mjs && node tests/lint/no_content_logs.mjs
       - run: cd tests/sql && npm ci && node run.mjs
-      - run: deno test --allow-env=APP_URL,MAILER_URL,MAILER_SECRET tests/moderation/moderation_test.ts tests/web/pw_test.ts tests/moderation/email_test.ts tests/web/export_test.ts tests/moderation/inactivity_test.ts tests/moderation/rules_test.ts tests/web/local_crypto_test.ts tests/web/account_mail_test.ts tests/moderation/attachments_test.ts tests/web/links_test.ts tests/web/install_test.ts
+      - run: deno test --allow-env=APP_URL,MAILER_URL,MAILER_SECRET tests/moderation/moderation_test.ts tests/web/pw_test.ts tests/moderation/email_test.ts tests/web/export_test.ts tests/moderation/inactivity_test.ts tests/moderation/rules_test.ts tests/web/local_crypto_test.ts tests/web/account_mail_test.ts tests/moderation/attachments_test.ts tests/web/links_test.ts tests/web/install_test.ts tests/web/limit_text_test.ts
       - run: cd supabase/functions && deno check */index.ts
       - run: cd apps/web && npm ci && npm run build
         env: { VITE_SUPABASE_URL: "https://example.supabase.co", VITE_SUPABASE_PUBLISHABLE_KEY: "ci" }
