@@ -94,3 +94,8 @@ Supabase (DB, auth, functions – Frankfurt), Hostinger (web + mail-relay), Open
 - Modtager: mail via samme PHP-mailer som feedback til `FEEDBACK_TO`. Ingen moderationsteam, ingen døgnvagt, ingen garanti for svar/handling; ved akut fare 112/politi.
 - Server: `report` Edge Function (kun indlogget, validering) → `submit_report` RPC tjekker medlemskab, at hver vedhæftet besked er synlig for rapportøren (get_messages-regler) og rate limit 3/døgn.
 - Opbevaring: kun `report_log` (bruger, samtale, kategori, antal vedhæftede, tidspunkt). Ingen tekst gemmes og ingen tekst logges; indholdet findes kun i mailen. Slettes med kontoen (cascade).
+
+## Opbevaring og sky-synk (implementeret 2026-11-02)
+- `user_privacy.retention` 1y (standard) / 5y / unlimited, sat via `set_my_data_prefs`. `get_messages` skjuler beskeder ældre end kalderens grænse.
+- `retention_sweep()` (dagligt via inactivity-sweep-cron) sletter en besked fysisk først, når den er ældre end grænsen for ALLE aktive medlemmer (bevismodellen).
+- `cloud_sync` (standard fra) gemmes. **Begrænsning:** i web-demoen er serveren eneste faste kopi, så "slet efter levering" er ikke aktiveret der. Det aktiveres i Flutter-appen, når lokal (krypteret) lagring er den primære kopi; sync fra ⇒ serverkopi slettes efter levering og synk-nøglen slettes straks.

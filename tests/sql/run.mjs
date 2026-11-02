@@ -387,5 +387,24 @@ await t('Rapport: ukendt kategori og fremmede besked-id afvises', async () => {
 });
 await t('Rapport: ikke-medlem afvises og kan ikke læse log', async () => { await rejects(as(X, `select * from submit_report($1,'other','{}')`, [conv]), /not_member/); await rejects(as(B, `select * from report_log`), /permission|denied/); });
 await t('Rapport: rate limit 3/døgn', async () => { await as(B, `select * from submit_report($1,'other','{}')`, [conv]); await as(B, `select * from submit_report($1,'other','{}')`, [conv]); await rejects(as(B, `select * from submit_report($1,'other','{}')`, [conv]), /rate_limited/); });
+
+await t('Opbevaring: standard 1 år; ugyldigt valg afvises', async () => {
+  assert.equal((await as(A, `select * from get_my_privacy()`))[0].retention, '1y');
+  await rejects(as(A, `select set_my_data_prefs(true,'10y')`), /bad_input/);
+});
+await t('Opbevaring: gamle beskeder skjules for 1 år, bevares fysisk hvis modparten valgte ubegrænset', async () => {
+  const id = (await sendAs(B, 'Gammel besked', 'key-ret00001'))[0].message_id;
+  await svc(`update messages set created_at = now() - interval '2 years' where id=$1`, [id]);
+  await svc(`update memberships set joined_at = now() - interval '3 years' where conversation_id=$1`, [conv]);
+  await as(A, `select set_my_data_prefs(false,'1y')`); await as(B, `select set_my_data_prefs(true,'unlimited')`);
+  assert.ok(!(await as(A, `select id from get_messages($1)`, [conv])).some(m => m.id === id));
+  assert.ok((await as(B, `select id from get_messages($1)`, [conv])).some(m => m.id === id));
+  await svc(`select retention_sweep()`);
+  assert.equal((await svc(`select count(*)::int n from messages where id=$1`, [id]))[0].n, 1);
+  await as(B, `select set_my_data_prefs(false,'1y')`);
+  await svc(`select retention_sweep()`);
+  assert.equal((await svc(`select count(*)::int n from messages where id=$1`, [id]))[0].n, 0);
+  await rejects(as(A, `select retention_sweep()`), /permission|denied/);
+});
 console.log(`\n${pass} bestået, ${fail} fejlet`);
 process.exit(fail ? 1 : 0);
