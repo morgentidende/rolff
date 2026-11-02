@@ -5,6 +5,7 @@
 // on the transcript -> approval bound to sender+conversation+sha256(body+sha256(file)) -> atomic store.
 // Nothing is stored or delivered before moderation passes. Fail closed. No content in logs.
 import { authed, cors, json } from "../_shared/http.ts";
+import { checkPersonLimits } from "../_shared/limits.ts";
 import { checkRules, findBlockedWord } from "../_shared/rules.ts";
 import { charCount, ModerationTechnicalError, prefilter, timeoutFromEnv } from "../_shared/moderation.ts";
 import { checkFile, cleanName, MAX_BYTES, openaiFileModerate, validateFileResult } from "../_shared/attachments.ts";
@@ -33,6 +34,10 @@ Deno.serve(async (req) => {
 
   const body = caption || `Vedhæftning: ${name}`;
 
+  // Person limits (frequency, then length) before rate limit and AI.
+  const pl = await checkPersonLimits(admin, conv, uid, charCount(caption));
+  if (pl === "error") return json({ status: "technical_error" }, 503);
+  if (pl) return json(pl, 200);
   const prep = await admin.rpc("prepare_send", { p_sender: uid, conv, p_body: [...body].slice(0, 480).join("") });
   if (prep.error) {
     const m = prep.error.message;
@@ -100,6 +105,7 @@ Deno.serve(async (req) => {
   const c = await admin.rpc("commit_attachment_message", { p_approval: appr.data, p_sender: uid, conv, p_body: body, p_key: key,
     p_mime: fc.mime, p_name: name, p_alt: alt, p_pages: fc.pages, p_data: "\\x" + hex(bytes.buffer as ArrayBuffer) });
   if (c.error && /cannot_deliver/.test(c.error.message)) return json({ status: "cannot_deliver" }, 200);
+  if (c.error && /person_frequency/.test(c.error.message)) { const again = await checkPersonLimits(admin, conv, uid, 0); return json(again && again !== "error" ? again : { status: "frequency_limit" }, 200); }
   if (c.error && /plan_required/.test(c.error.message)) return json({ error: "plan_required" }, 402);
   if (c.error && /rate_limited/.test(c.error.message)) return json({ error: "rate_limited" }, 429);
   if (c.error || !c.data?.[0]) return json({ status: "technical_error" }, 503);

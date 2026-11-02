@@ -33,6 +33,7 @@ const hash = async (s) => (await db.query(`select encode(extensions.digest($1,'s
 
 const [A, B, X, C] = (await db.query(`insert into auth.users(raw_user_meta_data) values ('{"display_name":"Test A"}'),('{"display_name":"Test B"}'),('{"display_name":"Uvedkommende"}'),('{"display_name":"Raadgiver"}') returning id`)).rows.map(r => r.id);
 
+await db.query(`insert into user_plans(user_id,plan) values ($1,'text_attachments'),($2,'text_attachments')`, [A, B]);
 let conv, token;
 await t('A opretter samtale', async () => { conv = (await as(A, `select create_conversation('Test') c`))[0].c; assert.ok(conv); });
 await t('A opretter invitation (kun hash gemt)', async () => {
@@ -350,7 +351,7 @@ await t('Blokér ord: modparten kan ikke hente listen', async () => { assert.equ
 await t('Blokér ord: uvedkommende ser intet og kan ikke tilføje', async () => { assert.equal((await as(X, `select * from conversation_blocked_words`)).length, 0); await rejects(as(X, `select add_blocked_word($1,'abc',true)`, [conv]), /not_member/); });
 await t('Blokér ord: andre kan ikke slette ejerens ord', async () => { await as(B, `delete from conversation_blocked_words`); assert.equal((await svc(`select count(*)::int n from conversation_blocked_words where user_id=$1`, [A]))[0].n, 1); });
 await t('Blokér ord: direkte insert afvises', async () => rejects(as(A, `insert into conversation_blocked_words(conversation_id,user_id,word) values ($1,$2,'xx')`, [conv, B]), /permission|denied/));
-await t('Blokér ord: længde 2-40 og max 50', async () => { await rejects(as(A, `select add_blocked_word($1,'x',true)`, [conv]), /length/); await rejects(as(A, `select add_blocked_word($1,repeat('a',41),true)`, [conv]), /length/); for (let k = 0; k < 49; k++) await as(A, `select add_blocked_word($1,$2,true)`, [conv, 'ord' + k]); await rejects(as(A, `select add_blocked_word($1,'ord99',true)`, [conv]), /too_many/); await svc(`delete from conversation_blocked_words where word like 'ord%'`); });
+await t('Blokér ord: længde 2-120 (hele sætninger) og max 50', async () => { await rejects(as(A, `select add_blocked_word($1,'x',true)`, [conv]), /length/); await rejects(as(A, `select add_blocked_word($1,repeat('a',121),true)`, [conv]), /length/); for (let k = 0; k < 49; k++) await as(A, `select add_blocked_word($1,$2,true)`, [conv, 'ord' + k]); await rejects(as(A, `select add_blocked_word($1,'ord99',true)`, [conv]), /too_many/); await svc(`delete from conversation_blocked_words where word like 'ord%'`); });
 await t('Blokér ord: server henter kun modtagernes ord (ikke afsenderens egne)', async () => { assert.deepEqual((await svc(`select * from recipient_blocked_words($1,$2) w`, [conv, B])).map(r => r.w), ['pis hoved']); assert.equal((await svc(`select * from recipient_blocked_words($1,$2)`, [conv, A])).length, 0); });
 await t('Blokér ord: slettes ved kontosletning (cascade)', async () => { const [Z] = (await db.query(`insert into auth.users(email) values ('z@test.invalid') returning id`)).rows.map(r => r.id); const zc = (await as(Z, `select create_conversation('z') c`))[0].c; await as(Z, `select add_blocked_word($1,'hej',true)`, [zc]); await db.query(`delete from auth.users where id=$1`, [Z]); assert.equal((await svc(`select count(*)::int n from conversation_blocked_words where user_id=$1`, [Z]))[0].n, 0); });
 await t('Blokering: B kan ikke sende, mens A blokerer (server)', async () => { await as(A, `select block_conversation($1)`, [conv]); await rejects(sendAs(B, 'Hej fra B', 'key-blk00001'), /cannot_deliver/); });
@@ -461,6 +462,59 @@ await t('Vedhæftning kræver afsenders 79-plan; tabeller er lukkede for kliente
   assert.equal(g[0]?.att_mime, 'image/png');
   assert.equal((await as(Q, `select mime from get_attachment($1)`, [mid]))[0].mime, 'image/png');
   await rejects(as(X, `select * from get_attachment($1)`, [mid]), /not_found/);
+});
+
+// ---------- Person limits + invite plan ----------
+const mkConv = async (a, b) => { const cv = (await db.query(`insert into conversations(created_by) values ($1) returning id`, [a])).rows[0].id; await db.query(`insert into memberships(conversation_id,user_id,role) values ($1,$2,'parent'),($1,$3,'parent')`, [cv, a, b]); return cv; };
+const sendIn = async (cv, from, text, key) => { const id = (await svc(`select issue_approval($1,$2,$3,'test','m') id`, [from, cv, await hash(text)]))[0].id; return svc(`select * from commit_message($1,$2,$3,$4,$5)`, [id, from, cv, text, key]); };
+const [LP, LQ, LS] = (await db.query(`insert into auth.users(raw_user_meta_data) values ('{}'),('{}'),('{}') returning id`)).rows.map(r => r.id);
+const lc1 = await mkConv(LP, LQ), lc2 = await mkConv(LQ, LP), lc3 = await mkConv(LS, LQ);
+const lim = async (cv, s) => (await svc(`select * from _send_limits($1,$2)`, [cv, s]))[0];
+await t('Længdegrænse: min 80, max 10000, kun modpart i fælles samtale', async () => {
+  await rejects(as(LQ, `select * from set_person_limit($1,79,null)`, [LP]), /bad_max_chars/);
+  await rejects(as(LQ, `select * from set_person_limit($1,10001,null)`, [LP]), /bad_max_chars/);
+  await rejects(svc(`insert into person_limits(recipient_id,sender_id,max_chars) values ($1,$2,79)`, [LQ, LP]), /check/);
+  await as(LQ, `select * from set_person_limit($1,80,null)`, [LP]); assert.equal((await lim(lc1, LP)).max_chars, 80);
+  for (const n of [140, 250, 300]) { await as(LQ, `select * from set_person_limit($1,$2,null)`, [LP, n]); assert.equal((await lim(lc2, LP)).max_chars, n); }
+  await rejects(as(LQ, `select * from set_person_limit($1,140,null)`, [LQ]), /not_found/);
+  const [Y] = (await db.query(`insert into auth.users(raw_user_meta_data) values ('{}') returning id`)).rows.map(r => r.id);
+  await rejects(as(LQ, `select * from set_person_limit($1,140,null)`, [Y]), /not_found/);
+});
+await t('Længdegrænse: gælder på tværs af samtaler, kun for den person, ubegrænset rydder', async () => {
+  await as(LQ, `select * from set_person_limit($1,140,null)`, [LP]);
+  assert.equal((await lim(lc1, LP)).max_chars, 140); assert.equal((await lim(lc2, LP)).max_chars, 140);
+  assert.equal((await lim(lc3, LS)).max_chars, null); assert.equal((await lim(lc1, LQ)).max_chars, null);
+  assert.equal((await as(LP, `select * from person_limits`)).length, 0);
+  assert.equal((await as(LQ, `select * from person_limits`)).length, 1);
+  assert.equal((await as(LP, `select max_chars from get_my_send_limits($1)`, [lc1]))[0].max_chars, 140);
+  await as(LQ, `select * from set_person_limit($1,null,null)`, [LP]); assert.equal((await lim(lc1, LP)).max_chars, null);
+});
+await t('Frekvensgrænse: 1..1440 min, på tværs af samtaler, DB-trigger, andre upåvirket', async () => {
+  await rejects(as(LQ, `select * from set_person_limit($1,null,0)`, [LP]), /bad_interval/);
+  await rejects(as(LQ, `select * from set_person_limit($1,null,1441)`, [LP]), /bad_interval/);
+  await as(LQ, `select * from set_person_limit($1,null,5)`, [LP]);
+  assert.equal((await lim(lc1, LP)).next_at, null);
+  await sendIn(lc1, LP, 'Første besked', 'key-pl-0001');
+  assert.ok((await lim(lc2, LP)).next_at);
+  await rejects(sendIn(lc2, LP, 'Anden besked', 'key-pl-0002'), /person_frequency/);
+  assert.equal((await db.query(`select count(*)::int n from messages where idempotency_key='key-pl-0002'`)).rows[0].n, 0, 'afvist besked må ikke gemmes');
+  await sendIn(lc3, LS, 'Fra S', 'key-pl-0003');
+  await sendIn(lc1, LQ, 'Q svarer', 'key-pl-0004');
+  await db.query(`update messages set created_at = now() - interval '6 minutes' where idempotency_key='key-pl-0001'`);
+  await sendIn(lc2, LP, 'Anden besked', 'key-pl-0005');
+  await as(LQ, `select * from set_person_limit($1,null,60)`, [LP]);
+  await db.query(`update messages set created_at = now() - interval '6 minutes' where idempotency_key='key-pl-0005'`);
+  assert.ok((await lim(lc1, LP)).next_at);
+  await as(LQ, `select * from set_person_limit($1,null,null)`, [LP]); assert.equal((await lim(lc1, LP)).next_at, null);
+});
+await t('Invitation af ekstra deltager kræver kun den inviterendes 79-plan', async () => {
+  await rejects(as(LP, `select * from create_member_invitation($1,'ekstra@test.invalid','reader')`, [lc1]), /plan_required/);
+  await as(LQ, `select * from set_my_plan_test('text_attachments')`);
+  await rejects(as(LP, `select * from create_member_invitation($1,'ekstra@test.invalid','reader')`, [lc1]), /plan_required/);
+  const r = await as(LQ, `select * from create_member_invitation($1,'ekstra@test.invalid','reader')`, [lc1]);
+  assert.ok(r[0].invitation_id);
+  await as(LP, `select consent_member_invitation($1)`, [r[0].invitation_id]);
+  assert.ok((await as(LP, `select * from create_invitation($1,'parent')`, [await (async () => (await as(LP, `select create_conversation('ny') c`))[0].c)()]))[0].token);
 });
 console.log(`\n${pass} bestået, ${fail} fejlet`);
 process.exit(fail ? 1 : 0);

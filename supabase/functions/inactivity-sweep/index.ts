@@ -4,6 +4,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { json } from "../_shared/http.ts";
 import { inactivityMail, sendMail } from "../_shared/email.ts";
+import { appUrl } from "../_shared/links.ts";
 export const allowed = (email: string, env: string, allow: string) =>
   env === "production" || (!!allow && new RegExp(allow, "i").test(email));
 Deno.serve(async (req) => {
@@ -17,7 +18,7 @@ Deno.serve(async (req) => {
   let warned = 0, deleted = 0, skipped = 0;
   for (const r of (data ?? []) as { user_id: string; email: string; action: string }[]) {
     if (!allowed(r.email ?? "", env, allow)) { skipped++; continue; }
-    if (r.action === "warn") { if (await sendMail(r.email, inactivityMail({ link: Deno.env.get("APP_URL") ?? "" }))) warned++; }
+    if (r.action === "warn") { if (await sendMail(r.email, inactivityMail({ link: appUrl() }))) warned++; }
     else if (r.action === "delete") {
       const p = await admin.rpc("purge_user_content", { p_uid: r.user_id });
       if (!p.error && !(await admin.auth.admin.deleteUser(r.user_id)).error) deleted++;

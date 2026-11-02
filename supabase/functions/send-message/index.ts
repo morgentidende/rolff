@@ -3,6 +3,7 @@
 // strict validation -> single-use approval bound to sender+conversation+sha256(body) (60s) ->
 // atomic consume + store (commit_message, idempotent). Fail closed on any error.
 import { authed, cors, json } from "../_shared/http.ts";
+import { checkPersonLimits } from "../_shared/limits.ts";
 import { checkRules } from "../_shared/rules.ts";
 import { charCount, MAX_CHARS, moderate, ModerationTechnicalError, providerFromEnv, timeoutFromEnv } from "../_shared/moderation.ts";
 
@@ -25,6 +26,10 @@ Deno.serve(async (req) => {
   const prev = await admin.from("messages").select("id").eq("sender_id", uid).eq("idempotency_key", key).maybeSingle();
   if (prev.data) return json({ status: "accepted", message_id: prev.data.id, duplicate: true });
 
+  // Person limits (frequency, then length) before rate limit and AI.
+  const pl = await checkPersonLimits(admin, conv, uid, charCount(body));
+  if (pl === "error") return json({ status: "technical_error" }, 503);
+  if (pl) return json(pl, 200);
   const prep = await admin.rpc("prepare_send", { p_sender: uid, conv, p_body: body });
   if (prep.error) {
     const m = prep.error.message;
@@ -67,6 +72,7 @@ Deno.serve(async (req) => {
   if (appr.error) return json({ status: "technical_error" }, 503);
   const c = await admin.rpc("commit_message", { p_approval: appr.data, p_sender: uid, conv, p_body: body, p_key: key });
   if (c.error && /cannot_deliver/.test(c.error.message)) return json({ status: "cannot_deliver" }, 200);
+  if (c.error && /person_frequency/.test(c.error.message)) { const again = await checkPersonLimits(admin, conv, uid, 0); return json(again && again !== "error" ? again : { status: "frequency_limit" }, 200); }
   if (c.error || !c.data?.[0]) return json({ status: "technical_error" }, 503);
   // Generic acceptance only: says nothing about recipient delivery/reading/windows.
   return json({ status: "accepted", message_id: c.data[0].message_id, duplicate: c.data[0].duplicate });
