@@ -593,5 +593,45 @@
   "expect": "block",
   "cat": "controlling_demand",
   "text": "Du skal møde op kl. 16 med papirerne, ellers dropper jeg samarbejdet."
+ } ,
+ {
+  "id": "sug-pure-da-01",
+  "lang": "da",
+  "expect": "block",
+  "cat": "suggestion_empty",
+  "text": "Du er altid så sur",
+  "expect_suggestion": ""
+ },
+ {
+  "id": "sug-pure-da-02",
+  "lang": "da",
+  "expect": "block",
+  "cat": "suggestion_empty",
+  "text": "Du er en idiot",
+  "expect_suggestion": ""
+ },
+ {
+  "id": "sug-pure-en-01",
+  "lang": "en",
+  "expect": "block",
+  "cat": "suggestion_empty",
+  "text": "You are always so angry",
+  "expect_suggestion": ""
+ },
+ {
+  "id": "sug-mix-da-01",
+  "lang": "da",
+  "expect": "block",
+  "cat": "suggestion_practical",
+  "text": "Du er idiot, hent tasken kl 16",
+  "expect_suggestion_nonempty": true
+ },
+ {
+  "id": "sug-mix-da-02",
+  "lang": "da",
+  "expect": "block",
+  "cat": "suggestion_practical",
+  "text": "Du er så egoistisk. Kan du hente børnene kl. 16?",
+  "expect_suggestion_nonempty": true
  }
 ]

@@ -6,34 +6,51 @@
 html,body{margin:0;max-width:100%;overflow-x:hidden;background:var(--bg,#f4f6f5);color:var(--text,#1d2a2a);font:17px/1.5 system-ui,sans-serif}
 :root{--bg:#f4f6f5;--card:#fff;--text:#1d2a2a;--muted:#5b6b6a;--accent:#016C72;--warn:#fff4e0;--warn-b:#c98a1b;--border:#d5dedc}
 .wrap{max-width:480px;width:100%;margin:24px auto;padding:16px}
-.notice{background:var(--warn);border:1px solid var(--warn-b);border-radius:10px;padding:8px 12px;font-size:14px;overflow-wrap:anywhere;word-break:break-word;max-width:100%}
+.notice{background:var(--warn);border:1px solid var(--warn-b);border-radius:10px;padding:8px 12px;font-size:14px;overflow-wrap:anywhere;word-break:break-word;max-width:100%;margin-bottom:20px}
 .suggest{margin-top:8px;padding-top:8px;border-top:1px solid color-mix(in srgb,var(--warn-b) 40%,transparent);overflow-wrap:anywhere}
 .meta{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
 button.ghost{background:transparent;color:var(--accent);border:1px solid var(--accent);border-radius:10px;min-height:44px;padding:8px 16px;max-width:100%;user-select:none;-webkit-user-select:none;cursor:pointer}
-textarea{display:block;width:100%;max-width:100%;min-height:88px;padding:8px 10px;border-radius:10px;border:1px solid var(--border);font:inherit;overflow-wrap:anywhere}
+textarea{display:block;width:100%;max-width:100%;min-height:72px;padding:8px 10px;border-radius:10px;border:1px solid var(--border);font:inherit;overflow-wrap:anywhere;margin:6px 0 0}
 mark{background:var(--warn-b);color:#000;border-radius:3px}
 #status{min-height:1.2em;margin:8px 0 0}
+h2{font-size:15px;margin:0 0 8px}
 </style></head><body><main class="wrap">
-<h1>Fixture: blokering + forslag</h1>
-<p class="meta">Opdigtet UI uden login. Original står i feltet; knappen «Brug forslaget» kopierer forslaget (samme adfærd som i appen).</p>
-<div class="notice" role="alert">
+<h1>Fixture: blokering (to tilstande)</h1>
+<p class="meta">Opdigtet UI uden login. A) kan omformuleres → «Brug forslaget». B) kan ikke → kun vejledning (ikke kopierbar til afsendelse).</p>
+
+<section class="notice" role="alert" aria-labelledby="h-can">
+  <h2 id="h-can">A) Kan omformuleres (praktisk kerne)</h2>
   <p style="margin:0">Beskeden blev ikke sendt. Den kan opfattes som sårende eller som en ordre til den anden. Ret den og prøv igen.</p>
   <p class="meta">Markeret tekst: <mark>Du skal</mark> hente kl. 16, punktum.</p>
   <div class="suggest">
     <p class="meta"><strong>Forslag til omformulering</strong></p>
     <p id="sug">Kan vi aftale afhentning kl. 16?</p>
-    <button type="button" class="ghost" id="use" aria-controls="t">Brug forslaget</button>
+    <button type="button" class="ghost" id="use" aria-controls="t-can">Brug forslaget</button>
     <p class="meta">Forslaget kopieres til skrivefeltet. Du sender selv — det tjekkes igen.</p>
     <p id="status" class="meta" role="status" aria-live="polite"></p>
   </div>
-</div>
-<label class="meta" for="t">Skrivefelt</label>
-<textarea id="t">Du skal hente kl. 16, punktum.</textarea>
+  <label class="meta" for="t-can">Skrivefelt</label>
+  <textarea id="t-can">Du skal hente kl. 16, punktum.</textarea>
+</section>
+
+<section class="notice" role="alert" aria-labelledby="h-cannot">
+  <h2 id="h-cannot">B) Kan ikke omformuleres (ren kritik)</h2>
+  <p style="margin:0">Beskeden blev ikke sendt. Den kan opfattes som sårende eller som en ordre til den anden. Ret den og prøv igen.</p>
+  <p class="meta">Markeret tekst: <mark>Du er altid så sur</mark></p>
+  <div class="suggest">
+    <p class="meta"><strong>Vejledning</strong></p>
+    <p class="meta" id="guide">Vent med at sende, eller skriv et konkret spørgsmål/ønske.</p>
+    <!-- ingen «Brug forslaget» — vejledning er ikke sendbar -->
+  </div>
+  <label class="meta" for="t-cannot">Skrivefelt</label>
+  <textarea id="t-cannot">Du er altid så sur</textarea>
+</section>
+
 <script>
 (function () {
   function apply() {
     var sug = document.getElementById("sug");
-    var ta = document.getElementById("t");
+    var ta = document.getElementById("t-can");
     var st = document.getElementById("status");
     if (!sug || !ta) return;
     var next = (sug.textContent || "").trim();

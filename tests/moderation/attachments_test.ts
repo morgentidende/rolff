@@ -21,9 +21,12 @@ Deno.test("checkFile rejects animation, pages, encryption, size", () => {
 });
 Deno.test("cleanName strips paths and markup", () => assertEquals(cleanName('C:\\x\\<b>"a".png'), "ba.png"));
 Deno.test("validateFileResult is strict and fails closed", () => {
-  const ok = validateFileResult('{"decision":"block","reason_code":"personal_attack","spans":["klovn","not there"],"transcript":"du er en klovn","suggestion":"Kan vi tale roligt om det?"}', "");
+  const ok = validateFileResult('{"decision":"block","reason_code":"personal_attack","spans":["klovn","not there"],"transcript":"du er en klovn","suggestion":""}', "");
   assertEquals(ok.spans, ["klovn"]);
-  assertEquals(validateFileResult('{"decision":"block","reason_code":"inappropriate_image","spans":[],"transcript":"","suggestion":""}', "").reason_code, "inappropriate_image");
+  assertEquals(ok.suggestion, "");
+  const img = validateFileResult('{"decision":"block","reason_code":"inappropriate_image","spans":[],"transcript":"","suggestion":"Prøv et faktuelt dokument i stedet."}', "");
+  assertEquals(img.reason_code, "inappropriate_image");
+  assertEquals(img.suggestion, "");
   assertThrows(() => validateFileResult('{"decision":"allow","reason_code":"personal_attack","spans":[],"transcript":"","suggestion":""}', ""));
   assertThrows(() => validateFileResult('{"decision":"allow","reason_code":"none","spans":[],"suggestion":""}', ""));
   assertThrows(() => validateFileResult("not json", ""));
@@ -42,4 +45,9 @@ Deno.test("blocked phrases: multi-word, whole sentences, case/diacritics incl. �
 Deno.test("file result: controlling_demand + suggestion", () => {
   const r = validateFileResult({ decision: "block", reason_code: "controlling_demand", spans: ["du skal"], transcript: "du skal skrive under", suggestion: "Kan vi gennemgå aftalen?" }, "");
   if (r.reason_code !== "controlling_demand" || !r.suggestion) throw new Error(JSON.stringify(r));
+});
+
+Deno.test("file result: empty when no practical core / meta advice", () => {
+  const r = validateFileResult({ decision: "block", reason_code: "personal_attack", spans: ["klovn"], transcript: "du er en klovn", suggestion: "Lad os holde samtalen til det konkrete." }, "");
+  assertEquals(r.suggestion, "");
 });
