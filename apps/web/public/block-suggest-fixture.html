@@ -2,31 +2,52 @@
 <html lang="da"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Rolff – forslag ved blokering (fixture)</title>
 <style>
+*{box-sizing:border-box}
+html,body{margin:0;max-width:100%;overflow-x:hidden;background:var(--bg,#f4f6f5);color:var(--text,#1d2a2a);font:17px/1.5 system-ui,sans-serif}
 :root{--bg:#f4f6f5;--card:#fff;--text:#1d2a2a;--muted:#5b6b6a;--accent:#016C72;--warn:#fff4e0;--warn-b:#c98a1b;--border:#d5dedc}
-body{margin:0;background:var(--bg);color:var(--text);font:17px/1.5 system-ui,sans-serif}
-.wrap{max-width:480px;margin:24px auto;padding:16px}
-.notice{background:var(--warn);border:1px solid var(--warn-b);border-radius:10px;padding:8px 12px;font-size:14px}
-.suggest{margin-top:8px;padding-top:8px;border-top:1px solid color-mix(in srgb,var(--warn-b) 40%,transparent)}
-.meta{font-size:12px;color:var(--muted)}
-button.ghost{background:transparent;color:var(--accent);border:1px solid var(--accent);border-radius:10px;min-height:44px;padding:8px 16px}
-textarea{width:100%;min-height:88px;padding:8px 10px;border-radius:10px;border:1px solid var(--border);font:inherit}
+.wrap{max-width:480px;width:100%;margin:24px auto;padding:16px}
+.notice{background:var(--warn);border:1px solid var(--warn-b);border-radius:10px;padding:8px 12px;font-size:14px;overflow-wrap:anywhere;word-break:break-word;max-width:100%}
+.suggest{margin-top:8px;padding-top:8px;border-top:1px solid color-mix(in srgb,var(--warn-b) 40%,transparent);overflow-wrap:anywhere}
+.meta{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+button.ghost{background:transparent;color:var(--accent);border:1px solid var(--accent);border-radius:10px;min-height:44px;padding:8px 16px;max-width:100%;user-select:none;-webkit-user-select:none;cursor:pointer}
+textarea{display:block;width:100%;max-width:100%;min-height:88px;padding:8px 10px;border-radius:10px;border:1px solid var(--border);font:inherit;overflow-wrap:anywhere}
 mark{background:var(--warn-b);color:#000;border-radius:3px}
+#status{min-height:1.2em;margin:8px 0 0}
 </style></head><body><main class="wrap">
 <h1>Fixture: blokering + forslag</h1>
-<p class="meta">Opdigtet UI uden login. Original står i feltet; «Brug forslaget» kopierer forslaget.</p>
+<p class="meta">Opdigtet UI uden login. Original står i feltet; knappen «Brug forslaget» kopierer forslaget (samme adfærd som i appen).</p>
 <div class="notice" role="alert">
   <p style="margin:0">Beskeden blev ikke sendt. Den kan opfattes som sårende eller som en ordre til den anden. Ret den og prøv igen.</p>
   <p class="meta">Markeret tekst: <mark>Du skal</mark> hente kl. 16, punktum.</p>
   <div class="suggest">
     <p class="meta"><strong>Forslag til omformulering</strong></p>
     <p id="sug">Kan vi aftale afhentning kl. 16?</p>
-    <button type="button" class="ghost" id="use">Brug forslaget</button>
+    <button type="button" class="ghost" id="use" aria-controls="t">Brug forslaget</button>
     <p class="meta">Forslaget kopieres til skrivefeltet. Du sender selv — det tjekkes igen.</p>
+    <p id="status" class="meta" role="status" aria-live="polite"></p>
   </div>
 </div>
 <label class="meta" for="t">Skrivefelt</label>
 <textarea id="t">Du skal hente kl. 16, punktum.</textarea>
 <script>
-document.getElementById('use').onclick=()=>{document.getElementById('t').value=document.getElementById('sug').textContent;};
+(function () {
+  function apply() {
+    var sug = document.getElementById("sug");
+    var ta = document.getElementById("t");
+    var st = document.getElementById("status");
+    if (!sug || !ta) return;
+    var next = (sug.textContent || "").trim();
+    if (!next) return;
+    ta.value = next;
+    if (st) st.textContent = "Forslag indsat i skrivefeltet.";
+  }
+  function bind() {
+    var btn = document.getElementById("use");
+    if (!btn) return;
+    btn.addEventListener("click", function (e) { e.preventDefault(); apply(); });
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bind);
+  else bind();
+})();
 </script>
 </main></body></html>
