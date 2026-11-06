@@ -155,6 +155,11 @@ await t('E-mailinvitation opretter ny samtale med kun inviterende', async () => 
   em = (await as(A, `select * from create_email_invitation('Maya@Test.invalid')`))[0];
   assert.equal((await db.query(`select count(*)::int n from memberships where conversation_id=$1`, [em.conversation_id])).rows[0].n, 1);
 });
+await t('Ventende invitation viser invitee i listen (ikke anonym Venter…)', async () => {
+  const row = (await as(A, `select others, pending_invitee from list_my_conversations() where id=$1`, [em.conversation_id]))[0];
+  assert.deepEqual(row.others, []);
+  assert.equal(row.pending_invitee, 'maya@test.invalid');
+});
 await t('Peek virker anonymt med gyldigt token, intet med ugyldigt', async () => {
   const ok = await db.transaction(async tx => { await tx.exec('set local role anon'); return (await tx.query(`select * from peek_invitation($1)`, [em.token])).rows; });
   assert.equal(ok[0].invitee_email, 'maya@test.invalid');
@@ -163,6 +168,7 @@ await t('Peek virker anonymt med gyldigt token, intet med ugyldigt', async () =>
 });
 await t('Ikke-inviteret konto kan ikke acceptere', async () => rejects(as(B, `select accept_invitation($1)`, [em.token]), /invalid_invitation/));
 await t('Inviteret konto accepterer', async () => assert.equal((await as(X, `select accept_invitation($1) c`, [em.token]))[0].c, em.conversation_id));
+await t('Efter accept er pending_invitee tom', async () => assert.equal((await as(A, `select pending_invitee from list_my_conversations() where id=$1`, [em.conversation_id]))[0].pending_invitee, null));
 await t('Link er engangs', async () => rejects(as(X, `select accept_invitation($1)`, [em.token]), /invalid_invitation/));
 await t('Kan ikke invitere sig selv', async () => rejects(as(A, `select * from create_email_invitation('a@test.invalid')`), /bad_email/));
 // Private aliases
