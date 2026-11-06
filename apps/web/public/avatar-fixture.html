@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="da">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Rolff avatar-fixture (ingen login)</title>
+<style>
+/* Isolated copy of the Samtaler-row avatar CSS. Kept in sync by tests/web/dot_center_test.ts */
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:17px/1.5 system-ui,sans-serif}
+button{min-height:44px;padding:8px 16px;border-radius:10px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-text);font-size:16px;cursor:pointer}
+:root{--bg:#f4f6f5;--card:#fff;--text:#1d2a2a;--muted:#5b6b6a;--accent:#016C72;--accent-text:#fff;--mine:#dcebe7;--theirs:#fff;--warn:#fff4e0;--warn-b:#c98a1b;--err:#fbe9e9;--border:#d5dedc}
+.card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px}
+.list .convbtn{width:100%;text-align:left;margin:4px 0;background:var(--card);color:var(--text);border-color:var(--border)}
+.convrow{display:flex;align-items:center;gap:10px;margin:4px 0;position:relative}
+.convrow .convbtn{flex:1;min-width:0;text-align:left;background:var(--card);color:var(--text);border-color:var(--border);display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;padding:10px 12px}
+.convname{overflow-wrap:anywhere;font-weight:600;line-height:1.25}
+.convstatus{display:block;line-height:1.3}
+.dotwrap{position:relative;display:inline-flex}
+button.dot{width:44px;height:44px;min-width:44px;min-height:44px;padding:0;border-radius:50%;border:2px solid var(--card);background:var(--cc);color:#fff;font-weight:700;font-size:18px;box-shadow:0 0 0 1px var(--border);position:relative;display:inline-block;text-align:center;line-height:1;flex:none;overflow:hidden}
+button.dot > span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;line-height:1}
+.c-teal{--cc:#016C72}
+.wrap{max-width:480px;margin:24px auto;padding:16px}
+h1{font-size:20px}
+.meta{font-size:12px;color:var(--muted)}
+.note{margin-top:18px;padding:10px 12px;background:var(--warn,#fff4e0);border:1px solid var(--warn-b,#c98a1b);border-radius:10px;font-size:14px}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <h1>Avatar-fixture</h1>
+  <p class="meta">Samme DOM og CSS som Samtaler-rækken. Opdigtet titel — ingen konto, ingen data.</p>
+  <div class="card list" style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px">
+    <h2 style="font-size:20px;margin:4px 0 8px">Samtaler</h2>
+    <div class="convrow">
+      <span class="dotwrap">
+        <button type="button" class="dot c-teal" aria-label="Vælg farve for samtalen med maya@example.test" aria-expanded="false">
+          <span aria-hidden="true">M</span>
+        </button>
+      </span>
+      <button type="button" class="convbtn">
+        <span class="convname">maya@example.test</span>
+      </button>
+    </div>
+  </div>
+  <p class="note">Tjek: bogstavet <strong>M</strong> skal sidde midt i den teal cirkel (ikke op ad venstre kant). Skærmbredde ca. 390–473 px.</p>
+</main>
+</body>
+</html>
