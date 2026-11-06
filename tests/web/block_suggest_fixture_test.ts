@@ -9,7 +9,17 @@ Deno.test("fixture prevents mobile overflow basics", () => {
 Deno.test("fixture wires Brug forslaget click (not a dead button)", () => {
   assertStringIncludes(html, 'id="use"');
   assertStringIncludes(html, "addEventListener(\"click\"");
-  assertStringIncludes(html, 'id="t"');
+  assertStringIncludes(html, 'id="t-can"');
   assertStringIncludes(html, "ta.value = next");
   assertEquals(html.includes("onclick="), false, "prefer addEventListener over inline onclick");
+});
+Deno.test("fixture shows both rewritable and non-rewritable states", () => {
+  assertStringIncludes(html, "Kan omformuleres");
+  assertStringIncludes(html, "Kan ikke omformuleres");
+  assertStringIncludes(html, "Vejledning");
+  assertStringIncludes(html, "Vent med at sende");
+  assertStringIncludes(html, "Du er altid så sur");
+  // Guidance section must not have a use-suggestion button targeting the pure-criticism textarea
+  assertStringIncludes(html, 'id="t-cannot"');
+  assertEquals(/id="use"[^>]*>[\s\S]*id="t-cannot"/.test(html) && html.includes('aria-controls="t-cannot"'), false);
 });
