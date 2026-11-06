@@ -29,7 +29,7 @@ Deno.test("injection i suggestion -> tom", () => {
 Deno.test("meta-råd i suggestion -> tom (ikke sendbar)", () => {
   assertEquals(sanitizeSuggestion("Lad os holde samtalen til det konkrete.", "Du er altid så sur", "personal_attack"), "");
   assertEquals(sanitizeSuggestion("Prøv en anmodning i stedet for en ordre", "Du skal", "controlling_demand"), "");
-  assertEquals(sanitizeSuggestion("Vent med at sende, eller skriv et konkret spørgsmål/ønske.", "x", "other_harmful"), "");
+  assertEquals(sanitizeSuggestion("Skriv, hvad der skete, og hvad du gerne vil have anderledes – uden at kritisere den anden.", "x", "other_harmful"), "");
 });
 Deno.test("allow får altid tom suggestion", () => {
   assertEquals(validateResult({ decision: "allow", reason_code: "none", spans: [], suggestion: "hemmelig" }, "hej").suggestion, "");
@@ -57,7 +57,7 @@ Deno.test("fallbackSuggestion er altid tom", () => {
 Deno.test("blockGuidance er vejledning, ikke sendbar kopi af original", () => {
   const g = blockGuidance("Du er altid så sur");
   assertEquals(/altid så sur/i.test(g), false);
-  assertEquals(/Vent med at sende|Hold off sending/i.test(g), true);
+  assertEquals(g.includes("Skriv, hvad der skete") || /Write what happened/i.test(g), true);
 });
 Deno.test("produktion med gratis niveau nægtes", () => { assertThrows(() => providerFromEnv({ get: (k) => ({ APP_ENV: "production", MODERATION_TIER: "free", GEMINI_API_KEY: "x" } as any)[k] }), ModerationTechnicalError, "free_tier_forbidden_in_production"); });
 Deno.test("tegnoptælling er Unicode-kodepunkter", () => assertEquals(charCount("æøå👍"), 4));

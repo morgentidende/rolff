@@ -44,8 +44,8 @@ const INJECTION_HINT = /ignore (all |any )?(previous|prior|above) (instructions|
 export function blockGuidance(msg: string): string {
   const isDa = /[æøåÆØÅ]/.test(msg) || /\b(du|dig|jeg|skal|ikke|barn|børn|hente|aflever|venligst)\b/i.test(msg);
   return isDa
-    ? "Vent med at sende, eller skriv et konkret spørgsmål/ønske."
-    : "Hold off sending, or write a concrete question/request.";
+    ? "Skriv, hvad der skete, og hvad du gerne vil have anderledes – uden at kritisere den anden."
+    : "Write what happened and what you would like done differently – without criticizing the other person.";
 }
 
 /** @deprecated No sendable fallback — empty string only. Kept name for call sites; always "". */
@@ -54,7 +54,7 @@ export function fallbackSuggestion(_reason: ReasonCode, _msg: string): string {
 }
 
 /** Meta/advice lines that must never become a sendable suggestion (guidance belongs in the UI). */
-const META_ADVICE = /^(prøv |try |lad os holde|let'?s keep|hold the (conversation|talk)|vent med at sende|hold off sending|skriv et konkret|write a concrete|beskeden kan ikke|the (image|message) cannot|prøv en (anmodning|klar|kort)|try a (request|clear|short))/i;
+const META_ADVICE = /^(prøv |try |lad os holde|let'?s keep|hold the (conversation|talk)|vent med at sende|hold off sending|skriv et konkret|write a concrete|skriv,? hvad der skete|write what happened|beskeden kan ikke|the (image|message) cannot|prøv en (anmodning|klar|kort)|try a (request|clear|short))/i;
 
 /** Accept AI suggestion only if it looks like a safe rewrite of a practical wish; else "" (fail closed, no invented sendable text). */
 export function sanitizeSuggestion(raw: unknown, msg: string, _reason: ReasonCode): string {
