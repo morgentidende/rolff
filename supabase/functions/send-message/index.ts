@@ -66,7 +66,7 @@ Deno.serve(async (req) => {
     return json({ status: "technical_error" }, 503);
   }
   await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: res.decision, p_reason: res.reason_code });
-  if (res.decision === "block") return json({ status: "blocked", reason_code: res.reason_code, spans: res.spans }, 200);
+  if (res.decision === "block") return json({ status: "blocked", reason_code: res.reason_code, spans: res.spans, suggestion: res.suggestion }, 200);
 
   const appr = await admin.rpc("issue_approval", { p_sender: uid, conv, p_hash: await sha256Hex(body), p_provider: provider.name, p_model: provider.model });
   if (appr.error) return json({ status: "technical_error" }, 503);

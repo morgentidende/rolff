@@ -90,13 +90,13 @@ Deno.serve(async (req) => {
 
   if (res.decision === "block") {
     await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "block", p_reason: res.reason_code });
-    return json({ status: "blocked", reason_code: res.reason_code, spans: res.spans, meta }, 200);
+    return json({ status: "blocked", reason_code: res.reason_code, spans: res.spans, suggestion: res.suggestion, meta }, 200);
   }
   // Same blocked words and hard prefilter as normal messages, on the text found in the file.
   const w = findBlockedWord(res.transcript + "\n" + name, words);
   if (w) { await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "block", p_reason: "rule" }); return json({ status: "blocked_word", word: w, where: "file", meta }, 200); }
   const pre = prefilter(res.transcript + "\n" + name);
-  if (pre) { await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "block", p_reason: pre.reason_code }); return json({ status: "blocked", reason_code: pre.reason_code, spans: pre.spans, meta }, 200); }
+  if (pre) { await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "block", p_reason: pre.reason_code }); return json({ status: "blocked", reason_code: pre.reason_code, spans: pre.spans, suggestion: pre.suggestion, meta }, 200); }
   await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "allow", p_reason: "none" });
 
   const hash = await sha(body + "\n" + await sha(bytes));

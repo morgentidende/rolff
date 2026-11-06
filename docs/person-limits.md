@@ -18,3 +18,6 @@
 - Alle links bygges ét sted: `supabase/functions/_shared/links.ts` (`appUrl()`, `inviteLink()`), fra secret `APP_URL`. Standard (også hvis `APP_URL` mangler eller er ugyldig) er webappen https://yellowgreen-lobster-916967.hostingersite.com/.
 - Bruges af invitationsmails (`#invite=<token>`), godkendelsesmails, kontomails (`?auth=…&th=…`), inaktivitetsmail og logoet i mails. Webappen har ingen egne delings-links; FAQ indeholder ingen links.
 - Senere app-deep-links: sæt `APP_URL` til et https universal-link-domæne. Der skal ikke ændres kode.
+
+## Tone / dikterende formuleringer
+Beskeder der **dikterer** hvad modtageren skal gøre (fx «du skal …» som ordre, «you must …») kan blokeres med `controlling_demand`. Venlige anmodninger, spørgsmål, egen grænsesætning og neutrale citater blokeres ikke alene pga. ordene. Ved AI-/prefilter-blokering kan afsenderen få et **valgfrit** omformuleringsforslag («Brug forslaget»); det sendes ikke automatisk og modereres igen ved gensendelse. Forslag bruges ikke til at omgå ordblokliste, længde- eller frekvensgrænser.
