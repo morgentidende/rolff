@@ -9,7 +9,7 @@ button.ghost{background:transparent;color:var(--accent)}button:disabled{opacity:
 input,select,textarea{min-height:44px;padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:16px;width:100%}
 label{display:block;margin:6px 0 2px;color:var(--muted);font-size:14px}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.spacer{flex:1}
-.notice{background:var(--warn);border:1px solid var(--warn-b);border-radius:10px;padding:8px 12px;font-size:14px}
+.notice{background:var(--warn);border:1px solid var(--warn-b);border-radius:10px;padding:8px 12px;font-size:14px;overflow-wrap:anywhere;word-break:break-word;max-width:100%}
 .err{background:var(--err);border-radius:10px;padding:8px 12px}
 .msgs{flex:1;display:flex;flex-direction:column;gap:8px;overflow-y:auto;min-height:300px}
 .msg{max-width:80%;padding:8px 12px;border-radius:14px;border:1px solid var(--border);white-space:pre-wrap;word-break:break-word}
@@ -79,4 +79,5 @@ button.danger{background:#c0392b;color:#fff;border-color:#c0392b}button.danger:d
 .plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:10px 0}.plan h3{margin:0 0 4px;font-size:18px}.plan .price{margin:0 0 6px}.plan.current{border:2px solid var(--accent)}.badge{display:inline-block;margin:0;padding:4px 10px;border-radius:999px;background:var(--accent);color:var(--accent-text);font-size:14px}
 .attach{margin-top:6px}.att{margin-top:6px;white-space:normal}button.linkish{min-height:0;padding:0;border:0;background:none;color:var(--accent);text-decoration:underline;font-size:inherit}
 
-.suggest{margin-top:8px;padding-top:8px;border-top:1px solid color-mix(in srgb,var(--warn-b) 40%,transparent)}
+.suggest{margin-top:8px;padding-top:8px;border-top:1px solid color-mix(in srgb,var(--warn-b) 40%,transparent);overflow-wrap:anywhere;max-width:100%}
+.suggest button{max-width:100%;user-select:none;-webkit-user-select:none}
