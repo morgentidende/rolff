@@ -509,5 +509,89 @@
   "expect": "block",
   "cat": "lawsuit",
   "text": "Keep pushing this case and see what happens to your business."
+ },
+ {
+  "id": "ctrl-da-01",
+  "lang": "da",
+  "expect": "block",
+  "cat": "controlling_demand",
+  "text": "Du skal hente børnene kl. 16, punktum. Jeg bestemmer det."
+ },
+ {
+  "id": "ctrl-da-02",
+  "lang": "da",
+  "expect": "block",
+  "cat": "controlling_demand",
+  "text": "Du har bare at skrive under på aftalen i aften."
+ },
+ {
+  "id": "ctrl-da-03",
+  "lang": "da",
+  "expect": "block",
+  "cat": "controlling_demand",
+  "text": "Jeg bestemmer at du ikke må se dem i weekenden."
+ },
+ {
+  "id": "ctrl-en-01",
+  "lang": "en",
+  "expect": "block",
+  "cat": "controlling_demand",
+  "text": "You must do exactly as I say about the pickup."
+ },
+ {
+  "id": "ctrl-en-02",
+  "lang": "en",
+  "expect": "block",
+  "cat": "controlling_demand",
+  "text": "You will do as I say, or else I cancel the visit."
+ },
+ {
+  "id": "ctrl-allow-da-01",
+  "lang": "da",
+  "expect": "allow",
+  "cat": "controlling_allow",
+  "text": "Kan du hente kl. 16 i stedet for 15?"
+ },
+ {
+  "id": "ctrl-allow-da-02",
+  "lang": "da",
+  "expect": "allow",
+  "cat": "controlling_allow",
+  "text": "Du skal ikke finde dig i trusler — sig fra over for dem."
+ },
+ {
+  "id": "ctrl-allow-da-03",
+  "lang": "da",
+  "expect": "allow",
+  "cat": "controlling_allow",
+  "text": "Jeg kan ikke bytte weekend denne gang."
+ },
+ {
+  "id": "ctrl-allow-da-04",
+  "lang": "da",
+  "expect": "allow",
+  "cat": "controlling_allow",
+  "text": "Til dokumentation: du skrev «du skal», men jeg beder kun om en tid."
+ },
+ {
+  "id": "ctrl-allow-en-01",
+  "lang": "en",
+  "expect": "allow",
+  "cat": "controlling_allow",
+  "text": "Could you pick up at 4 instead of 3?"
+ },
+ {
+  "id": "ctrl-allow-en-02",
+  "lang": "en",
+  "expect": "allow",
+  "cat": "controlling_allow",
+  "text": "You must not accept threats from anyone — that is my advice to myself too."
+ },
+ {
+  "id": "ctrl-prio-da-01",
+  "lang": "da",
+  "expect": "block",
+  "cat": "controlling_demand",
+  "text": "Du skal møde op kl. 16 med papirerne, ellers dropper jeg samarbejdet."
  }
 ]

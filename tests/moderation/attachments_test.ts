@@ -21,11 +21,11 @@ Deno.test("checkFile rejects animation, pages, encryption, size", () => {
 });
 Deno.test("cleanName strips paths and markup", () => assertEquals(cleanName('C:\\x\\<b>"a".png'), "ba.png"));
 Deno.test("validateFileResult is strict and fails closed", () => {
-  const ok = validateFileResult('{"decision":"block","reason_code":"personal_attack","spans":["klovn","not there"],"transcript":"du er en klovn"}', "");
+  const ok = validateFileResult('{"decision":"block","reason_code":"personal_attack","spans":["klovn","not there"],"transcript":"du er en klovn","suggestion":"Kan vi tale roligt om det?"}', "");
   assertEquals(ok.spans, ["klovn"]);
-  assertEquals(validateFileResult('{"decision":"block","reason_code":"inappropriate_image","spans":[],"transcript":""}', "").reason_code, "inappropriate_image");
-  assertThrows(() => validateFileResult('{"decision":"allow","reason_code":"personal_attack","spans":[],"transcript":""}', ""));
-  assertThrows(() => validateFileResult('{"decision":"allow","reason_code":"none","spans":[]}', ""));
+  assertEquals(validateFileResult('{"decision":"block","reason_code":"inappropriate_image","spans":[],"transcript":"","suggestion":""}', "").reason_code, "inappropriate_image");
+  assertThrows(() => validateFileResult('{"decision":"allow","reason_code":"personal_attack","spans":[],"transcript":"","suggestion":""}', ""));
+  assertThrows(() => validateFileResult('{"decision":"allow","reason_code":"none","spans":[],"suggestion":""}', ""));
   assertThrows(() => validateFileResult("not json", ""));
 });
 
@@ -37,4 +37,9 @@ Deno.test("blocked phrases: multi-word, whole sentences, case/diacritics incl. �
   assertEquals(findBlockedWord("Det er altid din skyld at Emil er ked af det!", ["det er altid din skyld"]), "Det er altid din skyld");
   assertEquals(findBlockedWord("d책rligfar", ["d책rlig far"]), null);
   assertEquals(findBlockedWord("far er d책rlig", ["d책rlig far"]), null);
+});
+
+Deno.test("file result: controlling_demand + suggestion", () => {
+  const r = validateFileResult({ decision: "block", reason_code: "controlling_demand", spans: ["du skal"], transcript: "du skal skrive under", suggestion: "Kan vi gennemg책 aftalen?" }, "");
+  if (r.reason_code !== "controlling_demand" || !r.suggestion) throw new Error(JSON.stringify(r));
 });
