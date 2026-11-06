@@ -17,7 +17,7 @@ Deno.test("fixture shows both rewritable and non-rewritable states", () => {
   assertStringIncludes(html, "Kan omformuleres");
   assertStringIncludes(html, "Kan ikke omformuleres");
   assertStringIncludes(html, "Vejledning");
-  assertStringIncludes(html, "Vent med at sende");
+  assertStringIncludes(html, "Skriv, hvad der skete, og hvad du gerne vil have anderledes – uden at kritisere den anden.");
   assertStringIncludes(html, "Du er altid så sur");
   // Guidance section must not have a use-suggestion button targeting the pure-criticism textarea
   assertStringIncludes(html, 'id="t-cannot"');
