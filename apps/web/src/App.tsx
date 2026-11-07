@@ -1,3 +1,7 @@
+import { resetBackNavigation, useBackLayer, useBackNavigationRoot, usePanelState } from "./backNavigation";
+import { ReceiveSettings } from "./ReceiveSettings";
+import { setReceiveTimezoneUser, syncReceiveTimezone } from "./receiveTimezone";
+import { ContactAliasDialog, ContactButton } from "./ContactAlias";
 import { ComposerInput } from "./ComposerInput";
 import { effectiveCharLimit, textRetryKey } from "./composerLimits";
 import { MessageBubble, ReplyPreview, type Message } from "./MessageBubble";
@@ -24,7 +28,7 @@ type Peek = { inviter_email: string; invitee_email: string; expires_at: string }
 // Invite link: #invite=TOKEN. Kept in sessionStorage until accepted, then removed from URL.
 function readInviteToken(): string | null {
   const m = location.hash.match(/invite=([0-9a-f]{16,128})/);
-  if (m) { sessionStorage.setItem("invite", m[1]); history.replaceState(null, "", location.pathname + location.search); }
+  if (m) { sessionStorage.setItem("invite", m[1]); history.replaceState(history.state, "", location.pathname + location.search); }
   return sessionStorage.getItem("invite");
 }
 
@@ -39,8 +43,10 @@ export function App() {
   const [theme, setTheme] = useState(localStorage.getItem("theme") || "system");
   const [session, setSession] = useState<Session | null>(null);
   const [conv, setConv] = useState<Conv | null>(null);
-  const [sheet, setSheet] = useState<Sheet>(null);
+  const [sheet, setSheet, resetSheet] = usePanelState<Sheet>(null);
   const [homeKey, setHomeKey] = useState(0);
+  const [renameContacts, setRenameContacts] = useState<Other[] | null>(null);
+  useEffect(() => { setRenameContacts(null); }, [session?.user.id]);
   const t = strings[lang]; const da = lang === "da";
   useEffect(() => { localStorage.setItem("lang", lang); document.documentElement.lang = lang; }, [lang]);
   useEffect(() => {
@@ -49,9 +55,12 @@ export function App() {
     apply(); const mq = matchMedia("(prefers-color-scheme: dark)"); mq.addEventListener("change", apply); return () => mq.removeEventListener("change", apply);
   }, [theme]);
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
-    return () => data.subscription.unsubscribe();
+    let uid:string|null=null, active=true, observed=0;
+    const apply=(s:Session|null)=>{if(!active)return;const next=s?.user.id??null;setReceiveTimezoneUser(next);if(uid!==next){resetBackNavigation();setConv(null);resetSheet();setRenameContacts(null);uid=next;}setSession(s);};
+    const { data } = supabase.auth.onAuthStateChange((event, s) => {if(event==="INITIAL_SESSION"&&observed)return;observed++;apply(s);});
+    const start=observed;
+    supabase.auth.getSession().then(({ data }) => {if(observed===start)apply(data.session);});
+    return () => {active=false;data.subscription.unsubscribe();};
   }, []);
   useEffect(() => {
     if (!inviteToken) return;
@@ -69,7 +78,7 @@ export function App() {
   useEffect(() => {
     const q = new URLSearchParams(location.search), type = q.get("auth"), th = q.get("th");
     if (!type || !th) return;
-    history.replaceState(null, "", location.pathname);
+    history.replaceState(history.state, "", location.pathname);
     if (type !== "recovery" && type !== "email_change") return;
     supabase.auth.verifyOtp({ token_hash: th, type }).then(({ error }) => {
       if (error) { setInviteMsg(da ? "Linket er ugyldigt eller udløbet. Bed om et nyt." : "The link is invalid or expired. Request a new one."); return; }
@@ -78,21 +87,30 @@ export function App() {
     });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (session) supabase.rpc("touch_seen").then(() => {}); }, [session]);
+  useEffect(() => {
+    const uid=session?.user.id; if(!uid)return;
+    const sync=()=>{if(document.visibilityState!=="hidden")void syncReceiveTimezone(uid,true);};
+    sync();window.addEventListener("focus",sync);window.addEventListener("online",sync);document.addEventListener("visibilitychange",sync);
+    return()=>{window.removeEventListener("focus",sync);window.removeEventListener("online",sync);document.removeEventListener("visibilitychange",sync);};
+  },[session?.user.id]);
   const menu: MenuItem[] = [
     { label: t.lang, run: () => setSheet("lang") },
     { label: t.theme, run: () => setSheet("theme") },
     { label: t.windows, run: () => setSheet("times") },
     { label: "FAQ", run: () => setSheet("faq") },
     { label: da ? "Abonnement" : "Plan", run: () => setSheet("plans") },
-    { label: da ? "Visningsnavn" : "Display name", run: () => setSheet("name") },
+    { label: conv ? (da ? "Kontaktens kaldenavn" : "Contact nickname") : (da ? "Mit visningsnavn" : "My display name"), run: () => conv ? setRenameContacts(conv.others) : setSheet("name") },
     { label: da ? "Konto (e-mail og adgangskode)" : "Account (email and password)", run: () => setSheet("account") },
     { label: da ? "Privatliv og sletning" : "Privacy and deletion", run: () => setSheet("privacy") },
     { label: da ? "Privatlivspolitik" : "Privacy policy", run: () => { window.open("./privatliv.html" + (da ? "" : "#en"), "_blank", "noopener"); } },
     { label: "Feedback", run: () => setSheet("feedback") },
     { label: da ? "Inviter person" : "Invite person", run: () => setSheet("invite") },
-    { label: t.logout, run: () => { setConv(null); setSheet(null); cacheClear().finally(() => supabase.auth.signOut()); }, danger: true },
+    { label: t.logout, run: () => { resetBackNavigation(); setConv(null); resetSheet(); cacheClear().finally(() => supabase.auth.signOut()); }, danger: true },
   ];
   const close = () => setSheet(null);
+  useBackNavigationRoot();
+  useBackLayer(!!conv,()=>setConv(null),"view");
+  useBackLayer(!!renameContacts,()=>setRenameContacts(null));
   return (
     <div className="wrap">
       {!(session && conv) && <header className="topbar"><img src="./favicon.svg" alt="" width={30} height={30} style={{ borderRadius: 8 }} /><strong className="brand">Rolff</strong><span className="spacer" />
@@ -104,15 +122,18 @@ export function App() {
       {inviteMsg && <div className="notice" role="status">{inviteMsg}</div>}
       {session && !conv && <InstallPrompt lang={lang} />}
       {!session ? <Auth lang={lang} peek={inviteToken ? peek : undefined} />
-        : conv ? <Chat lang={lang} conv={conv} back={() => setConv(null)} menu={menu} openPlans={() => setSheet("plans")} planKey={sheet} />
-        : <Home key={homeKey} lang={lang} open={setConv} invite={() => setSheet("invite")} />}
+        : conv ? <Chat lang={lang} conv={conv} rename={setRenameContacts} back={() => setConv(null)} menu={menu} openPlans={() => setSheet("plans")} planKey={sheet} />
+        : <Home key={`home:${session.user.id}`} refreshKey={homeKey} lang={lang} open={setConv} rename={setRenameContacts} invite={() => setSheet("invite")} />}
       {sheet === "lang" && <SheetView title={t.lang} close={close} lang={lang}><Choice name="lang" value={lang} set={(v) => setLang(v as Lang)} opts={[["da", "Dansk"], ["en", "English"]]} /></SheetView>}
       {sheet === "theme" && <SheetView title={t.theme} close={close} lang={lang}><Choice name="theme" value={theme} set={setTheme} opts={[["dark", t.dark], ["light", t.light], ["system", t.system]]} /></SheetView>}
-      {sheet === "times" && <SheetView title={t.windows} close={close} lang={lang}><ReceiveSettings lang={lang} /></SheetView>}
+      {sheet === "times" && <SheetView title={t.windows} close={close} lang={lang}><ReceiveSettings key={session?.user.id??"anonymous"} lang={lang} /></SheetView>}
       {sheet === "plans" && <SheetView title={da ? "Abonnement" : "Plan"} close={close} lang={lang}><Plans lang={lang} /></SheetView>}
       {sheet === "faq" && <SheetView title="FAQ" close={close} lang={lang}><Faq lang={lang} /></SheetView>}
-      {sheet === "name" && <SheetView title={da ? "Visningsnavn" : "Display name"} close={close} lang={lang}><PublicName lang={lang} /></SheetView>}
-      {session && !sheet && <NameHint lang={lang} open={() => setSheet("name")} />}
+      {sheet === "name" && <SheetView title={da ? "Mit navn – det andre ser" : "My name – visible to others"} close={close} lang={lang}><PublicName lang={lang} /></SheetView>}
+      {session && renameContacts && <ContactAliasDialog key={`alias:${session.user.id}`} lang={lang} contacts={renameContacts}
+        close={() => setRenameContacts(null)} save={async (id, alias) => { const uid=session.user.id; const { error } = await supabase.rpc("set_contact_alias", { p_contact: id, p_alias: alias }).setHeader("Authorization", `Bearer ${session.access_token}`); if (error) throw error; if((await supabase.auth.getSession()).data.session?.user.id!==uid)return; const name=alias.trim()||null; setConv(c => c ? { ...c, others: c.others.map(o => o.user_id === id ? { ...o, alias:name } : o) } : c); setHomeKey(k => k + 1); }}
+        saved={() => setRenameContacts(null)} />}
+      {session && !sheet && !renameContacts && <NameHint lang={lang} open={() => setSheet("name")} />}
       {sheet === "account" && <SheetView title={da ? "Konto" : "Account"} close={close} lang={lang}><AccountPanel lang={lang} /></SheetView>}
       {sheet === "newpw" && session && <SheetView title={da ? "Vælg ny adgangskode" : "Choose a new password"} close={close} lang={lang}><NewPassword lang={lang} done={close} /></SheetView>}
       {sheet === "privacy" && <SheetView title={da ? "Privatliv og sletning" : "Privacy and deletion"} close={close} lang={lang}><PrivacyPanel lang={lang} /></SheetView>}
@@ -124,13 +145,13 @@ export function App() {
 
 function Menu({ lang, items }: { lang: Lang; items: MenuItem[] }) {
   const [open, setOpen] = useState(false); const ref = useRef<HTMLDivElement>(null);
+  useBackLayer(open,()=>setOpen(false));
   useEffect(() => {
     if (!open) return;
     const off = (e: Event) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
-    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    document.addEventListener("pointerdown", off); document.addEventListener("keydown", esc);
+    document.addEventListener("pointerdown", off);
     ref.current?.querySelector<HTMLButtonElement>("[role=menuitem]")?.focus();
-    return () => { document.removeEventListener("pointerdown", off); document.removeEventListener("keydown", esc); };
+    return () => { document.removeEventListener("pointerdown", off); };
   }, [open]);
   return (
     <div className="menuwrap" ref={ref}>
@@ -144,7 +165,8 @@ function Menu({ lang, items }: { lang: Lang; items: MenuItem[] }) {
 
 function SheetView({ title, close, lang, children }: { title: string; close: () => void; lang: Lang; children: React.ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => { const esc = (e: KeyboardEvent) => { if (e.key === "Escape") close(); }; document.addEventListener("keydown", esc); ref.current?.focus(); return () => document.removeEventListener("keydown", esc); }, [close]);
+  useBackLayer(true,close);
+  useEffect(() => { ref.current?.focus(); }, []);
   return (
     <div className="overlay" onPointerDown={(e) => { if (e.target === e.currentTarget) close(); }}>
       <div className="sheet" role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} ref={ref}>
@@ -167,7 +189,7 @@ function Faq({ lang }: { lang: Lang }) {
     ["Hvad er modtagetider?", "Du kan vælge, hvornår på ugen nye beskeder når frem til dig. Beskeder, der kommer uden for dine tider, venter, til næste modtagetid – eller til du selv trykker “Modtag beskeder nu”."],
     ["Hvordan kommer man ind i en samtale?", "Kun via invitation på e-mail. Ekstra deltagere (fx advokat eller sagsbehandler) får først adgang, når alle i samtalen har godkendt, og de ser ingen beskeder fra før, de kom med."],
     ["Hvem kan se og skrive i samtalen?", "Under ⋮ → “Deltagere og roller” ser du alle deltagere og deres rolle: Part, Læse og skrive eller Kun læse. Parterne kan fjerne ekstra deltagere eller gøre en skrivende deltager til kun læse. Skriveadgang kræver en ny invitation, som alle parter godkender. Alle kan forlade samtalen."],
-    ["Hvad bliver blokeret?", "Rolff stopper beskeder, der kan opfattes som sårende (tjekket af AI), beskeder der dikterer hvad den anden skal gøre (fx «du skal …» som en ordre – ikke venlige anmodninger, spørgsmål, egen grænsesætning eller neutrale citater), beskeder med emojis (de misforstås let – skriv det med ord), beskeder skrevet med store bogstaver (opleves som råb) og den samme besked sendt igen. Ved AI-/tone-afvisning kan du få et valgfrit forslag, hvis beskeden indeholder et konkret, legitimt praktisk ønske («Brug forslaget» kopierer det til skrivefeltet; du redigerer og sender selv, og det tjekkes igen). Ren kritik, trusler uden praktisk kerne eller lignende kan ikke omformuleres — så får du kun vejledning (ikke en sendbar tekst). Forslag erstatter ikke ordblokliste, længde- eller frekvensgrænser."],
+    ["Hvad bliver blokeret?", "Rolff stopper beskeder, der kan opfattes som sårende (tjekket af AI), beskeder der dikterer hvad den anden skal gøre (fx «du skal …» som en ordre – ikke venlige anmodninger, spørgsmål, egen grænsesætning eller neutrale citater), beskeder med emojis (de misforstås let – skriv det med ord), beskeder skrevet med store bogstaver (opleves som råb) og den samme besked sendt igen. Ved AI-/tone-afvisning kan du få et valgfrit forslag, hvis beskeden indeholder et konkret, legitimt praktisk ønske («Brug forslaget» kopierer det til skrivefeltet; du redigerer og sender selv, og det tjekkes igen). Ren kritik, trusler uden praktisk kerne eller lignende kan ikke omformuleres — så får du kun vejledning (ikke en sendbar tekst). Forslag erstatter ikke ordblokliste, længde- eller frekvensgrænser. Stavefejl og ukendte egenavne er ikke i sig selv et problem. Hvis AI er usikker på beskedens afgørende mening, bliver du bedt om at præcisere den, før den kan sendes. Store begyndelsesbogstaver gør ikke krænkende ord til tilladte navne."],
     ["Hvordan blokerer jeg en samtale?", "Tryk ⋮ i samtalen → “Blokér samtale”. Så kan de andre ikke længere sende beskeder i samtalen; de får kun at vide, at beskeden ikke kan sendes – ikke hvem eller hvornår. Blokeringen udløber aldrig af sig selv. Den ophører kun, når du selv trykker “Afblokér”."],
     ["Hvad er “Blokerede ord”?", "Et valgfrit filter (slået fra som standard): Under ⋮ → “Blokerede ord” kan du tilføje enkeltord, udtryk på flere ord eller hele sætninger (op til 120 tegn), som ikke må nå frem til dig. Store/små bogstaver og accenter er ligegyldige (fx matcher “dårlig far” også “DÅRLIG FAR” og “darlig far”), og ordene skal stå i samme rækkefølge. Afslutter du med * (fx “pis*”), rammes også ord, der begynder sådan. Listen gælder den samtale, du står i, og er privat. Rammer en besked noget på listen, bliver den ikke leveret – afsenderen får at vide præcis hvilket ord eller udtryk, og at modtageren har blokeret det, og kan omformulere. Derfor skal du bekræfte det for hvert ord. Du kan fjerne ord igen når som helst."],
     ["Kan jeg begrænse hvor tit en person skriver?", "Ja. Åbn “Deltagere og roller” og derefter “Indstillinger for denne person”. Vælg højst 1 besked pr. minut, pr. 5 minutter, pr. time eller et brugerdefineret antal minutter (1 til 1.440 = 24 timer). Standard er ingen grænse. Det regnes fra personens seneste leverede besked til dig i alle jeres samtaler; afviste beskeder tæller ikke, vedhæftninger tæller som en besked. For tidlige beskeder gemmes ikke, og afsenderen får at vide, hvornår der kan sendes igen. Er I flere, gælder den strengeste grænse."],
@@ -184,7 +206,7 @@ function Faq({ lang }: { lang: Lang }) {
     ["What are receive times?", "You choose when during the week new messages reach you. Messages arriving outside your times wait until the next receive time – or until you tap “Receive messages now”."],
     ["How do people join a conversation?", "Only by e-mail invitation. Extra participants (e.g. a lawyer or caseworker) only get access when everyone in the conversation has approved, and they see no messages from before they joined."],
     ["Who can read and write in the conversation?", "Under ⋮ → “Participants and roles” you see everyone and their role: Party, Read and write or Read only. Parties can remove extra participants or make a writer read only. Write access needs a new invitation approved by all parties. Anyone can leave."],
-    ["What gets blocked?", "Rolff stops messages that may come across as hurtful (checked by AI), messages that dictate what the other person must do (e.g. “you must …” as an order — not polite requests, questions, your own boundaries or neutral quotes), messages with emojis (easily misread – use words), messages in all caps (reads as shouting) and the same message sent twice. On AI/tone blocks you may get an optional rephrase only if the message contains a concrete legitimate practical wish (“Use suggestion” copies it into the composer; you edit and send yourself, and it is checked again). Pure criticism, threats without a practical core, and similar cannot be rewritten — you then get guidance only (not sendable text). Suggestions do not override blocked words, length or frequency limits."],
+    ["What gets blocked?", "Rolff stops messages that may come across as hurtful (checked by AI), messages that dictate what the other person must do (e.g. “you must …” as an order — not polite requests, questions, your own boundaries or neutral quotes), messages with emojis (easily misread – use words), messages in all caps (reads as shouting) and the same message sent twice. On AI/tone blocks you may get an optional rephrase only if the message contains a concrete legitimate practical wish (“Use suggestion” copies it into the composer; you edit and send yourself, and it is checked again). Pure criticism, threats without a practical core, and similar cannot be rewritten — you then get guidance only (not sendable text). Suggestions do not override blocked words, length or frequency limits. Spelling errors and unfamiliar proper names alone are not a problem. If AI cannot understand the core meaning sufficiently, you are asked to clarify before sending. Capitalizing offensive words does not exempt them as names."],
     ["How do I block a conversation?", "Tap ⋮ in the conversation → “Block conversation”. The others can then no longer send messages there; they are only told the message cannot be sent – not who or when. A block never expires by itself. It only ends when you tap “Unblock”."],
     ["What are “Blocked words”?", "An optional filter (off by default): under ⋮ → “Blocked words” you can add single words, multi-word expressions or whole sentences (up to 120 characters) that must not reach you. Case and accents are ignored, and words must appear in the same order. Ending with * (e.g. “pis*”) also matches words starting that way. The list applies to the current conversation and is private. If a message hits it, it is not delivered – the sender is told exactly which word or phrase and that the recipient blocked it, and can rephrase. That is why you confirm each word. You can remove words at any time."],
     ["Can I limit how often a person writes?", "Yes. Open “Participants and roles”, then “Settings for this person”. Choose at most 1 message per minute, per 5 minutes, per hour, or a custom number of minutes (1 to 1,440 = 24 hours). Default: no limit. It counts from the person's latest delivered message to you in any of your conversations; rejected messages do not count; attachments count as a message. Early messages are not stored and the sender is told when they can send again. With several recipients the strictest applies."],
@@ -308,8 +330,8 @@ function BlockedWords({ lang, conv }: { lang: Lang; conv: string }) {
 }
 
 export const emailVisibleNote = (lang: Lang) => lang === "da"
-  ? "De andre i samtalen ser din e-mail som dit navn, indtil du vælger et kaldenavn (⋮ → Visningsnavn). Du logger altid ind med din e-mail."
-  : "Others in the conversation see your e-mail as your name until you choose a nickname (⋮ → Display name). You always log in with your e-mail.";
+  ? "De andre i samtalen ser din e-mail som dit navn, indtil du vælger et kaldenavn (⋮ → Mit visningsnavn). Du logger altid ind med din e-mail."
+  : "Others in the conversation see your e-mail as your name until you choose a nickname (⋮ → My display name). You always log in with your e-mail.";
 function NameHint({ lang, open }: { lang: Lang; open: () => void }) {
   const da = lang === "da";
   const [show, setShow] = useState(false);
@@ -475,6 +497,7 @@ const COLOR_NAMES: Record<string, [string, string]> = { teal: ["Petrol", "Teal"]
 
 function ColorDot({ lang, conv, label, initial, changed }: { lang: Lang; conv: Conv; label: string; initial?: string; changed: (c: string) => void }) {
   const da = lang === "da"; const [open, setOpen] = useState(false); const color = conv.color || "teal";
+  useBackLayer(open,()=>setOpen(false));
   const letter = (initial || label.trim().match(/[\p{L}\p{N}]/u)?.[0] || "?").toUpperCase();
   const pick = async (c: string) => { const { error } = await supabase.rpc("set_conversation_color", { conv: conv.id, p_color: c }); if (!error) { changed(c); setOpen(false); } };
   return (
@@ -489,21 +512,22 @@ function ColorDot({ lang, conv, label, initial, changed }: { lang: Lang; conv: C
   );
 }
 
-function Home({ lang, open, invite }: { lang: Lang; open: (c: Conv) => void; invite: () => void }) {
+function Home({ lang, open, invite, rename, refreshKey }: { lang: Lang; open: (c: Conv) => void; invite: () => void; rename: (contacts: Other[]) => void; refreshKey: number }) {
   const t = strings[lang]; const da = lang === "da";
   const [convs, setConvs] = useState<Conv[] | null>(null);
   const load = useCallback(async () => { const { data } = await supabase.rpc("list_my_conversations"); setConvs((data as Conv[]) ?? []); }, []);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [load, refreshKey]);
   return (
     <div className="card list"><h2>{t.conversations}</h2>
       {convs?.length === 0 && <p className="meta">{da ? "Ingen samtaler endnu. " : "No conversations yet. "}<button type="button" className="linkbtn" onClick={invite}>{da ? "Inviter en person" : "Invite someone"}</button></p>}
       {(convs ?? []).map((c) => { const d = convDisplay(c, da); return (
         <div key={c.id} className="convrow">
           <ColorDot lang={lang} conv={c} label={d.title} initial={d.initial} changed={(col) => setConvs((convs ?? []).map((x) => x.id === c.id ? { ...x, color: col } : x))} />
-          <button type="button" className="convbtn" onClick={() => open(c)}>
+          <ContactButton open={() => open(c)} rename={() => rename(c.others)}>
             <span className="convname">{d.title}</span>
             {d.status && <span className="meta convstatus">{d.status}</span>}
-          </button>
+          </ContactButton>
+          {!!c.others.length && <button type="button" className="ghost pencil" aria-label={da ? `Privat kaldenavn for ${d.title}` : `Private nickname for ${d.title}`} onClick={() => rename(c.others)}>✎</button>}
         </div>); })}
     </div>
   );
@@ -537,28 +561,6 @@ function highlight(text: string, spans: string[]) {
   parts.push(rest); return parts;
 }
 
-function AliasEdit({ lang, other, saved }: { lang: Lang; other: Other; saved: (a: string | null) => void }) {
-  const da = lang === "da";
-  const [edit, setEdit] = useState(false); const [v, setV] = useState(other.alias ?? ""); const [err, setErr] = useState("");
-  const save = async (e: React.FormEvent) => {
-    e.preventDefault(); setErr("");
-    const { error } = await supabase.rpc("set_contact_alias", { p_contact: other.user_id, p_alias: v });
-    if (error) { setErr(da ? "Kaldenavnet kunne ikke gemmes." : "Could not save nickname."); return; }
-    setEdit(false); saved(v.trim() || null);
-  };
-  if (!edit) return (<span className="alias">{labelOf(other)}{" "}
-    <button type="button" className="ghost pencil" aria-label={da ? `Giv ${other.email} et privat kaldenavn` : `Set a private nickname for ${other.email}`} title={da ? "Privat kaldenavn" : "Private nickname"} onClick={() => { setV(other.alias ?? ""); setEdit(true); }}>
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></svg>
-    </button></span>);
-  return (
-    <form onSubmit={save} className="alias-form" style={{ fontSize: 16, fontWeight: 400 }}>
-      <label htmlFor={`al-${other.user_id}`}>{da ? `Privat kaldenavn for ${other.email}` : `Private nickname for ${other.email}`}</label>
-      <input id={`al-${other.user_id}`} maxLength={40} value={v} onChange={(e) => setV(e.target.value)} placeholder={other.email} autoFocus />
-      <p className="meta" style={{ margin: "4px 0" }}>{da ? "Kun du kan se det. Lad feltet stå tomt for at vise e-mailen." : "Only you can see it. Leave empty to show the email."}</p>
-      <div className="row"><button type="submit">{da ? "Gem" : "Save"}</button><button type="button" className="ghost" onClick={() => setEdit(false)}>{da ? "Annuller" : "Cancel"}</button></div>
-      {err && <p className="err" role="alert">{err}</p>}
-    </form>);
-}
 
 type Pending = { id: string; role: string; invitee_email: string | null; consents: number; required: number; i_consented: boolean; mine: boolean };
 
@@ -571,11 +573,12 @@ function markAll(text: string, q: string, current: boolean): (string | React.Rea
 
 const Icon = ({ d }: { d: React.ReactNode }) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">{d}</svg>;
 
-function Chat({ lang, conv, back, menu, openPlans, planKey }: { lang: Lang; conv: Conv; back: () => void; menu: MenuItem[]; openPlans: () => void; planKey: Sheet }) {
+function Chat({ lang, conv, back, menu, openPlans, planKey, rename }: { lang: Lang; conv: Conv; back: () => void; menu: MenuItem[]; openPlans: () => void; planKey: Sheet; rename: (contacts: Other[]) => void }) {
   const [plan, setPlan] = useState<string | null>(null);
   const loadPlan = useCallback(() => { supabase.rpc("get_my_plan").then(({ data }) => { if (data?.[0]) setPlan(data[0].plan); }); }, []);
   useEffect(() => { loadPlan(); }, [planKey, loadPlan]);
   const [others, setOthers] = useState<Other[]>(conv.others ?? []); const [color, setColor] = useState<string | null>(conv.color);
+  useEffect(() => { setOthers(conv.others ?? []); }, [conv.others]);
   const t = strings[lang]; const da = lang === "da";
   const draftKey = `draft:${conv.id}`; const replyKey = `draft-reply:${conv.id}`;
   const [msgs, setMsgs] = useState<Msg[]>([]); const [pending, setPending] = useState(0);
@@ -601,12 +604,14 @@ function Chat({ lang, conv, back, menu, openPlans, planKey }: { lang: Lang; conv
   const [blocked, setBlocked] = useState(false);
   useEffect(() => { supabase.from("conversation_blocks").select("user_id").eq("conversation_id", conv.id).then(({ data }) => setBlocked((data ?? []).length > 0)); }, [conv.id]);
   const setBlock = async (on: boolean) => { const r = await supabase.rpc(on ? "block_conversation" : "unblock_conversation", { conv: conv.id }); if (!r.error) setBlocked(on); };
-  const [sheet, setSheet] = useState<Sheet>(null);
+  const [sheet, setSheet, resetSheet] = usePanelState<Sheet>(null);
   const [q, setQ] = useState<string | null>(null); const [cur, setCur] = useState(0);
+  useBackLayer(q!==null,()=>setQ(null));
   const endRef = useRef<HTMLDivElement>(null); const listRef = useRef<HTMLDivElement>(null);
   const load = useCallback(async () => {
-    const { data, error } = await supabase.rpc("get_messages_v2", { conv: conv.id });
     const uid = (await supabase.auth.getSession()).data.session?.user.id;
+    if (uid) await syncReceiveTimezone(uid);
+    const { data, error } = await supabase.rpc("get_messages_v2", { conv: conv.id });
     if (data) { setMsgs(data as Msg[]); setReply(r => r ? { id: r.id, body: (data as Msg[]).find(m => m.id === r.id)?.body ?? null } : null); if (uid) cacheSet(uid, conv.id, data); }
     else if (error && uid) { const c = await cacheGet<Msg[]>(uid, conv.id); if (c) setMsgs(c); }
     const p = await supabase.rpc("my_pending_count"); setPending((p.data as number) ?? 0);
@@ -628,6 +633,7 @@ function Chat({ lang, conv, back, menu, openPlans, planKey }: { lang: Lang; conv
     let r; try { r = await callFn("send-message", { conversation_id: conv.id, body: text, reply_to_id: reply?.id ?? null, idempotency_key: saved.key }); } catch { r = { status: 0, data: null }; }
     setBusy(false);
     if (r.status === 200 && r.data?.status === "accepted") { setText(""); setReply(null); localStorage.removeItem(draftKey); localStorage.removeItem(replyKey); localStorage.removeItem(keyStore); setStatus({ kind: "accepted" }); load(); }
+    else if (r.status === 200 && r.data?.status === "clarification_required") setStatus({ kind: "clarification" });
     else if (r.status === 200 && r.data?.status === "blocked") setStatus({ kind: "blocked", spans: r.data.spans ?? [], blockedText: text, suggestion: typeof r.data.suggestion === "string" ? r.data.suggestion : "", reason: r.data.reason_code });
     else if (r.status === 200 && r.data?.status === "blocked_word") setStatus({ kind: "note", blockedText: da ? `Beskeden blev ikke sendt: Modtageren har blokeret ordet/sætningen "${r.data.word}". Ret beskeden og prøv igen.` : `The message was not sent: the recipient has blocked the word/phrase "${r.data.word}". Edit the message and try again.` });
     else if (r.status === 200 && r.data?.status === "rule") setStatus({ kind: "note", blockedText: ({ emoji: da ? "Beskeden blev ikke sendt: Emojis er ikke tilladt i Rolff. Skriv det med ord." : "Not sent: emojis are not allowed in Rolff. Use words.", caps: da ? "Beskeden blev ikke sendt: Den er skrevet med store bogstaver, som kan opfattes som råb." : "Not sent: all caps can read as shouting.", repeat: da ? "Beskeden blev ikke sendt: Du har lige sendt den samme besked." : "Not sent: you just sent the same message." } as Record<string, string>)[r.data.rule] ?? "" });
@@ -647,7 +653,7 @@ function Chat({ lang, conv, back, menu, openPlans, planKey }: { lang: Lang; conv
       <header className="topbar chat">
         <button className="icon" onClick={back} aria-label={t.back}><Icon d={<path d="M15 18l-6-6 6-6" />} /></button>
         <ColorDot lang={lang} conv={{ ...conv, color }} label={label} initial={d.initial} changed={setColor} />
-        <div role="heading" aria-level={2} className="chattitle">{others.length ? others.map((o) => <AliasEdit key={o.user_id} lang={lang} other={o} saved={(a) => { setOthers(others.map((x) => x.user_id === o.user_id ? { ...x, alias: a } : x)); load(); }} />) : <><span className="convname">{d.title}</span>{d.status && <span className="meta convstatus"> · {d.status}</span>}</>}</div>
+        <div role="heading" aria-level={2} className="chattitle">{others.length ? others.map((o) => <button key={o.user_id} type="button" className="contact-heading" title={da ? "Privat kaldenavn" : "Private nickname"} onClick={() => rename([o])}>{labelOf(o)}</button>) : <><span className="convname">{d.title}</span>{d.status && <span className="meta convstatus"> · {d.status}</span>}</>}</div>
         <button className="icon" aria-label={da ? "Søg i samtalen" : "Search conversation"} aria-pressed={q !== null} onClick={() => { setQ(q === null ? "" : null); setCur(0); }}><Icon d={<><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></>} /></button>
         {conv.role === "parent" && <button className="icon" aria-label={da ? "Tilføj person" : "Add person"} onClick={() => setSheet("addMember")}><Icon d={<><circle cx="9" cy="8" r="4" /><path d="M2 21c0-4 3-6 7-6s7 2 7 6" /><path d="M19 8v6M16 11h6" /></>} /></button>}
         <Menu lang={lang} items={[{ label: da ? "Deltagere og roller" : "Participants and roles", run: () => setSheet("members") },
@@ -678,8 +684,9 @@ function Chat({ lang, conv, back, menu, openPlans, planKey }: { lang: Lang; conv
         <div ref={endRef} />
       </div>
       {status?.kind === "blocked" && <div className="notice" role="alert"><p style={{ margin: 0 }}>{t.blocked}</p>{status.spans!.length > 0 && <p className="meta" style={{ marginBottom: 0 }}>{t.flagged}: {highlight(status.blockedText!, status.spans!)}</p>}{status.suggestion ? <div className="suggest"><p className="meta" style={{ margin: "8px 0 4px" }}><strong>{t.suggestionLabel}</strong></p><p style={{ margin: "0 0 8px" }}>{status.suggestion}</p><button type="button" className="ghost" onClick={() => { setText(applySuggestion(text, status.suggestion)); setStatus(null); }}>{t.useSuggestion}</button><p className="meta" style={{ margin: "6px 0 0" }}>{da ? "Forslaget kopieres til skrivefeltet. Du kan rette det og skal selv trykke Send — det tjekkes igen. Originalteksten står stadig i feltet, indtil du vælger forslaget." : "The suggestion is copied into the composer. You can edit it and must press Send yourself — it is checked again. Your original text stays until you use the suggestion."}</p></div> : <div className="suggest"><p className="meta" style={{ margin: "8px 0 4px" }}><strong>{t.guidanceLabel}</strong></p><p className="meta" style={{ margin: 0 }}>{t.blockGuidance}</p></div>}</div>}
+      {status?.kind === "clarification" && <div className="notice" role="alert">{da ? "Beskeden er ikke sendt. Vi er usikre på, hvad du mener. Vil du skrive det lidt tydeligere?" : "Your message was not sent. We’re not sure what you mean. Could you write it a little more clearly?"}</div>}
       {status?.kind === "note" && <div className="notice" role="alert">{status.blockedText}</div>}
-      {status && status.kind !== "blocked" && status.kind !== "note" && <div className={status.kind === "accepted" ? "notice" : "err"} role="status">{(t as any)[status.kind]}</div>}
+      {status && status.kind !== "blocked" && status.kind !== "note" && status.kind !== "clarification" && <div className={status.kind === "accepted" ? "notice" : "err"} role="status">{(t as any)[status.kind]}</div>}
       {conv.role !== "reader" ? (
         <div className="card composer"><fieldset className="composer-fields" disabled={sending}>
           {reply && <div className="reply-composer"><div><span className="meta">{da ? "Besvarer" : "Replying"}</span><ReplyPreview body={reply?.body} unavailable={reply.body == null} lang={lang} /></div><button type="button" className="ghost" aria-label={da ? "Annullér svar" : "Cancel reply"} onClick={() => { setReply(null); composerRef.current?.focus(); }}>✕</button></div>}
@@ -786,54 +793,6 @@ function ExportPanel({ lang, msgs }: { lang: Lang; msgs: Msg[] }) {
   );
 }
 
-const TZS = ["Europe/Copenhagen", "Europe/London", "Europe/Berlin", "Europe/Stockholm", "Europe/Oslo", "America/New_York", "UTC"];
-type W = { weekday: number; start_minute: number; end_minute: number };
-const toHM = (m: number) => `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
-// Always 24-hour "HH:MM" regardless of device locale (native time inputs can show a clipped AM/PM).
-const STEPS = Array.from({ length: 96 }, (_, k) => k * 15);
-function TimeSelect({ label, value, set, end }: { label: string; value: number; set: (v: number) => void; end?: boolean }) {
-  const opts = [...new Set([...STEPS.filter((m) => !end || m > 0), ...(end ? [1440] : []), value])].sort((a, b) => a - b);
-  return <select aria-label={label} className="tsel" value={value} onChange={(e) => set(+e.target.value)}>{opts.map((m) => <option key={m} value={m}>{m === 1440 ? "24:00" : toHM(m)}</option>)}</select>;
-}
-
-function ReceiveSettings({ lang }: { lang: Lang }) {
-  const t = strings[lang];
-  const [enabled, setEnabled] = useState(false); const [tz, setTz] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Copenhagen");
-  const [ws, setWs] = useState<W[]>([]); const [msg, setMsg] = useState("");
-  useEffect(() => { (async () => {
-    const { data: u } = await supabase.auth.getUser(); if (!u.user) return;
-    const s = await supabase.from("receive_settings").select("*").maybeSingle(); if (s.data) { setEnabled(s.data.enabled); setTz(s.data.timezone); }
-    const w = await supabase.from("receive_windows").select("weekday,start_minute,end_minute").order("weekday"); setWs((w.data as W[]) ?? []);
-  })(); }, []);
-  const save = async () => {
-    const { data: u } = await supabase.auth.getUser(); const uid = u.user!.id;
-    await supabase.from("receive_settings").upsert({ user_id: uid, timezone: tz, enabled });
-    await supabase.from("receive_windows").delete().eq("user_id", uid);
-    if (ws.length) await supabase.from("receive_windows").insert(ws.map((w) => ({ ...w, user_id: uid })));
-    setMsg(t.saved);
-  };
-  const upd = (i: number, p: Partial<W>) => { setWs(ws.map((x, j) => j === i ? { ...x, ...p } : x)); setMsg(""); };
-  const tzs = TZS.includes(tz) ? TZS : [tz, ...TZS];
-  return (
-    <div className="times">
-      <label className="switch"><input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /><span>{t.windowsOn}</span></label>
-      <label htmlFor="tz">{t.tz}</label><select id="tz" value={tz} onChange={(e) => setTz(e.target.value)}>{tzs.map((z) => <option key={z}>{z}</option>)}</select>
-      <div className="wlist">
-        {ws.map((w, i) => (
-          <div className="wrow" key={i}>
-            <select aria-label={lang === "da" ? "Dag" : "Day"} value={w.weekday} onChange={(e) => upd(i, { weekday: +e.target.value })}>{t.days.map((d, k) => <option key={k} value={k + 1}>{d}</option>)}</select>
-            <TimeSelect label={t.from} value={w.start_minute} set={(v) => upd(i, { start_minute: v })} />
-            <span className="dash" aria-hidden="true">–</span>
-            <TimeSelect label={t.to} value={w.end_minute} set={(v) => upd(i, { end_minute: v })} end />
-            <button type="button" className="icon rm" aria-label={`${t.remove} ${t.days[w.weekday - 1]} ${toHM(w.start_minute)}–${toHM(w.end_minute)}`} onClick={() => { setWs(ws.filter((_, j) => j !== i)); setMsg(""); }}>
-              <Icon d={<><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M6 6l1 14h10l1-14" /></>} />
-            </button>
-          </div>))}
-      </div>
-      <div className="row"><button className="ghost" onClick={() => setWs([...ws, { weekday: 1, start_minute: 17 * 60, end_minute: 20 * 60 }])}>+ {t.add}</button><span className="spacer" /><span className="meta" role="status">{msg}</span><button onClick={save}>{t.save}</button></div>
-    </div>
-  );
-}
 
 function NewPassword({ lang, done }: { lang: Lang; done: () => void }) {
   const da = lang === "da";
@@ -966,6 +925,7 @@ function AttachBar({ lang, conv, plan, openPlans, caption, file, setFile, sendRe
     setBusy(false); onBusy(false); const d = r.data ?? {};
     if (r.status === 200 && d.status === "accepted") { setFile(null); setAlt(""); setOut({ ok: true, text: da ? "Vedhæftningen er sendt." : "Attachment sent." }); sent(); }
     else if (limitMsg(d)) setOut({ ok: false, text: limitMsg(d)! });
+    else if (d.status === "clarification_required") setOut({ ok: false, text: da ? "Filen er ikke sendt. Vi er usikre på, hvad du mener. Vil du gøre teksten i filen eller din billedtekst lidt tydeligere?" : "Your file was not sent. We’re not sure what you mean. Could you make the text in the file or your caption a little clearer?" });
     else if (d.status === "blocked") setOut({ ok: false, text: (da ? "Filen blev ikke sendt: " : "Not sent: ") + (reasons[d.reason_code] ?? reasons.other_harmful) + "." + ((d.spans ?? []).length ? (da ? " Markeret: “" : " Flagged: “") + d.spans.join("”, “") + "”" : "") + (typeof d.suggestion === "string" && d.suggestion ? (da ? " Forslag: " : " Suggestion: ") + d.suggestion : "") });
     else if (d.status === "blocked_word") setOut({ ok: false, text: da ? `Filen blev ikke sendt: Modtageren har blokeret ordet/sætningen "${d.word}", og det står i ${d.where === "caption" ? "din tekst" : "filen"}.` : `Not sent: the recipient blocked "${d.word}", which appears in ${d.where === "caption" ? "your text" : "the file"}.` });
     else if (d.status === "rule") setOut({ ok: false, text: da ? "Filen blev ikke sendt: Din tekst overholder ikke reglerne (emojis, store bogstaver eller gentagelse)." : "Not sent: your text breaks the rules (emoji, caps or repetition)." });

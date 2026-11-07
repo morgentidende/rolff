@@ -1,3 +1,4 @@
+import { useBackLayer } from "./backNavigation";
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { messageCharCount } from "./composerLimits";
 
@@ -15,6 +16,7 @@ export function ComposerInput({ lang, text, onText, textareaRef, plan, cap, busy
   const da = lang === "da"; const count = messageCharCount(text);
   const picker = useRef<HTMLInputElement>(null); const camera = useRef<HTMLInputElement>(null);
   const dialog = useRef<HTMLDialogElement>(null); const [upgrade, setUpgrade] = useState(false); const [note, setNote] = useState("");
+  useBackLayer(upgrade,()=>setUpgrade(false));
   useLayoutEffect(() => {
     const el = textareaRef.current; if (!el) return;
     const grow = () => { el.style.height = "0px"; const height = Math.min(el.scrollHeight, 180); el.style.height = `${height}px`; el.style.overflowY = el.scrollHeight > height ? "auto" : "hidden"; };
@@ -45,16 +47,18 @@ export function ComposerInput({ lang, text, onText, textareaRef, plan, cap, busy
   }, [da]);
   return <>
     <div className="composer-input-row">
+      <div className="composer-entry">
       <button type="button" className="composer-icon" disabled={busy || plan === null} aria-label={da ? "Vedhæft fil" : "Attach file"} title={da ? "Vedhæft fil" : "Attach file"} onClick={() => choose("file")}><Glyph><path d="m21 11-8.2 8.2a5.3 5.3 0 0 1-7.5-7.5l9-9a3.5 3.5 0 0 1 5 5l-9 9a1.8 1.8 0 0 1-2.5-2.5l8.3-8.3" /></Glyph></button>
-      <button type="button" className="composer-icon" disabled={busy || plan === null} aria-label={da ? "Tag billede" : "Take photo"} title={da ? "Tag billede" : "Take photo"} onClick={() => choose("camera")}><Glyph><path d="M4 6h4l2-3h4l2 3h4a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z" /><circle cx="12" cy="13" r="4" /></Glyph></button>
       <textarea className="message-input" ref={textareaRef} rows={1} value={text} disabled={busy} aria-label={da ? "Skriv en besked" : "Write a message"} aria-describedby="composer-count" aria-invalid={(count > cap && !retry) || undefined} placeholder={da ? "Skriv en besked" : "Write a message"} onChange={e => onText(e.target.value)} />
+      <button type="button" className="composer-icon" disabled={busy || plan === null} aria-label={da ? "Tag billede" : "Take photo"} title={da ? "Tag billede" : "Take photo"} onClick={() => choose("camera")}><Glyph><path d="M4 6h4l2-3h4l2 3h4a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z" /><circle cx="12" cy="13" r="4" /></Glyph></button>
+      </div>
       <button type="button" className="composer-send" aria-label={busy ? (da ? "Sender" : "Sending") : file ? (da ? "Send vedhæftning" : "Send attachment") : (da ? "Send besked" : "Send message")} title={da ? "Send" : "Send"} disabled={busy || !canSend || (count > cap && !retry) || plan === null} onClick={onSend}><Glyph><path d="m22 2-7 20-4-9-9-4Z" /><path d="m22 2-11 11" /></Glyph></button>
     </div>
     <input type="file" ref={picker} accept={FILE_ACCEPT} hidden disabled={busy} onChange={e => selected(e.currentTarget)} />
     <input type="file" ref={camera} accept="image/*" capture="environment" hidden disabled={busy} onChange={e => selected(e.currentTarget)} />
     <div id="composer-count" className={`composer-count meta${count > cap ? " over-limit" : ""}`} role="status">{count}/{cap}{count > cap ? (retry ? (da ? " – prøv den tidligere afsendelse igen" : " – retry the previous send") : (da ? " – forkort beskeden for at sende" : " – shorten your message to send")) : ""}</div>
     {note && <p className="meta" role="status">{note}</p>}
-    <dialog className="composer-upgrade" ref={dialog} aria-labelledby="upgrade-title" onCancel={() => setUpgrade(false)} onClose={() => setUpgrade(false)} onClick={e => { if (e.target === e.currentTarget) setUpgrade(false); }}>
+    <dialog className="composer-upgrade" ref={dialog} aria-labelledby="upgrade-title" onCancel={e => { e.preventDefault(); setUpgrade(false); }} onClick={e => { if (e.target === e.currentTarget) setUpgrade(false); }}>
       <h3 id="upgrade-title">{da ? "Vil du dele billeder og filer?" : "Would you like to share photos and files?"}</h3>
       <p>{da ? "Med planen til 79 kr./md. kan du bruge kameraet, sende vedhæftninger og skrive op til 480 tegn pr. besked." : "With the 79 DKK/month plan you can use the camera, send attachments and write up to 480 characters per message."}</p>
       <div className="row end"><button type="button" className="ghost" onClick={() => setUpgrade(false)}>{da ? "Måske senere" : "Maybe later"}</button><button type="button" onClick={() => { setUpgrade(false); openPlans(); }}>{da ? "Se planen til 79 kr." : "See the 79 DKK plan"}</button></div>

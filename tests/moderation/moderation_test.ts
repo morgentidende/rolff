@@ -31,8 +31,8 @@ Deno.test("meta-råd i suggestion -> tom (ikke sendbar)", () => {
   assertEquals(sanitizeSuggestion("Prøv en anmodning i stedet for en ordre", "Du skal", "controlling_demand"), "");
   assertEquals(sanitizeSuggestion("Skriv, hvad der skete, og hvad du gerne vil have anderledes – uden at kritisere den anden.", "x", "other_harmful"), "");
 });
-Deno.test("allow får altid tom suggestion", () => {
-  assertEquals(validateResult({ decision: "allow", reason_code: "none", spans: [], suggestion: "hemmelig" }, "hej").suggestion, "");
+Deno.test("allow med modstridende suggestion afvises", () => {
+  assertThrows(() => validateResult({ decision: "allow", reason_code: "none", spans: [], suggestion: "hemmelig" }, "hej"), ModerationTechnicalError, "inconsistent");
 });
 Deno.test("timeout -> teknisk fejl (fail closed)", async () => { await assertRejects(() => moderate(fake("{}", 200), "hej", [], 20), ModerationTechnicalError, "timeout"); });
 Deno.test("provider-fejl -> teknisk fejl", async () => { await assertRejects(() => moderate({ name: "x", model: "m", moderate: () => Promise.reject(new Error("boom")) }, "hej", []), ModerationTechnicalError); });
