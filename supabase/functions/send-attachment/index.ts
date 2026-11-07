@@ -1,3 +1,4 @@
+import { checkTopics, validateFilterSnapshot } from "../_shared/topics.ts";
 // POST {conversation_id, idempotency_key, file_b64, file_name, caption?, alt?}
 // Same pipeline as send-message, for one image/PDF: auth (sender must have plan 'text_attachments')
 // -> membership/role/rate (prepare_send) -> plan -> file checks (magic bytes, size, pages, no animation)
@@ -73,9 +74,11 @@ Deno.serve(async (req) => {
   const blk = await admin.from("conversation_blocks").select("user_id").eq("conversation_id", conv).neq("user_id", uid).limit(1);
   if (blk.error) return json({ status: "technical_error" }, 503);
   if ((blk.data ?? []).length) return json({ status: "cannot_deliver" }, 200);
-  const bw = await admin.rpc("recipient_blocked_words", { conv, p_sender: uid });
-  if (bw.error) return json({ status: "technical_error" }, 503);
-  const words = (bw.data ?? []) as string[];
+  const snapshot = await admin.rpc("recipient_filter_snapshot", { conv, p_sender: uid });
+  let policy;
+  try { if (snapshot.error) throw new Error(); policy = validateFilterSnapshot(snapshot.data); }
+  catch { return json({ status: "technical_error" }, 503); }
+  const words = policy.words;
   if (caption) {
     const hit = checkRules(caption, words, ctx.filter((c: any) => c.mine).map((c: any) => c.body));
     if (hit) {
@@ -119,10 +122,19 @@ Deno.serve(async (req) => {
     await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "clarify", p_reason: "unclear_meaning" });
     return json({ status: "clarification_required", meta }, 200);
   }
-  await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "allow", p_reason: "none" });
 
   const hash = await sha(body + "\n" + await sha(bytes));
-  const appr = await admin.rpc("issue_reply_approval_v2", { p_sender: uid, conv, p_hash: hash, p_reply: reply, p_provider: "openai", p_model: model });
+  // This stage can only deny or request clarification AFTER global safety allows.
+  try {
+    const decision = await checkTopics({ get: k => Deno.env.get(k) }, [caption, res.transcript, name, alt].join("\n"), policy.topics, ctx, timeoutFromEnv({ get: k => Deno.env.get(k) }));
+    if (decision !== "allow") {
+      await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: decision, p_reason: "private_boundary" });
+      return json({ status: decision === "block" ? "private_boundary" : "clarification_required" }, 200);
+    }
+  } catch { return json({ status: "technical_error" }, 503); }
+
+  await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "allow", p_reason: "none" });
+  const appr = await admin.rpc("issue_reply_approval_v3", { p_revision: policy.revision, p_sender: uid, conv, p_hash: hash, p_reply: reply, p_provider: "openai", p_model: model });
   if (appr.error) return json({ status: "technical_error" }, 503);
   const c = await admin.rpc("commit_attachment_reply", { p_approval: appr.data, p_sender: uid, conv, p_body: body, p_key: key, p_reply: reply,
     p_mime: fc.mime, p_name: name, p_alt: alt, p_pages: fc.pages, p_data: "\\x" + hex(bytes.buffer as ArrayBuffer) });

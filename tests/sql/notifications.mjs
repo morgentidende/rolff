@@ -1,6 +1,7 @@
 // PGlite by default; optional PostgreSQL runs only through the existing guarded CI bootstrap.
 import assert from 'node:assert/strict';
 import {bootstrap} from './timezone-test-db.mjs';
+import {notificationFixture} from './notification-fixtures.mjs';
 if(process.env.TIMEZONE_SQL_BACKEND && process.env.TIMEZONE_SQL_BACKEND!=='postgres')throw Error('Unsupported synthetic SQL backend');
 const {db,U,V}=await bootstrap();let pass=0;
 const test=async(name,f)=>{await f();pass++;console.log('ok',name);};
@@ -27,9 +28,8 @@ await test('key lengths and null bounded',async()=>{for(const [a,b] of [[null,au
 let S;await test('owner subscription persisted, no endpoint/key in state',async()=>{S=await sub();const s=await state();assert.equal(s.enabled,true);assert.equal(s.devices[0].id,S);assert(!JSON.stringify(s).includes('SyntheticOnly'));assert.equal((await state(V)).devices.length,0);});
 await test('another account cannot steal endpoint',async()=>assert.rejects(sub(V),/subscription_conflict/));
 await test('another account cannot revoke owner binding',async()=>{await as(V,'select revoke_my_push($1)',[S]);assert.equal((await state()).devices.length,1);});
-const conv=(await query('insert into conversations(created_by) values($1) returning id',[V]))[0].id;
-async function message(){const m=(await query("insert into messages(conversation_id,sender_id,body,body_hash,idempotency_key) values($1,$2,'Synthetic only','synthetic',gen_random_uuid()::text) returning id",[conv,V]))[0].id;await query('insert into message_deliveries(message_id,recipient_id) values($1,$2)',[m,U]);return m;}
-async function blockWindow(enabled=true){await query('insert into receive_settings(user_id,timezone,enabled) values($1,\'UTC\',$2) on conflict(user_id) do update set enabled=excluded.enabled',[U,enabled]);await query('delete from receive_windows where user_id=$1',[U]);}
+const fixture=await notificationFixture(db,V,U);const {conv,message}=fixture;
+const blockWindow=fixture.window;
 let M;await test('pending delivery does not create a job or claim',async()=>{await blockWindow();M=await message();assert.equal((await svc('select push_release_tick() n'))[0].n,0);assert.equal((await claim()).length,0);assert.equal((await query('select released_at from message_deliveries where message_id=$1',[M]))[0].released_at,null);});
 await test('settings save does not release or enqueue',async()=>{await as(U,"select save_my_receive_settings(false,'[]','fixed','UTC',null,1)");assert.equal((await query('select count(*)::int n from notification_jobs'))[0].n,0);});
 let work;await test('normal scheduler releases then atomically claims',async()=>{assert.equal((await svc('select push_release_tick() n'))[0].n,1);const w=await claim();assert.equal(w.length,1);work=w[0];assert.equal(work.subscription_id,S);assert((await prepare(work)).endpoint===endpoint);});

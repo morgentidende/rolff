@@ -8,7 +8,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test:back": "node --test tests/back-navigation/*.test.cjs",
-    "test:clarification": "node --test tests/clarification/*.test.cjs && node tests/moderation-endpoints/run.cjs"
+    "test:clarification": "node --test tests/clarification/*.test.cjs && node tests/moderation-endpoints/run.cjs",
+    "test:blocking": "node --test tests/blocking-lists/*.test.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2",

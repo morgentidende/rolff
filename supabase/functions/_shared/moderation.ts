@@ -156,9 +156,11 @@ export const RESPONSE_SCHEMA = {
   required: ["decision", "reason_code", "spans", "suggestion"],
 };
 
+export interface ProviderContract { prompt: string; schema: object }
+
 export class GeminiProvider implements ModerationProvider {
   name = "gemini";
-  constructor(private apiKey: string, public model: string) {}
+  constructor(private apiKey: string, public model: string, private contract: ProviderContract = { prompt: SYSTEM_PROMPT, schema: RESPONSE_SCHEMA }) {}
   async moderate(msg: string, ctx: ContextMsg[], signal: AbortSignal) {
     let r!: Response;
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -166,9 +168,9 @@ export class GeminiProvider implements ModerationProvider {
       method: "POST", signal,
       headers: { "content-type": "application/json", "x-goog-api-key": this.apiKey },
       body: JSON.stringify({
-        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        systemInstruction: { parts: [{ text: this.contract.prompt }] },
         contents: [{ role: "user", parts: [{ text: buildUserPayload(msg, ctx) }] }],
-        generationConfig: { temperature: 0, responseMimeType: "application/json", responseSchema: RESPONSE_SCHEMA,
+        generationConfig: { temperature: 0, responseMimeType: "application/json", responseSchema: this.contract.schema,
           ...(this.model.startsWith("gemini-3") ? { thinkingConfig: { thinkingLevel: "minimal" } } : {}) },
       }),
     });
@@ -185,15 +187,15 @@ export class GeminiProvider implements ModerationProvider {
 
 export class OpenAIProvider implements ModerationProvider {
   name = "openai";
-  constructor(private apiKey: string, public model: string, public baseUrl = "https://eu.api.openai.com/v1") {}
+  constructor(private apiKey: string, public model: string, public baseUrl = "https://eu.api.openai.com/v1", private contract: ProviderContract = { prompt: SYSTEM_PROMPT, schema: RESPONSE_SCHEMA }) {}
   async moderate(msg: string, ctx: ContextMsg[], signal: AbortSignal) {
     const r = await fetch(`${this.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
       method: "POST", signal,
       headers: { "content-type": "application/json", authorization: `Bearer ${this.apiKey}` },
       body: JSON.stringify({
         model: this.model, store: false,
-        messages: [{ role: "system", content: SYSTEM_PROMPT }, { role: "user", content: buildUserPayload(msg, ctx) }],
-        response_format: { type: "json_schema", json_schema: { name: "moderation", strict: true, schema: { ...RESPONSE_SCHEMA, additionalProperties: false } } },
+        messages: [{ role: "system", content: this.contract.prompt }, { role: "user", content: buildUserPayload(msg, ctx) }],
+        response_format: { type: "json_schema", json_schema: { name: "moderation", strict: true, schema: { ...this.contract.schema, additionalProperties: false } } },
       }),
     });
     if (!r.ok) throw new ModerationTechnicalError(`http_${r.status}`);
@@ -208,20 +210,20 @@ export interface ModerationEnv { get(k: string): string | undefined }
  * MODERATION_TIER     = free | paid   (free = Gemini free tier: Google may use data → synthetic test data ONLY)
  * APP_ENV             = test | production. production + free tier => refuse (fail closed).
  */
-export function providerFromEnv(env: ModerationEnv): ModerationProvider {
+export function providerFromEnv(env: ModerationEnv, contract?: ProviderContract): ModerationProvider {
   const p = env.get("MODERATION_PROVIDER") ?? "gemini";
   const tier = env.get("MODERATION_TIER") ?? "free";
   const appEnv = env.get("APP_ENV") ?? "test";
   if (appEnv === "production" && tier !== "paid") throw new ModerationTechnicalError("free_tier_forbidden_in_production");
   if (p === "gemini") {
     const k = env.get("GEMINI_API_KEY"); if (!k) throw new ModerationTechnicalError("missing_key");
-    return new GeminiProvider(k, env.get("GEMINI_MODEL") ?? env.get("MODERATION_MODEL") ?? "gemini-3-flash-preview");
+    return new GeminiProvider(k, env.get("GEMINI_MODEL") ?? env.get("MODERATION_MODEL") ?? "gemini-3-flash-preview", contract);
   }
   if (p === "openai") {
     const k = env.get("OPENAI_API_KEY"); if (!k) throw new ModerationTechnicalError("missing_key");
     const base = env.get("OPENAI_BASE_URL") ?? "https://eu.api.openai.com/v1";
     if (!/^https:\/\/([a-z0-9-]+\.)*openai\.com\/v1\/?$/.test(base)) throw new ModerationTechnicalError("bad_base_url");
-    return new OpenAIProvider(k, env.get("OPENAI_MODEL") ?? "gpt-6-luna", base);
+    return new OpenAIProvider(k, env.get("OPENAI_MODEL") ?? "gpt-6-luna", base, contract);
   }
   throw new ModerationTechnicalError("unknown_provider");
 }

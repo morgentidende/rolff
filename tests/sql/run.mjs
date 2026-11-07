@@ -17,6 +17,9 @@ await db.exec(`
 const mig = fs.readdirSync('../../supabase/migrations').sort();
 for (const f of mig) await db.exec(fs.readFileSync('../../supabase/migrations/' + f, 'utf8'));
 
+await db.exec(`create function public.test_issue_current_approval(p_sender uuid,conv uuid,p_hash text,p_provider text,p_model text,p_reply uuid default null) returns uuid language sql security definer as $$
+ select public.issue_reply_approval_v3(p_sender,conv,p_hash,p_provider,p_model,public.recipient_filter_snapshot(conv,p_sender)->>'revision',p_reply)
+$$; revoke all on function public.test_issue_current_approval(uuid,uuid,text,text,text,uuid) from public,anon,authenticated; grant execute on function public.test_issue_current_approval(uuid,uuid,text,text,text,uuid) to service_role;`);
 let pass = 0, fail = 0;
 async function t(name, fn) { try { await fn(); pass++; console.log('ok   ', name); } catch (e) { fail++; console.log('FAIL ', name, '-', e.message); } }
 async function as(uid, sql, params = []) {
@@ -48,7 +51,7 @@ await t('Uvedkommende kan ikke læse beskeder', async () => rejects(as(X, `selec
 await t('Uvedkommende ser ingen samtaler', async () => assert.equal((await as(X, `select * from conversations`)).length, 0));
 await t('Klient kan ikke læse messages-tabellen direkte', async () => rejects(as(A, `select * from messages`), /permission denied/));
 await t('Klient kan ikke kalde commit_message', async () => rejects(as(A, `select commit_message(gen_random_uuid(),$1,$2,'hej','key-12345')`, [A, conv]), /permission denied/));
-await t('Klient kan ikke udstede godkendelse', async () => rejects(as(A, `select issue_reply_approval_v2($1,$2,'x','p','m')`, [A, conv]), /permission denied/));
+await t('Klient kan ikke udstede godkendelse', async () => rejects(as(A, `select test_issue_current_approval($1,$2,'x','p','m')`, [A, conv]), /permission denied/));
 
 const body = 'Kan du hente kl. 16 i stedet for 15?';
 let appr;
@@ -56,7 +59,7 @@ await t('prepare_send ok for medlem', async () => { await svc(`select * from pre
 await t('prepare_send afviser uvedkommende', async () => rejects(svc(`select * from prepare_send($1,$2,$3)`, [X, conv, body]), /not_member/));
 await t('prepare_send afviser >480 tegn', async () => rejects(svc(`select * from prepare_send($1,$2,$3)`, [A, conv, 'x'.repeat(481)]), /length/));
 await t('Ændret tekst med gammel hash afvises', async () => {
-  appr = (await svc(`select issue_reply_approval_v2($1,$2,$3,'test','m') id`, [A, conv, await hash(body)]))[0].id;
+  appr = (await svc(`select test_issue_current_approval($1,$2,$3,'test','m') id`, [A, conv, await hash(body)]))[0].id;
   await rejects(svc(`select * from commit_message($1,$2,$3,$4,'key-aaaaaaa1')`, [appr, A, conv, body + ' Idiot.']), /approval_invalid/);
 });
 await t('Godkendelse kan ikke bruges af anden afsender', async () => rejects(svc(`select * from commit_message($1,$2,$3,$4,'key-aaaaaaa2')`, [appr, B, conv, body]), /approval_invalid/));
@@ -65,7 +68,7 @@ await t('Gyldig godkendelse gemmer besked', async () => { const r = await svc(`s
 await t('Netværksretry (samme nøgle) giver ingen dublet', async () => { const r = await svc(`select * from commit_message($1,$2,$3,$4,'key-aaaaaaa3')`, [appr, A, conv, body]); assert.equal(r[0].message_id, mid); assert.equal(r[0].duplicate, true); });
 await t('Godkendelse kan ikke genbruges med ny nøgle', async () => rejects(svc(`select * from commit_message($1,$2,$3,$4,'key-aaaaaaa4')`, [appr, A, conv, body]), /approval_invalid/));
 await t('Udløbet godkendelse afvises', async () => {
-  const id = (await svc(`select issue_reply_approval_v2($1,$2,$3,'test','m') id`, [A, conv, await hash('hej')]))[0].id;
+  const id = (await svc(`select test_issue_current_approval($1,$2,$3,'test','m') id`, [A, conv, await hash('hej')]))[0].id;
   await db.query(`update moderation_approvals set expires_at = now() - interval '1 second' where id=$1`, [id]);
   await rejects(svc(`select * from commit_message($1,$2,$3,'hej','key-aaaaaaa5')`, [id, A, conv]), /approval_invalid/);
 });
@@ -76,7 +79,7 @@ await t('Svar indeholder ingen kvitterings-/statusfelter', async () => {
 });
 
 // Receive windows
-const sendAs = async (from, text, key) => { const id = (await svc(`select issue_reply_approval_v2($1,$2,$3,'test','m') id`, [from, conv, await hash(text)]))[0].id; return svc(`select * from commit_message($1,$2,$3,$4,$5)`, [id, from, conv, text, key]); };
+const sendAs = async (from, text, key) => { const id = (await svc(`select test_issue_current_approval($1,$2,$3,'test','m') id`, [from, conv, await hash(text)]))[0].id; return svc(`select * from commit_message($1,$2,$3,$4,$5)`, [id, from, conv, text, key]); };
 await t('Modtagetid: besked uden for vindue holdes tilbage', async () => {
   // B only receives in a 1-minute window that is never "now": choose a weekday != today
   await db.query(`insert into receive_settings(user_id,timezone,enabled) values ($1,'Europe/Copenhagen',true)`, [B]);
@@ -128,7 +131,7 @@ await t('Gamle samtykker rækker ikke efter medlemsændring: nyt medlem skal ogs
 });
 await t('Læser kan ikke sende (heller ikke via server-API)', async () => rejects(svc(`select * from prepare_send($1,$2,'hej')`, [C, conv]), /read_only/));
 await t('Læser kan ikke committe selv med godkendelse', async () => {
-  const id = (await svc(`select issue_reply_approval_v2($1,$2,$3,'test','m') id`, [C, conv, await hash('hej')]))[0].id;
+  const id = (await svc(`select test_issue_current_approval($1,$2,$3,'test','m') id`, [C, conv, await hash('hej')]))[0].id;
   await rejects(svc(`select * from commit_message($1,$2,$3,'hej','key-ccccccc1')`, [id, C, conv]), /not_member/);
 });
 await t('Tilbagekaldt invitation virker ikke', async () => {
@@ -298,7 +301,7 @@ await t('Sletning: opsætning (P og Q i samtale, P alene i en anden)', async () 
   const tk = (await as(P, `select * from create_invitation($1,'parent')`, [pc]))[0].token;
   await as(Q, `select accept_invitation($1)`, [tk]);
   solo = (await as(P, `select create_conversation('y') c`))[0].c;
-  for (const [txt, k] of [['Leveret fra P', 'key-del00001']]) { const id = (await svc(`select issue_reply_approval_v2($1,$2,$3,'test','m') id`, [P, pc, await hash(txt)]))[0].id; await svc(`select * from commit_message($1,$2,$3,$4,$5)`, [id, P, pc, txt, k]); }
+  for (const [txt, k] of [['Leveret fra P', 'key-del00001']]) { const id = (await svc(`select test_issue_current_approval($1,$2,$3,'test','m') id`, [P, pc, await hash(txt)]))[0].id; await svc(`select * from commit_message($1,$2,$3,$4,$5)`, [id, P, pc, txt, k]); }
   await as(Q, `select * from get_messages($1)`, [pc]); // releases delivery
   // undelivered message: Q receives never
   await svc(`insert into receive_windows(user_id, weekday, start_min, end_min) select $1, (extract(isodow from now())::int % 7) + 1, 0, 1`, [Q]).catch(() => {});
@@ -313,7 +316,7 @@ await t('Klient kan ikke kalde purge_user_content / inactivity_sweep', async () 
 });
 let qBefore;
 await t('Sletning: modparten har skrevet og modtaget før sletning', async () => {
-  const id = (await svc(`select issue_reply_approval_v2($1,$2,$3,'test','m') id`, [Q, pc, await hash('Svar fra Q')]))[0].id;
+  const id = (await svc(`select test_issue_current_approval($1,$2,$3,'test','m') id`, [Q, pc, await hash('Svar fra Q')]))[0].id;
   await svc(`select * from commit_message($1,$2,$3,'Svar fra Q','key-del00002')`, [id, Q, pc]);
   qBefore = await as(Q, `select * from get_messages($1)`, [pc]); assert.equal(qBefore.length, 2);
 });
@@ -355,7 +358,7 @@ await t('Blokér ord: medlem tilføjer (normaliseret)', async () => { await as(A
 await t('Blokér ord: uden bekræftelse tilføjes intet', async () => { await rejects(as(A, `select add_blocked_word($1,'test')`, [conv]), /ack_required/); await rejects(as(A, `select add_blocked_word($1,'test',false)`, [conv]), /ack_required/); assert.equal((await as(A, `select * from conversation_blocked_words where word='test'`)).length, 0); });
 await t('Blokér ord: modparten kan ikke hente listen', async () => { assert.equal((await as(B, `select * from conversation_blocked_words`)).length, 0); await rejects(as(B, `select * from recipient_blocked_words($1,$2)`, [conv, B]), /permission denied/); });
 await t('Blokér ord: uvedkommende ser intet og kan ikke tilføje', async () => { assert.equal((await as(X, `select * from conversation_blocked_words`)).length, 0); await rejects(as(X, `select add_blocked_word($1,'abc',true)`, [conv]), /not_member/); });
-await t('Blokér ord: andre kan ikke slette ejerens ord', async () => { await as(B, `delete from conversation_blocked_words`); assert.equal((await svc(`select count(*)::int n from conversation_blocked_words where user_id=$1`, [A]))[0].n, 1); });
+await t('Blokér ord: andre kan ikke slette ejerens ord', async () => { await rejects(as(B, `delete from conversation_blocked_words`), /permission denied/); assert.equal((await svc(`select count(*)::int n from conversation_blocked_words where user_id=$1`, [A]))[0].n, 1); });
 await t('Blokér ord: direkte insert afvises', async () => rejects(as(A, `insert into conversation_blocked_words(conversation_id,user_id,word) values ($1,$2,'xx')`, [conv, B]), /permission|denied/));
 await t('Blokér ord: længde 2-120 (hele sætninger) og max 50', async () => { await rejects(as(A, `select add_blocked_word($1,'x',true)`, [conv]), /length/); await rejects(as(A, `select add_blocked_word($1,repeat('a',121),true)`, [conv]), /length/); for (let k = 0; k < 49; k++) await as(A, `select add_blocked_word($1,$2,true)`, [conv, 'ord' + k]); await rejects(as(A, `select add_blocked_word($1,'ord99',true)`, [conv]), /too_many/); await svc(`delete from conversation_blocked_words where word like 'ord%'`); });
 await t('Blokér ord: server henter kun modtagernes ord (ikke afsenderens egne)', async () => { assert.deepEqual((await svc(`select * from recipient_blocked_words($1,$2) w`, [conv, B])).map(r => r.w), ['pis hoved']); assert.equal((await svc(`select * from recipient_blocked_words($1,$2)`, [conv, A])).length, 0); });
@@ -457,7 +460,7 @@ await t('Vedhæftning kræver afsenders 79-plan; tabeller er lukkede for kliente
   await db.query(`insert into memberships(conversation_id,user_id,role) values ($1,$2,'parent'),($1,$3,'parent')`, [cv, P, Q]);
   const data = new Uint8Array([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a,0]);
   const h = (await db.query(`select encode(extensions.digest($1 || E'\n' || encode(extensions.digest($2::bytea,'sha256'),'hex'),'sha256'),'hex') h`, ['Vedhæftning: a.png', data])).rows[0].h;
-  const ap = async () => (await svc(`select issue_reply_approval_v2($1,$2,$3,'openai','m') id`, [P, cv, h]))[0].id;
+  const ap = async () => (await svc(`select test_issue_current_approval($1,$2,$3,'openai','m') id`, [P, cv, h]))[0].id;
   const commit = async (k) => svc(`select * from commit_attachment_message($1,$2,$3,'Vedhæftning: a.png',$4,'image/png','a.png','alt',null,$5::bytea)`, [await ap(), P, cv, k, data]);
   await rejects(commit('key-att-0001'), /plan_required/);
   await as(P, `select * from set_my_plan_test('text_attachments')`);
@@ -472,7 +475,7 @@ await t('Vedhæftning kræver afsenders 79-plan; tabeller er lukkede for kliente
 
 // ---------- Person limits + invite plan ----------
 const mkConv = async (a, b) => { const cv = (await db.query(`insert into conversations(created_by) values ($1) returning id`, [a])).rows[0].id; await db.query(`insert into memberships(conversation_id,user_id,role) values ($1,$2,'parent'),($1,$3,'parent')`, [cv, a, b]); return cv; };
-const sendIn = async (cv, from, text, key) => { const id = (await svc(`select issue_reply_approval_v2($1,$2,$3,'test','m') id`, [from, cv, await hash(text)]))[0].id; return svc(`select * from commit_message($1,$2,$3,$4,$5)`, [id, from, cv, text, key]); };
+const sendIn = async (cv, from, text, key) => { const id = (await svc(`select test_issue_current_approval($1,$2,$3,'test','m') id`, [from, cv, await hash(text)]))[0].id; return svc(`select * from commit_message($1,$2,$3,$4,$5)`, [id, from, cv, text, key]); };
 const [LP, LQ, LS] = (await db.query(`insert into auth.users(raw_user_meta_data) values ('{}'),('{}'),('{}') returning id`)).rows.map(r => r.id);
 const lc1 = await mkConv(LP, LQ), lc2 = await mkConv(LQ, LP), lc3 = await mkConv(LS, LQ);
 const lim = async (cv, s) => (await svc(`select * from _send_limits($1,$2)`, [cv, s]))[0];
@@ -537,14 +540,14 @@ const elsewhere=(await sendIn(rcOther,RA,'Anden samtale','reply-other-001'))[0].
 let response;
 const replySend=async(target,key='reply-response-001')=>{
  const text='Ja, kl. 16 passer.';
- const ap=(await svc(`select issue_reply_approval_v2($1,$2,$3,'test','m',$4) id`,[RB,rc,await hash(text),target]))[0].id;
+ const ap=(await svc(`select test_issue_current_approval($1,$2,$3,'test','m',$4) id`,[RB,rc,await hash(text),target]))[0].id;
  return svc(`select * from commit_message_reply($1,$2,$3,$4,$5,$6)`,[ap,RB,rc,text,key,target]);
 };
 await t('Reply: visible target accepted atomically and persists',async()=>{response=(await replySend(original))[0].message_id; const rows=await as(RB,`select * from get_messages_v2($1)`,[rc]);const m=rows.find(m=>m.id===response);assert.equal(m.reply_to_id,original);assert.equal(m.reply_body,'Kan vi mødes kl. 16?');assert.equal(m.sender_email,'b@example.invalid');assert.equal(m.has_reply,true);});
 await t('Reply: actual email independent of private nickname; old RPC unchanged',async()=>{await as(RB,`select set_contact_alias($1,'Privat navn')`,[RA]); const m=(await as(RB,`select * from get_messages_v2($1)`,[rc])).find(m=>m.id===original);assert.equal(m.sender_name,'Privat navn');assert.equal(m.sender_email,'a@example.invalid');assert.ok(!('reply_to_id' in (await as(RB,`select * from get_messages($1)`,[rc]))[0]));});
 await t('Reply: cross-conversation target rejected, no storage',async()=>{await rejects(replySend(elsewhere,'reply-cross-001'),/invalid_reply/);assert.equal((await db.query(`select count(*)::int n from messages where idempotency_key='reply-cross-001'`)).rows[0].n,0);});
 await t('Reply: idempotent retry immutable; changed target rejected',async()=>{assert.equal((await replySend(original))[0].duplicate,true);await rejects(replySend(null),/idempotency_conflict/);});
-await t('Reply: old approval cannot be rebound to an original',async()=>{const ap=(await svc(`select issue_reply_approval_v2($1,$2,$3,'test','m') id`,[RB,rc,await hash('Test svar')]))[0].id;await rejects(svc(`select * from commit_message_reply($1,$2,$3,'Test svar','reply-unbound-001',$4)`,[ap,RB,rc,original]),/approval_invalid/);});
+await t('Reply: old approval cannot be rebound to an original',async()=>{const ap=(await svc(`select test_issue_current_approval($1,$2,$3,'test','m') id`,[RB,rc,await hash('Test svar')]))[0].id;await rejects(svc(`select * from commit_message_reply($1,$2,$3,'Test svar','reply-unbound-001',$4)`,[ap,RB,rc,original]),/approval_invalid/);});
 await t('Reply: client cannot commit, mutate refs or read other conversation',async()=>{await rejects(as(RB,`select * from commit_message_reply(gen_random_uuid(),$1,$2,'hi','reply-forged-001',$3)`,[RB,rc,original]),/permission denied/);await rejects(as(RX,`select * from get_messages_v2($1)`,[rc]),/not_member/);await rejects(as(RB,`select * from message_replies`),/permission denied/);});
 await t('Reply: unreleased target is forbidden and not leaked in quotes',async()=>{
  await db.query(`update message_deliveries set released_at=null where message_id=$1 and recipient_id=$2`,[original,RB]);
@@ -560,7 +563,7 @@ await t('Reply: attachment uses same validated reference and exact retry identit
  await as(RB,`select * from set_my_plan_test('text_attachments')`);
  const txt='Testfil',data=new Uint8Array([0x89,0x50,0x4e,0x47]);
  const fh=(await db.query(`select encode(extensions.digest($1::bytea,'sha256'),'hex') h`,[data])).rows[0].h;
- const ap=(await svc(`select issue_reply_approval_v2($1,$2,$3,'test','m',$4) id`,[RB,rc,await hash(txt+'\n'+fh),original]))[0].id;
+ const ap=(await svc(`select test_issue_current_approval($1,$2,$3,'test','m',$4) id`,[RB,rc,await hash(txt+'\n'+fh),original]))[0].id;
  const params=[ap,RB,rc,txt,'reply-file-001','image/png','test.png','',null,data,original];
  const sql=`select * from commit_attachment_reply($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::bytea,$11)`;
  const result=await svc(sql,params);assert.equal(result[0].duplicate,false);
@@ -593,7 +596,7 @@ await db.query(`insert into user_plans(user_id,plan) values ($1,'text'),($2,'tex
 const pc=(await as(P49,`select create_conversation('Quota synthetic') c`))[0].c;
 const pt=(await as(P49,`select * from create_invitation($1,'parent')`,[pc]))[0].token;
 await as(P79,`select accept_invitation($1)`,[pt]);
-const quotaSend=async(uid,body,key)=>{const aid=(await svc(`select issue_reply_approval_v2($1,$2,$3,'test','synthetic',null) id`,[uid,pc,await hash(body)]))[0].id;return svc(`select * from commit_message_reply($1,$2,$3,$4,$5,null)`,[aid,uid,pc,body,key]);};
+const quotaSend=async(uid,body,key)=>{const aid=(await svc(`select test_issue_current_approval($1,$2,$3,'test','synthetic',null) id`,[uid,pc,await hash(body)]))[0].id;return svc(`select * from commit_message_reply($1,$2,$3,$4,$5,null)`,[aid,uid,pc,body,key]);};
 await t('Old recipient140 does not override49/79 quotas or composer contract',async()=>{
  await svc(`insert into person_limits(recipient_id,sender_id,max_chars) values ($1,$2,140),($2,$1,140)`,[P49,P79]);
  for(const uid of [P49,P79]) { const row=(await as(uid,`select * from get_my_send_limits($1)`,[pc]))[0];assert.equal(row.max_chars,null);assert.equal(row.chars_by,null); }
@@ -602,7 +605,7 @@ await t('Old recipient140 does not override49/79 quotas or composer contract',as
 });
 await t('Plan quotas: authoritative49/79 limits; helper not client-accessible',async()=>{assert.equal((await svc(`select message_char_limit($1) n`,[P49]))[0].n,160);assert.equal((await svc(`select message_char_limit($1) n`,[P79]))[0].n,480);await rejects(as(P49,`select message_char_limit($1)`,[P79]),/permission denied/);});
 await t('Plan49:160 accepted,161 blocked in prepare and direct commit',async()=>{await svc(`select * from prepare_send($1,$2,$3)`,[P49,pc,'x'.repeat(160)]);await quotaSend(P49,'x'.repeat(160),'quota-49-160');await rejects(svc(`select * from prepare_send($1,$2,$3)`,[P49,pc,'x'.repeat(161)]),/plan_length_limit:160/);await rejects(quotaSend(P49,'x'.repeat(161),'quota-49-161'),/plan_length_limit:160/);});
-await t('Legacy text commit cannot bypass49 plan quota',async()=>{const txt='l'.repeat(161);const aid=(await svc(`select issue_reply_approval_v2($1,$2,$3,'test','m') id`,[P49,pc,await hash(txt)]))[0].id;await rejects(svc(`select * from commit_message($1,$2,$3,$4,'quota-legacy-161')`,[aid,P49,pc,txt]),/plan_length_limit:160/);});
+await t('Legacy text commit cannot bypass49 plan quota',async()=>{const txt='l'.repeat(161);const aid=(await svc(`select test_issue_current_approval($1,$2,$3,'test','m') id`,[P49,pc,await hash(txt)]))[0].id;await rejects(svc(`select * from commit_message($1,$2,$3,$4,'quota-legacy-161')`,[aid,P49,pc,txt]),/plan_length_limit:160/);});
 await t('Plan79:480 accepted and481 blocked',async()=>{await svc(`select * from prepare_send($1,$2,$3)`,[P79,pc,'x'.repeat(480)]);await quotaSend(P79,'x'.repeat(480),'quota-79-480');await rejects(quotaSend(P79,'x'.repeat(481),'quota-79-481'),/plan_length_limit:480|check constraint/);});
 await t('Plan limit counts Unicode codepoints, not UTF16',async()=>{await quotaSend(P49,'𐀀'.repeat(160),'quota-unicode-160');await rejects(quotaSend(P49,'𐀀'.repeat(161),'quota-unicode-161'),/plan_length_limit:160/);});
 await t('Downgrade during moderation rechecked; accepted historical retry still succeeds',async()=>{const txt='y'.repeat(200);await svc(`select * from prepare_send($1,$2,$3)`,[P79,pc,txt]);await db.query(`update user_plans set plan='text' where user_id=$1`,[P79]);await rejects(quotaSend(P79,txt,'quota-downgrade-new'),/plan_length_limit:160/);const retry=await svc(`select * from commit_message_reply(gen_random_uuid(),$1,$2,$3,'quota-79-480',null)`,[P79,pc,'x'.repeat(480)]);assert.equal(retry[0].duplicate,true);await db.query(`update user_plans set plan='text_attachments' where user_id=$1`,[P79]);});
@@ -610,7 +613,7 @@ await t('Pending downgrade is effective at prepare/commit without trusting old c
 const quotaFile=async(uid,txt,key)=>{
  const data=Buffer.from([137,80,78,71]).toString('hex');
  const h=(await db.query(`select encode(extensions.digest($1||E'\\n'||encode(extensions.digest(decode($2,'hex'),'sha256'),'hex'),'sha256'),'hex') h`,[txt,data])).rows[0].h;
- const aid=(await svc(`select issue_reply_approval_v2($1,$2,$3,'test','m',null) id`,[uid,pc,h]))[0].id;
+ const aid=(await svc(`select test_issue_current_approval($1,$2,$3,'test','m',null) id`,[uid,pc,h]))[0].id;
  return svc(`select * from commit_attachment_reply($1,$2,$3,$4,$5,'image/png','synthetic.png','',null,decode($6,'hex'),null)`,[aid,uid,pc,txt,key,data]);
 };
 await t('Plan79 attachment caption480 commits;481 rejected;49 still forbidden',async()=>{
@@ -621,5 +624,7 @@ await t('Plan79 attachment caption480 commits;481 rejected;49 still forbidden',a
 }
 const {testClarificationPolicy}=await import('./clarification-policy.mjs');
 await testClarificationPolicy({db,as,svc,hash,t,assert});
+const {testBlockingTopics}=await import('./blocking-topics.mjs');
+await testBlockingTopics({db,as,svc,hash,t,assert});
 console.log(`\n${pass} bestået, ${fail} fejlet`);
 process.exit(fail ? 1 : 0);

@@ -25,7 +25,7 @@ export async function testClarificationPolicy({db,as,svc,hash,t,assert}) {
   await assert.rejects(as(A,`update moderation_approvals set policy_version=1`),/permission denied/);
  });
  await t('Clarify cutover: current acceptance and historical retry',async()=>{
-  const id=(await svc(`select issue_reply_approval_v2($1,$2,$3,'test','synthetic',null) id`,[A,cv,await hash(text)]))[0].id;
+  const id=(await svc(`select test_issue_current_approval($1,$2,$3,'test','synthetic',null) id`,[A,cv,await hash(text)]))[0].id;
   assert.equal((await db.query(`select policy_version from moderation_approvals where id=$1`,[id])).rows[0].policy_version,1);
   const first=(await svc(`select * from commit_message_reply($1,$2,$3,$4,'clarify-current',null)`,[id,A,cv,text]))[0];
   assert.equal(first.duplicate,false);

@@ -209,3 +209,9 @@ No proxy/network settings or hosting routes were investigated. This is **not** a
 - https://web.dev/articles/push-notifications-web-push-protocol
 
 - https://docs.postgrest.org/en/stable/references/transactions.html (per-request transaction, READ COMMITTED, commit/rollback)
+
+## Source integration with blocking lists (not a release)
+
+PR54 integrates blocking-list source commit `891476922fd92668667c122a16fb41d159c0bb90`. Notification SQL fixtures now create conversation/invitation/membership through owner RPCs and send via `prepare_send` → private recipient snapshot → `issue_reply_approval_v3` → `commit_message_reply`. They neither insert messages/deliveries directly nor grant fixture privileges or disable policy triggers. The six additional `notifications-v3.mjs` regressions cover owner-private lists, edits before issue/consume, legacy-v2 rejection, pending→normal release→concrete intent, and post-consumption idempotency. All approvals/model decisions in tests are synthetic; no model/provider is called. The PostgreSQL workflow runs these alongside the 50 functional and nine parallel cases on disposable PostgreSQL17.
+
+This source merge does not authorize notification deployment. Gates remain disabled. The separately approved blocking-only release may rename its migration to the server-generated version; before a later notification release, integrate that bookkeeping and retest migration chronology without retaining duplicate migrations. Actual push, deployed Edge, physical mobile and integrated browser QA remain unverified.

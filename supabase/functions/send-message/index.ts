@@ -1,3 +1,4 @@
+import { checkTopics, validateFilterSnapshot } from "../_shared/topics.ts";
 // POST {conversation_id, body, idempotency_key}
 // Server-enforced pipeline: auth -> membership/role/length/rate (prepare_send) -> prefilter -> LLM ->
 // strict validation -> single-use approval bound to sender+conversation+sha256(body) (60s) ->
@@ -65,9 +66,11 @@ Deno.serve(async (req) => {
   if (blk.error) return json({ status: "technical_error" }, 503);
   if ((blk.data ?? []).length) return json({ status: "cannot_deliver" }, 200);
   // Rule pre-checks: recipients' private blocked words (only the matched word is returned, never the list), emoji, caps, repeat.
-  const bw = await admin.rpc("recipient_blocked_words", { conv, p_sender: uid });
-  if (bw.error) return json({ status: "technical_error" }, 503);
-  const hit = checkRules(body, (bw.data ?? []) as string[], ctx.filter((c: any) => c.mine).map((c: any) => c.body));
+  const snapshot = await admin.rpc("recipient_filter_snapshot", { conv, p_sender: uid });
+  let policy;
+  try { if (snapshot.error) throw new Error(); policy = validateFilterSnapshot(snapshot.data); }
+  catch { return json({ status: "technical_error" }, 503); }
+  const hit = checkRules(body, policy.words, ctx.filter((c: any) => c.mine).map((c: any) => c.body));
   if (hit) {
     await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "block", p_reason: "rule" });
     return json(hit.rule === "blocked_word" ? { status: "blocked_word", word: hit.word } : { status: "rule", rule: hit.rule }, 200);
@@ -87,11 +90,21 @@ Deno.serve(async (req) => {
     console.log(JSON.stringify({ evt: "moderation_error", kind: e instanceof ModerationTechnicalError ? e.message : "unknown" }));
     return json({ status: "technical_error" }, 503);
   }
-  await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: res.decision, p_reason: res.reason_code });
+  if (res.decision !== "allow") await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: res.decision, p_reason: res.reason_code });
   if (res.decision === "block") return json({ status: "blocked", reason_code: res.reason_code, spans: res.spans, suggestion: res.suggestion }, 200);
   if (res.decision === "clarify") return json({ status: "clarification_required" }, 200);
 
-  const appr = await admin.rpc("issue_reply_approval_v2", { p_sender: uid, conv, p_hash: await sha256Hex(body), p_reply: reply, p_provider: provider.name, p_model: provider.model });
+  // This stage can only deny or request clarification AFTER global safety allows.
+  try {
+    const decision = await checkTopics({ get: k => Deno.env.get(k) }, body, policy.topics, ctx, timeoutFromEnv({ get: k => Deno.env.get(k) }));
+    if (decision !== "allow") {
+      await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: decision, p_reason: "private_boundary" });
+      return json({ status: decision === "block" ? "private_boundary" : "clarification_required" }, 200);
+    }
+  } catch { return json({ status: "technical_error" }, 503); }
+
+  await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "allow", p_reason: "none" });
+  const appr = await admin.rpc("issue_reply_approval_v3", { p_revision: policy.revision, p_sender: uid, conv, p_hash: await sha256Hex(body), p_reply: reply, p_provider: provider.name, p_model: provider.model });
   if (appr.error) return json({ status: "technical_error" }, 503);
   const c = await admin.rpc("commit_message_reply", { p_approval: appr.data, p_sender: uid, conv, p_body: body, p_key: key, p_reply: reply });
   if (c.error) { const limit = planLengthError(c.error.message, charCount(body)); if (limit) return json(limit, 200); }
