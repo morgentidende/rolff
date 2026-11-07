@@ -3,6 +3,7 @@
 // strict validation -> single-use approval bound to sender+conversation+sha256(body) (60s) ->
 // atomic consume + store (commit_message, idempotent). Fail closed on any error.
 import { authed, cors, json } from "../_shared/http.ts";
+import { normalizeReplyId } from "../_shared/replies.ts";
 import { checkPersonLimits } from "../_shared/limits.ts";
 import { checkRules } from "../_shared/rules.ts";
 import { charCount, MAX_CHARS, moderate, ModerationTechnicalError, providerFromEnv, timeoutFromEnv } from "../_shared/moderation.ts";
@@ -18,13 +19,28 @@ Deno.serve(async (req) => {
   const a = await authed(req); if (a instanceof Response) return a;
   const { uid, admin } = a;
   let input: any; try { input = await req.json(); } catch { return json({ error: "bad_request" }, 400); }
-  const conv = String(input?.conversation_id ?? ""); const body = String(input?.body ?? ""); const key = String(input?.idempotency_key ?? "");
+  const conv = String(input?.conversation_id ?? "").toLowerCase(); const body = String(input?.body ?? ""); const key = String(input?.idempotency_key ?? "");
   if (!/^[0-9a-f-]{36}$/i.test(conv) || !/^[\w-]{8,80}$/.test(key)) return json({ error: "bad_request" }, 400);
   if (body.trim().length === 0 || charCount(body) > MAX_CHARS) return json({ error: "length" }, 400);
 
+  const reply = normalizeReplyId(input?.reply_to_id);
+  if (reply !== null && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reply)) return json({ error: "invalid_reply" }, 400);
+
   // Idempotent retry: if already stored, return the same result without re-moderating.
-  const prev = await admin.from("messages").select("id").eq("sender_id", uid).eq("idempotency_key", key).maybeSingle();
-  if (prev.data) return json({ status: "accepted", message_id: prev.data.id, duplicate: true });
+  const prev = await admin.from("messages").select("id,conversation_id,body").eq("sender_id", uid).eq("idempotency_key", key).maybeSingle();
+  if (prev.error) return json({ status: "technical_error" }, 503);
+  if (prev.data) {
+    const oldReply = await admin.from("message_replies").select("target_fingerprint").eq("message_id", prev.data.id).maybeSingle();
+    if (oldReply.error) return json({ status: "technical_error" }, 503);
+    const oldFile = await admin.from("message_attachments").select("message_id").eq("message_id", prev.data.id).maybeSingle();
+    if (oldFile.error) return json({ status: "technical_error" }, 503);
+    if (oldFile.data) return json({ error: "idempotency_conflict" }, 409);
+    if (prev.data.conversation_id !== conv || (oldReply.data?.target_fingerprint ?? null) !== (reply ? await sha256Hex(reply) : null) || prev.data.body !== body) return json({ error: "idempotency_conflict" }, 409);
+    return json({ status: "accepted", message_id: prev.data.id, duplicate: true });
+  }
+
+  const target = await admin.rpc("assert_reply_target", { p_sender: uid, conv, p_reply: reply });
+  if (target.error) return json({ error: "invalid_reply" }, 400);
 
   // Person limits (frequency, then length) before rate limit and AI.
   const pl = await checkPersonLimits(admin, conv, uid, charCount(body));
@@ -68,9 +84,11 @@ Deno.serve(async (req) => {
   await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: res.decision, p_reason: res.reason_code });
   if (res.decision === "block") return json({ status: "blocked", reason_code: res.reason_code, spans: res.spans, suggestion: res.suggestion }, 200);
 
-  const appr = await admin.rpc("issue_approval", { p_sender: uid, conv, p_hash: await sha256Hex(body), p_provider: provider.name, p_model: provider.model });
+  const appr = await admin.rpc("issue_reply_approval", { p_sender: uid, conv, p_hash: await sha256Hex(body), p_reply: reply, p_provider: provider.name, p_model: provider.model });
   if (appr.error) return json({ status: "technical_error" }, 503);
-  const c = await admin.rpc("commit_message", { p_approval: appr.data, p_sender: uid, conv, p_body: body, p_key: key });
+  const c = await admin.rpc("commit_message_reply", { p_approval: appr.data, p_sender: uid, conv, p_body: body, p_key: key, p_reply: reply });
+  if (c.error && /invalid_reply/.test(c.error.message)) return json({ error: "invalid_reply" }, 400);
+  if (c.error && /idempotency_conflict/.test(c.error.message)) return json({ error: "idempotency_conflict" }, 409);
   if (c.error && /cannot_deliver/.test(c.error.message)) return json({ status: "cannot_deliver" }, 200);
   if (c.error && /person_frequency/.test(c.error.message)) { const again = await checkPersonLimits(admin, conv, uid, 0); return json(again && again !== "error" ? again : { status: "frequency_limit" }, 200); }
   if (c.error || !c.data?.[0]) return json({ status: "technical_error" }, 503);

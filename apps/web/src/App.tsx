@@ -1,3 +1,4 @@
+import { MessageBubble, ReplyPreview, type Message } from "./MessageBubble";
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
@@ -14,7 +15,7 @@ import { labelOf, convDisplay } from "./convDisplay";
 type Other = { user_id: string; email: string; alias: string | null };
 type Conv = { id: string; role: string; members: number; others: Other[]; color: string | null; pending_invitee?: string | null };
 const convLabel = (c: Conv, da: boolean) => convDisplay(c, da).title;
-type Msg = { id: string; sender_id: string; sender_name: string | null; body: string; created_at: string; mine: boolean; att_mime?: string | null; att_name?: string | null; att_alt?: string | null; att_pages?: number | null };
+type Msg = Message;
 const MAX = 480;
 const count = (s: string) => [...s].length;
 
@@ -576,12 +577,13 @@ function Chat({ lang, conv, back, menu, openPlans, planKey }: { lang: Lang; conv
   useEffect(() => { supabase.rpc("get_my_plan").then(({ data }) => { if (data?.[0]) setPlan(data[0].plan); }); }, [planKey]);
   const [others, setOthers] = useState<Other[]>(conv.others ?? []); const [color, setColor] = useState<string | null>(conv.color);
   const t = strings[lang]; const da = lang === "da";
-  const draftKey = `draft:${conv.id}`;
+  const draftKey = `draft:${conv.id}`; const replyKey = `draft-reply:${conv.id}`;
   const [msgs, setMsgs] = useState<Msg[]>([]); const [pending, setPending] = useState(0);
+  const [reply, setReply] = useState<{ id: string; body: string | null } | null>(() => { const id = localStorage.getItem(replyKey); return id && /^[0-9a-f-]{36}$/i.test(id) ? { id, body: null } : null; }); const composerRef = useRef<HTMLTextAreaElement>(null);
   const [invs, setInvs] = useState<Pending[]>([]);
   const [text, setText] = useState(localStorage.getItem(draftKey) ?? "");
   const [status, setStatus] = useState<{ kind: string; spans?: string[]; blockedText?: string; suggestion?: string; reason?: string } | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(false); const [attachmentBusy, setAttachmentBusy] = useState(false); const sending = busy || attachmentBusy;
   const [lim, setLim] = useState<SendLimits | null>(null);
   const loadLim = useCallback(async () => { const { data } = await supabase.rpc("get_my_send_limits", { conv: conv.id }); setLim((data as SendLimits[])?.[0] ?? null); }, [conv.id]);
   useEffect(() => { loadLim(); }, [loadLim, msgs.length]);
@@ -599,9 +601,9 @@ function Chat({ lang, conv, back, menu, openPlans, planKey }: { lang: Lang; conv
   const [q, setQ] = useState<string | null>(null); const [cur, setCur] = useState(0);
   const endRef = useRef<HTMLDivElement>(null); const listRef = useRef<HTMLDivElement>(null);
   const load = useCallback(async () => {
-    const { data, error } = await supabase.rpc("get_messages", { conv: conv.id });
+    const { data, error } = await supabase.rpc("get_messages_v2", { conv: conv.id });
     const uid = (await supabase.auth.getSession()).data.session?.user.id;
-    if (data) { setMsgs(data as Msg[]); if (uid) cacheSet(uid, conv.id, data); }
+    if (data) { setMsgs(data as Msg[]); setReply(r => r ? { id: r.id, body: (data as Msg[]).find(m => m.id === r.id)?.body ?? null } : null); if (uid) cacheSet(uid, conv.id, data); }
     else if (error && uid) { const c = await cacheGet<Msg[]>(uid, conv.id); if (c) setMsgs(c); }
     const p = await supabase.rpc("my_pending_count"); setPending((p.data as number) ?? 0);
     const i = await supabase.rpc("list_pending_invitations", { conv: conv.id }); setInvs((i.data as Pending[]) ?? []);
@@ -609,22 +611,24 @@ function Chat({ lang, conv, back, menu, openPlans, planKey }: { lang: Lang; conv
   useEffect(() => { load(); const i = setInterval(load, 8000); return () => clearInterval(i); }, [load]);
   useEffect(() => { if (q === null) endRef.current?.scrollIntoView({ block: "end" }); }, [msgs.length]);
   useEffect(() => { localStorage.setItem(draftKey, text); }, [text, draftKey]);
+  useEffect(() => { if (reply) localStorage.setItem(replyKey, reply.id); else localStorage.removeItem(replyKey); }, [reply?.id, replyKey]);
   const hits = q ? findHits(msgs.map((m) => m.body), q) : [];
   const curIdx = hits.length ? hits[Math.min(cur, hits.length - 1)] : -1;
   useEffect(() => { if (curIdx >= 0) listRef.current?.querySelector(`[data-i="${curIdx}"]`)?.scrollIntoView({ block: "center" }); }, [curIdx, q]);
   const send = async () => {
-    if (!text.trim() || count(text) > MAX) return;
+    if (sending || !text.trim() || count(text) > MAX) return;
     setBusy(true); setStatus(null);
     const keyStore = `idem:${conv.id}`; let saved = JSON.parse(localStorage.getItem(keyStore) || "null");
-    if (!saved || saved.text !== text) { saved = { text, key: crypto.randomUUID() }; localStorage.setItem(keyStore, JSON.stringify(saved)); }
-    let r; try { r = await callFn("send-message", { conversation_id: conv.id, body: text, idempotency_key: saved.key }); } catch { r = { status: 0, data: null }; }
+    if (!saved || saved.text !== text || (saved.reply ?? null) !== (reply?.id ?? null)) { saved = { text, reply: reply?.id ?? null, key: crypto.randomUUID() }; localStorage.setItem(keyStore, JSON.stringify(saved)); }
+    let r; try { r = await callFn("send-message", { conversation_id: conv.id, body: text, reply_to_id: reply?.id ?? null, idempotency_key: saved.key }); } catch { r = { status: 0, data: null }; }
     setBusy(false);
-    if (r.status === 200 && r.data?.status === "accepted") { setText(""); localStorage.removeItem(keyStore); setStatus({ kind: "accepted" }); load(); }
+    if (r.status === 200 && r.data?.status === "accepted") { setText(""); setReply(null); localStorage.removeItem(draftKey); localStorage.removeItem(replyKey); localStorage.removeItem(keyStore); setStatus({ kind: "accepted" }); load(); }
     else if (r.status === 200 && r.data?.status === "blocked") setStatus({ kind: "blocked", spans: r.data.spans ?? [], blockedText: text, suggestion: typeof r.data.suggestion === "string" ? r.data.suggestion : "", reason: r.data.reason_code });
     else if (r.status === 200 && r.data?.status === "blocked_word") setStatus({ kind: "note", blockedText: da ? `Beskeden blev ikke sendt: Modtageren har blokeret ordet/sætningen "${r.data.word}". Ret beskeden og prøv igen.` : `The message was not sent: the recipient has blocked the word/phrase "${r.data.word}". Edit the message and try again.` });
     else if (r.status === 200 && r.data?.status === "rule") setStatus({ kind: "note", blockedText: ({ emoji: da ? "Beskeden blev ikke sendt: Emojis er ikke tilladt i Rolff. Skriv det med ord." : "Not sent: emojis are not allowed in Rolff. Use words.", caps: da ? "Beskeden blev ikke sendt: Den er skrevet med store bogstaver, som kan opfattes som råb." : "Not sent: all caps can read as shouting.", repeat: da ? "Beskeden blev ikke sendt: Du har lige sendt den samme besked." : "Not sent: you just sent the same message." } as Record<string, string>)[r.data.rule] ?? "" });
     else if (r.status === 200 && limitMsg(r.data)) { setStatus({ kind: "note", blockedText: limitMsg(r.data)! }); loadLim(); }
     else if (r.status === 200 && r.data?.status === "cannot_deliver") setStatus({ kind: "note", blockedText: da ? "Beskeden kan ikke sendes i denne samtale." : "Messages cannot be sent in this conversation." });
+    else if (r.data?.error === "invalid_reply") setStatus({ kind: "note", blockedText: da ? "Den valgte besked kan ikke besvares. Fjern svarvalget, og prøv igen." : "The selected message cannot be replied to. Remove the reply and try again." });
     else if (r.data?.error === "read_only") setStatus({ kind: "readOnly" });
     else if (r.status === 429) setStatus({ kind: "rateLimited" });
     else setStatus({ kind: "techError" });
@@ -666,21 +670,22 @@ function Chat({ lang, conv, back, menu, openPlans, planKey }: { lang: Lang; conv
       {pending > 0 && <div className="notice row"><span>{t.pending(pending)}</span><span className="spacer" /><button onClick={receiveNow}>{t.receiveNow}</button></div>}
       <div className="card msgs" aria-live="polite" ref={listRef}>
         {msgs.length === 0 && <p className="meta">{t.empty}</p>}
-        {msgs.map((m, i) => <div key={m.id} data-i={i} className={`msg ${m.mine ? "mine" : "theirs"}${i === curIdx ? " hit" : ""}`}><div className="meta">{m.mine ? t.you : m.sender_name} · {new Date(m.created_at).toLocaleString(lang, { dateStyle: "short", timeStyle: "short" })}</div>{q ? markAll(m.body, q, i === curIdx) : m.body}{m.att_mime && <AttachmentView lang={lang} m={m} />}</div>)}
+        {msgs.map((m, i) => <MessageBubble key={m.id} m={m} lang={lang} index={i} hit={i === curIdx} canReply={conv.role !== "reader" && !sending} onReply={selected => { if (sending) return; setReply(selected); requestAnimationFrame(() => composerRef.current?.focus()); }}>{q ? markAll(m.body, q, i === curIdx) : m.body}{m.att_mime && <AttachmentView lang={lang} m={m} />}</MessageBubble>)}
         <div ref={endRef} />
       </div>
       {status?.kind === "blocked" && <div className="notice" role="alert"><p style={{ margin: 0 }}>{t.blocked}</p>{status.spans!.length > 0 && <p className="meta" style={{ marginBottom: 0 }}>{t.flagged}: {highlight(status.blockedText!, status.spans!)}</p>}{status.suggestion ? <div className="suggest"><p className="meta" style={{ margin: "8px 0 4px" }}><strong>{t.suggestionLabel}</strong></p><p style={{ margin: "0 0 8px" }}>{status.suggestion}</p><button type="button" className="ghost" onClick={() => { setText(applySuggestion(text, status.suggestion)); setStatus(null); }}>{t.useSuggestion}</button><p className="meta" style={{ margin: "6px 0 0" }}>{da ? "Forslaget kopieres til skrivefeltet. Du kan rette det og skal selv trykke Send — det tjekkes igen. Originalteksten står stadig i feltet, indtil du vælger forslaget." : "The suggestion is copied into the composer. You can edit it and must press Send yourself — it is checked again. Your original text stays until you use the suggestion."}</p></div> : <div className="suggest"><p className="meta" style={{ margin: "8px 0 4px" }}><strong>{t.guidanceLabel}</strong></p><p className="meta" style={{ margin: 0 }}>{t.blockGuidance}</p></div>}</div>}
       {status?.kind === "note" && <div className="notice" role="alert">{status.blockedText}</div>}
       {status && status.kind !== "blocked" && status.kind !== "note" && <div className={status.kind === "accepted" ? "notice" : "err"} role="status">{(t as any)[status.kind]}</div>}
       {conv.role !== "reader" ? (
-        <div className="card composer">
-          <textarea aria-label={t.write} placeholder={t.write} rows={3} value={text} onChange={(e) => setText(e.target.value)} />
-          <AttachBar lang={lang} conv={conv.id} plan={plan} openPlans={openPlans} caption={text} limitMsg={limitMsg} sent={() => { setText(""); load(); loadLim(); }} />
+        <div className="card composer"><fieldset className="composer-fields" disabled={sending}>
+          {reply && <div className="reply-composer"><div><span className="meta">{da ? "Besvarer" : "Replying"}</span><ReplyPreview body={reply?.body} unavailable={reply.body == null} lang={lang} /></div><button type="button" className="ghost" aria-label={da ? "Annullér svar" : "Cancel reply"} onClick={() => { setReply(null); composerRef.current?.focus(); }}>✕</button></div>}
+          <textarea ref={composerRef} aria-label={t.write} placeholder={t.write} rows={3} value={text} onChange={(e) => setText(e.target.value)} />
+          <AttachBar lang={lang} conv={conv.id} plan={plan} openPlans={openPlans} caption={text} replyTo={reply?.id ?? null} onBusy={setAttachmentBusy} limitMsg={limitMsg} sent={() => { setText(""); setReply(null); localStorage.removeItem(draftKey); localStorage.removeItem(replyKey); load(); loadLim(); }} />
           {(() => { const cap = lim?.max_chars && lim.max_chars < MAX ? lim.max_chars : MAX; const wait = lim?.next_at ? Math.ceil((new Date(lim.next_at).getTime() - Date.now()) / 1000) : 0; return (<>
           {lim?.max_chars && lim.max_chars < MAX ? <p className="meta" id="lenlim" style={{ margin: "4px 0" }}>{da ? `Grænse for dine beskeder her: ${lim.max_chars} tegn${lim.multi ? " (den strengeste grænse blandt modtagerne gælder)" : ""}.` : `Limit for your messages here: ${lim.max_chars} characters${lim.multi ? " (the strictest limit among recipients applies)" : ""}.`}</p> : null}
           {wait > 0 && <p className="meta" role="status" style={{ margin: "4px 0" }}>{da ? `Frekvensgrænse: du kan sende igen ${waitText(wait, true)}${lim?.multi ? " (den strengeste grænse blandt modtagerne gælder)" : ""}.` : `Frequency limit: you can send again ${waitText(wait, false)}${lim?.multi ? " (strictest among recipients applies)" : ""}.`}</p>}
           <div className="row"><span className="meta" aria-live="polite" aria-describedby={cap < MAX ? "lenlim" : undefined} style={{ color: n > cap ? "crimson" : undefined }}>{n}/{cap}</span><span className="spacer" /><button onClick={send} disabled={busy || !text.trim() || n > MAX}>{busy ? t.sending : t.send}</button></div></>); })()}
-        </div>) : <div className="notice" role="note">{t.readOnly}</div>}
+        </fieldset></div>) : <div className="notice" role="note">{t.readOnly}</div>}
       {blocked && <div className="notice" role="status">{da ? "Du har blokeret samtalen. De andre kan ikke sende beskeder her. " : "You blocked this conversation. The others cannot send messages here. "}<button className="ghost" onClick={() => setBlock(false)}>{da ? "Afblokér" : "Unblock"}</button></div>}
       {sheet === "report" && <SheetView title={da ? "Rapportér" : "Report"} close={() => setSheet(null)} lang={lang}><ReportForm lang={lang} conv={conv.id} msgs={msgs} /></SheetView>}
       {sheet === "words" && <SheetView title={da ? "Blokerede ord" : "Blocked words"} close={() => setSheet(null)} lang={lang}><BlockedWords lang={lang} conv={conv.id} /></SheetView>}
@@ -942,7 +947,7 @@ function Plans({ lang }: { lang: Lang }) {
 // ---------- Attachments ----------
 const ACCEPT = "image/png,image/jpeg,image/webp,image/gif,application/pdf";
 const MAX_FILE = 4 * 1024 * 1024;
-function AttachBar({ lang, conv, plan, openPlans, caption, sent, limitMsg }: { lang: Lang; conv: string; plan: string; openPlans: () => void; caption: string; sent: () => void; limitMsg: (d: any) => string | null }) {
+function AttachBar({ lang, conv, plan, openPlans, caption, replyTo, onBusy, sent, limitMsg }: { lang: Lang; conv: string; plan: string; openPlans: () => void; caption: string; replyTo: string | null; onBusy: (value: boolean) => void; sent: () => void; limitMsg: (d: any) => string | null }) {
   const da = lang === "da";
   const [file, setFile] = useState<File | null>(null); const [alt, setAlt] = useState(""); const [busy, setBusy] = useState(false);
   const [out, setOut] = useState<{ ok: boolean; text: string } | null>(null); const [locked, setLocked] = useState(false);
@@ -953,10 +958,10 @@ function AttachBar({ lang, conv, plan, openPlans, caption, sent, limitMsg }: { l
     : { too_large: "File too large (max 4 MB).", bad_type: "Only PNG, JPG, WebP, GIF (not animated) and PDF.", animated: "Animated images cannot be sent.", too_many_pages: "PDF max 5 pages.", encrypted_pdf: "Encrypted PDFs cannot be sent.", empty: "The file is empty.", read_only: "You are read-only.", rate_limited: "Too many files. Wait and try again.", plan_required: "Attachments require the Text + attachments plan (79 DKK/month).", length: "Text too long (max 300 characters with an attachment)." };
   const pick = (f: File | null) => { setOut(null); if (!f) return; if (f.size > MAX_FILE) { setOut({ ok: false, text: errs.too_large }); return; } setFile(f); };
   const send = async () => {
-    if (!file) return; setBusy(true); setOut(null);
+    if (!file || busy) return; setBusy(true); onBusy(true); setOut(null);
     const buf = new Uint8Array(await file.arrayBuffer()); let bin = ""; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
-    let r; try { r = await callFn("send-attachment", { conversation_id: conv, idempotency_key: crypto.randomUUID(), file_b64: btoa(bin), file_name: file.name, caption: caption.trim(), alt: alt.trim() }); } catch { r = { status: 0, data: null as any }; }
-    setBusy(false); const d = r.data ?? {};
+    let r; try { r = await callFn("send-attachment", { conversation_id: conv, idempotency_key: crypto.randomUUID(), file_b64: btoa(bin), file_name: file.name, reply_to_id: replyTo, caption: caption.trim(), alt: alt.trim() }); } catch { r = { status: 0, data: null as any }; }
+    setBusy(false); onBusy(false); const d = r.data ?? {};
     if (r.status === 200 && d.status === "accepted") { setFile(null); setAlt(""); setOut({ ok: true, text: da ? "Vedhæftningen er sendt." : "Attachment sent." }); sent(); }
     else if (limitMsg(d)) setOut({ ok: false, text: limitMsg(d)! });
     else if (d.status === "blocked") setOut({ ok: false, text: (da ? "Filen blev ikke sendt: " : "Not sent: ") + (reasons[d.reason_code] ?? reasons.other_harmful) + "." + ((d.spans ?? []).length ? (da ? " Markeret: “" : " Flagged: “") + d.spans.join("”, “") + "”" : "") + (typeof d.suggestion === "string" && d.suggestion ? (da ? " Forslag: " : " Suggestion: ") + d.suggestion : "") });
