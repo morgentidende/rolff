@@ -20,7 +20,7 @@ Stripe-konto + Checkout/Billing + webhook; Apple IAP / Google Play Billing for k
 
 
 ## Skrivefelt, kamera og tegnkvoter
-- 160/480 er produktets SMS-længder, talt i Unicode-kodepunkter (samme som PostgreSQL char_length), ikke GSM/UCS-2 transportsegmenter. Ingen stille afkortning. En strengere modtagergrænse vinder altid.
+- 160/480 er produktets SMS-længder, talt i Unicode-kodepunkter (samme som PostgreSQL char_length), ikke GSM/UCS-2 transportsegmenter. Ingen stille afkortning. Modtageren kan ikke vælge en særskilt længdegrænse. Frekvensindstillinger er uændrede.
 - Den autoritative message_char_limit kalder _effective_plan. Edge afviser overgrænsen før AI, prepare_send gentjekker, og en BEFORE INSERT-trigger beskytter både gamle og nye commit-RPC'er mod planskift under AI. Eksisterende beskeder/identiske retries ændres ikke ved nedgradering.
 - På 79 kan billedtekst være op til 480 tegn; alt-tekst/kontekstuddrag beholder 300. Uden billedtekst tæller filnavn-fallback ikke som brugerens billedtekst i persongrænsen.
 - Papirclips og kamera vises også på 49. Tryk viser et venligt tilbud om 79, ikke en filvælger, tilladelsesdialog, automatisk opgradering eller betaling.

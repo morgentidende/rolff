@@ -476,24 +476,31 @@ const sendIn = async (cv, from, text, key) => { const id = (await svc(`select is
 const [LP, LQ, LS] = (await db.query(`insert into auth.users(raw_user_meta_data) values ('{}'),('{}'),('{}') returning id`)).rows.map(r => r.id);
 const lc1 = await mkConv(LP, LQ), lc2 = await mkConv(LQ, LP), lc3 = await mkConv(LS, LQ);
 const lim = async (cv, s) => (await svc(`select * from _send_limits($1,$2)`, [cv, s]))[0];
-await t('Længdegrænse: min 80, max 10000, kun modpart i fælles samtale', async () => {
-  await rejects(as(LQ, `select * from set_person_limit($1,79,null)`, [LP]), /bad_max_chars/);
-  await rejects(as(LQ, `select * from set_person_limit($1,10001,null)`, [LP]), /bad_max_chars/);
-  await rejects(svc(`insert into person_limits(recipient_id,sender_id,max_chars) values ($1,$2,79)`, [LQ, LP]), /check/);
-  await as(LQ, `select * from set_person_limit($1,80,null)`, [LP]); assert.equal((await lim(lc1, LP)).max_chars, 80);
-  for (const n of [140, 250, 300]) { await as(LQ, `select * from set_person_limit($1,$2,null)`, [LP, n]); assert.equal((await lim(lc2, LP)).max_chars, n); }
+await t('Retired length RPC ignores legacy inputs; membership protections unchanged', async () => {
+  for (const n of [-1, 79, 80, 140, 250, 10001]) {
+    const result=(await as(LQ, `select * from set_person_limit($1,$2,null)`, [LP,n]))[0];
+    assert.equal(result.max_chars,null); assert.equal((await lim(lc1,LP)).max_chars,null);
+  }
   await rejects(as(LQ, `select * from set_person_limit($1,140,null)`, [LQ]), /not_found/);
   const [Y] = (await db.query(`insert into auth.users(raw_user_meta_data) values ('{}') returning id`)).rows.map(r => r.id);
   await rejects(as(LQ, `select * from set_person_limit($1,140,null)`, [Y]), /not_found/);
 });
-await t('Længdegrænse: gælder på tværs af samtaler, kun for den person, ubegrænset rydder', async () => {
-  await as(LQ, `select * from set_person_limit($1,140,null)`, [LP]);
-  assert.equal((await lim(lc1, LP)).max_chars, 140); assert.equal((await lim(lc2, LP)).max_chars, 140);
-  assert.equal((await lim(lc3, LS)).max_chars, null); assert.equal((await lim(lc1, LQ)).max_chars, null);
-  assert.equal((await as(LP, `select * from person_limits`)).length, 0);
-  assert.equal((await as(LQ, `select * from person_limits`)).length, 1);
-  assert.equal((await as(LP, `select max_chars from get_my_send_limits($1)`, [lc1]))[0].max_chars, 140);
-  await as(LQ, `select * from set_person_limit($1,null,null)`, [LP]); assert.equal((await lim(lc1, LP)).max_chars, null);
+await t('Existing recipient140 is inert across conversations; privacy remains', async () => {
+  await svc(`insert into person_limits(recipient_id,sender_id,max_chars) values ($1,$2,140) on conflict(recipient_id,sender_id) do update set max_chars=140`,[LQ,LP]);
+  for (const cv of [lc1,lc2]) { const row=await lim(cv,LP); assert.equal(row.max_chars,null); assert.equal(row.chars_by,null); }
+  assert.equal((await lim(lc3,LS)).max_chars,null);
+  assert.equal((await as(LP, `select * from person_limits`)).length,0);
+  assert.equal((await as(LQ, `select * from person_limits`)).length,1);
+  const composer=(await as(LP, `select * from get_my_send_limits($1)`,[lc1]))[0]; assert.equal(composer.max_chars,null); assert.equal(composer.chars_by,null);
+  assert.equal((await as(LQ, `select max_chars from person_limits`))[0].max_chars,140,'migration semantics do not need to delete legacy settings');
+});
+await t('Legacy length input cannot reinstate cap or erase supplied frequency', async () => {
+  const row=(await as(LQ, `select * from set_person_limit($1,140,5)`,[LP]))[0];
+  assert.equal(row.max_chars,null); assert.equal(row.interval_min,5);
+  const stored=(await as(LQ, `select max_chars,interval_min from person_limits`))[0]; assert.equal(stored.max_chars,null); assert.equal(stored.interval_min,5);
+  await as(LQ, `select * from set_person_limit($1,250,60)`,[LP]);
+  assert.equal((await as(LQ, `select interval_min from person_limits`))[0].interval_min,60);
+  await as(LQ, `select * from set_person_limit($1,140,null)`,[LP]); assert.equal((await lim(lc1,LP)).next_at,null);
 });
 await t('Frekvensgrænse: 1..1440 min, på tværs af samtaler, DB-trigger, andre upåvirket', async () => {
   await rejects(as(LQ, `select * from set_person_limit($1,null,0)`, [LP]), /bad_interval/);
@@ -587,6 +594,12 @@ const pc=(await as(P49,`select create_conversation('Quota synthetic') c`))[0].c;
 const pt=(await as(P49,`select * from create_invitation($1,'parent')`,[pc]))[0].token;
 await as(P79,`select accept_invitation($1)`,[pt]);
 const quotaSend=async(uid,body,key)=>{const aid=(await svc(`select issue_reply_approval($1,$2,$3,'test','synthetic',null) id`,[uid,pc,await hash(body)]))[0].id;return svc(`select * from commit_message_reply($1,$2,$3,$4,$5,null)`,[aid,uid,pc,body,key]);};
+await t('Old recipient140 does not override49/79 quotas or composer contract',async()=>{
+ await svc(`insert into person_limits(recipient_id,sender_id,max_chars) values ($1,$2,140),($2,$1,140)`,[P49,P79]);
+ for(const uid of [P49,P79]) { const row=(await as(uid,`select * from get_my_send_limits($1)`,[pc]))[0];assert.equal(row.max_chars,null);assert.equal(row.chars_by,null); }
+ await svc(`select * from prepare_send($1,$2,$3)`,[P49,pc,'v'.repeat(160)]);
+ await svc(`select * from prepare_send($1,$2,$3)`,[P79,pc,'v'.repeat(480)]);
+});
 await t('Plan quotas: authoritative49/79 limits; helper not client-accessible',async()=>{assert.equal((await svc(`select message_char_limit($1) n`,[P49]))[0].n,160);assert.equal((await svc(`select message_char_limit($1) n`,[P79]))[0].n,480);await rejects(as(P49,`select message_char_limit($1)`,[P79]),/permission denied/);});
 await t('Plan49:160 accepted,161 blocked in prepare and direct commit',async()=>{await svc(`select * from prepare_send($1,$2,$3)`,[P49,pc,'x'.repeat(160)]);await quotaSend(P49,'x'.repeat(160),'quota-49-160');await rejects(svc(`select * from prepare_send($1,$2,$3)`,[P49,pc,'x'.repeat(161)]),/plan_length_limit:160/);await rejects(quotaSend(P49,'x'.repeat(161),'quota-49-161'),/plan_length_limit:160/);});
 await t('Legacy text commit cannot bypass49 plan quota',async()=>{const txt='l'.repeat(161);const aid=(await svc(`select issue_approval($1,$2,$3,'test','m') id`,[P49,pc,await hash(txt)]))[0].id;await rejects(svc(`select * from commit_message($1,$2,$3,$4,'quota-legacy-161')`,[aid,P49,pc,txt]),/plan_length_limit:160/);});

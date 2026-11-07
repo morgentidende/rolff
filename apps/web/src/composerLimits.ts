@@ -1,7 +1,7 @@
 // Product quotas count Unicode code points, not encoded SMS segments or UTF-16 units.
 export const messageCharCount = (text: string) => [...text].length;
 export const planCharLimit = (plan: string | null) => plan === "text_attachments" ? 480 : 160;
-export const effectiveCharLimit = (plan: string | null, personLimit?: number | null) => Math.min(planCharLimit(plan), personLimit ?? Infinity);
+export const effectiveCharLimit = (plan: string | null, _legacyRecipientLimit?: number | null) => planCharLimit(plan);
 
 // A saved key exists only once this exact draft has been submitted. Retrying it
 // is safe after a downgrade: the server either returns its existing acceptance
