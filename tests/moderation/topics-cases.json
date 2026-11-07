@@ -1,0 +1,12 @@
+{
+ "notice": "Recipient-perspective acceptance expectations for future approved synthetic provider evaluation. Not model accuracy evidence; no provider calls made.",
+ "cases": [
+  {"criterion":"omtaler mine forældre","message":"Dine forældre er søde.","expected":"block"},
+  {"criterion":"omtaler mine forældre","message":"Mine forældre kommer på søndag.","expected":"allow","note":"Sender's parents; no evidence of recipient relation"},
+  {"criterion":"omtaler mine forældre","message":"Dine forældre kommer på søndag.","expected":"block","note":"Neutral mention still unwanted"},
+  {"criterion":"omtaler mit udseende","message":"Din nye frisure er flot.","expected":"block"},
+  {"criterion":"omtaler mit udseende","message":"Min nye frisure er kort.","expected":"allow"},
+  {"criterion":"omtaler mine forældre","message":"De kommer på søndag.","expected":"clarify","note":"Only if context makes the referent materially ambiguous; do not guess"},
+  {"criterion":"omtaler mine forældre","message":"Kan vi mødes ved biblioteket?","expected":"allow"}
+ ]
+}
