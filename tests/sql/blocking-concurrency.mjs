@@ -44,9 +44,13 @@ try{
    const table=kind==='topic'?'conversation_blocked_topics':'conversation_blocked_words';
    const word=`opdigtet parallel ${kind} ${reset?'reset':'trash'}`;
    const entry=(await db.query(`insert into ${table}(conversation_id,user_id,word) values($1,$2,$3) returning id`,[cv,B,word])).rows[0].id;
-   const add=await client(),remove=await client();await begin(add,B);
+   const add=await client(),remove=await client();await begin(add);
+   // Intentional pause-point locks use only the guarded synthetic test administrator.
+   // Real application RPCs below still execute as the authenticated owner, with no extra grants.
    await add.query('select 1 from conversations where id=$1 for key share',[cv]);
    await add.query('select 1 from conversation_filter_revision where conversation_id=$1 for update',[cv]);
+   await add.query('set local role authenticated');
+   await add.query("select set_config('request.jwt.sub',$1,true)",[B]);
    await begin(remove,B);
    const pending=reflected(reset?remove.query('select reset_blocked_words($1)',[cv]):remove.query(`select remove_blocked_${kind}($1,$2)`,[cv,entry]));
    await waitBlocked(remove,add);
