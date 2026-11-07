@@ -579,5 +579,32 @@ await t('Reply: membership and per-recipient retention apply to original and quo
 });
 await t('Reply: deleted target no snapshot survives',async()=>{await db.query(`delete from messages where id=$1`,[original]);const m=(await as(RB,`select * from get_messages_v2($1)`,[rc])).find(m=>m.id===response);assert.equal(m.reply_to_id,null);assert.equal(m.reply_body,null);assert.equal(m.has_reply,true);});
 await t('Reply: identical retry after target deletion accepted, changed identity rejected',async()=>{assert.equal((await svc(`select * from commit_message_reply(gen_random_uuid(),$1,$2,'Ja, kl. 16 passer.','reply-response-001',$3)`,[RB,rc,original]))[0].duplicate,true);await rejects(svc(`select * from commit_message_reply(gen_random_uuid(),$1,$2,'Ja, kl. 16 passer.','reply-response-001',null)`,[RB,rc]),/idempotency_conflict/);});
+// Plan-specific product quotas. Synthetic users/conversation only.
+{
+const [P49,P79] = (await db.query(`insert into auth.users(email) values ('quota49@example.invalid'),('quota79@example.invalid') returning id`)).rows.map(r=>r.id);
+await db.query(`insert into user_plans(user_id,plan) values ($1,'text'),($2,'text_attachments')`,[P49,P79]);
+const pc=(await as(P49,`select create_conversation('Quota synthetic') c`))[0].c;
+const pt=(await as(P49,`select * from create_invitation($1,'parent')`,[pc]))[0].token;
+await as(P79,`select accept_invitation($1)`,[pt]);
+const quotaSend=async(uid,body,key)=>{const aid=(await svc(`select issue_reply_approval($1,$2,$3,'test','synthetic',null) id`,[uid,pc,await hash(body)]))[0].id;return svc(`select * from commit_message_reply($1,$2,$3,$4,$5,null)`,[aid,uid,pc,body,key]);};
+await t('Plan quotas: authoritative49/79 limits; helper not client-accessible',async()=>{assert.equal((await svc(`select message_char_limit($1) n`,[P49]))[0].n,160);assert.equal((await svc(`select message_char_limit($1) n`,[P79]))[0].n,480);await rejects(as(P49,`select message_char_limit($1)`,[P79]),/permission denied/);});
+await t('Plan49:160 accepted,161 blocked in prepare and direct commit',async()=>{await svc(`select * from prepare_send($1,$2,$3)`,[P49,pc,'x'.repeat(160)]);await quotaSend(P49,'x'.repeat(160),'quota-49-160');await rejects(svc(`select * from prepare_send($1,$2,$3)`,[P49,pc,'x'.repeat(161)]),/plan_length_limit:160/);await rejects(quotaSend(P49,'x'.repeat(161),'quota-49-161'),/plan_length_limit:160/);});
+await t('Legacy text commit cannot bypass49 plan quota',async()=>{const txt='l'.repeat(161);const aid=(await svc(`select issue_approval($1,$2,$3,'test','m') id`,[P49,pc,await hash(txt)]))[0].id;await rejects(svc(`select * from commit_message($1,$2,$3,$4,'quota-legacy-161')`,[aid,P49,pc,txt]),/plan_length_limit:160/);});
+await t('Plan79:480 accepted and481 blocked',async()=>{await svc(`select * from prepare_send($1,$2,$3)`,[P79,pc,'x'.repeat(480)]);await quotaSend(P79,'x'.repeat(480),'quota-79-480');await rejects(quotaSend(P79,'x'.repeat(481),'quota-79-481'),/plan_length_limit:480|check constraint/);});
+await t('Plan limit counts Unicode codepoints, not UTF16',async()=>{await quotaSend(P49,'𐀀'.repeat(160),'quota-unicode-160');await rejects(quotaSend(P49,'𐀀'.repeat(161),'quota-unicode-161'),/plan_length_limit:160/);});
+await t('Downgrade during moderation rechecked; accepted historical retry still succeeds',async()=>{const txt='y'.repeat(200);await svc(`select * from prepare_send($1,$2,$3)`,[P79,pc,txt]);await db.query(`update user_plans set plan='text' where user_id=$1`,[P79]);await rejects(quotaSend(P79,txt,'quota-downgrade-new'),/plan_length_limit:160/);const retry=await svc(`select * from commit_message_reply(gen_random_uuid(),$1,$2,$3,'quota-79-480',null)`,[P79,pc,'x'.repeat(480)]);assert.equal(retry[0].duplicate,true);await db.query(`update user_plans set plan='text_attachments' where user_id=$1`,[P79]);});
+await t('Pending downgrade is effective at prepare/commit without trusting old client plan',async()=>{await db.query(`update user_plans set pending_plan='text',period_end=now()-interval '1 second' where user_id=$1`,[P79]);assert.equal((await svc(`select message_char_limit($1) n`,[P79]))[0].n,160);await rejects(quotaSend(P79,'q'.repeat(161),'quota-pending'),/plan_length_limit:160/);await db.query(`update user_plans set plan='text_attachments',pending_plan=null where user_id=$1`,[P79]);});
+const quotaFile=async(uid,txt,key)=>{
+ const data=Buffer.from([137,80,78,71]).toString('hex');
+ const h=(await db.query(`select encode(extensions.digest($1||E'\\n'||encode(extensions.digest(decode($2,'hex'),'sha256'),'hex'),'sha256'),'hex') h`,[txt,data])).rows[0].h;
+ const aid=(await svc(`select issue_reply_approval($1,$2,$3,'test','m',null) id`,[uid,pc,h]))[0].id;
+ return svc(`select * from commit_attachment_reply($1,$2,$3,$4,$5,'image/png','synthetic.png','',null,decode($6,'hex'),null)`,[aid,uid,pc,txt,key,data]);
+};
+await t('Plan79 attachment caption480 commits;481 rejected;49 still forbidden',async()=>{
+ await quotaFile(P79,'z'.repeat(480),'quota-file-480');
+ await rejects(quotaFile(P79,'z'.repeat(481),'quota-file-481'),/plan_length_limit:480|check constraint/);
+ await rejects(quotaFile(P49,'Kort','quota49-file'),/plan_required/);
+});
+}
 console.log(`\n${pass} bestået, ${fail} fejlet`);
 process.exit(fail ? 1 : 0);

@@ -6,6 +6,7 @@
 // Nothing is stored or delivered before moderation passes. Fail closed. No content in logs.
 import { authed, cors, json } from "../_shared/http.ts";
 import { normalizeReplyId } from "../_shared/replies.ts";
+import { planLengthError } from "../_shared/planLimits.ts";
 import { checkPersonLimits } from "../_shared/limits.ts";
 import { checkRules, findBlockedWord } from "../_shared/rules.ts";
 import { charCount, ModerationTechnicalError, prefilter, timeoutFromEnv } from "../_shared/moderation.ts";
@@ -25,7 +26,7 @@ Deno.serve(async (req) => {
   const caption = String(input?.caption ?? "").trim(); const alt = [...String(input?.alt ?? "").trim()].slice(0, 300).join("");
   const name = cleanName(String(input?.file_name ?? ""));
   if (!/^[0-9a-f-]{36}$/i.test(conv) || !/^[\w-]{8,80}$/.test(key)) return json({ error: "bad_request" }, 400);
-  if (charCount(caption) > 300) return json({ error: "length" }, 400);
+  if (charCount(caption) > 480) return json({ error: "length", limit: 480, count: charCount(caption) }, 400);
   const b64s = String(input?.file_b64 ?? "");
   if (b64s.length > Math.ceil(MAX_BYTES / 3) * 4 + 8) return json({ error: "too_large" }, 413);
   let bytes: Uint8Array; try { bytes = Uint8Array.from(atob(b64s), (c) => c.charCodeAt(0)); } catch { return json({ error: "bad_request" }, 400); }
@@ -54,9 +55,10 @@ Deno.serve(async (req) => {
   const pl = await checkPersonLimits(admin, conv, uid, charCount(caption));
   if (pl === "error") return json({ status: "technical_error" }, 503);
   if (pl) return json(pl, 200);
-  const prep = await admin.rpc("prepare_send", { p_sender: uid, conv, p_body: [...body].slice(0, 480).join("") });
+  const prep = await admin.rpc("prepare_send", { p_sender: uid, conv, p_body: body });
   if (prep.error) {
     const m = prep.error.message;
+    const limit = planLengthError(m, charCount(caption)); if (limit) return json(limit, 200);
     const code = /read_only/.test(m) ? "read_only" : /rate_limited/.test(m) ? "rate_limited" : /length/.test(m) ? "length" : "forbidden";
     return json({ error: code }, code === "rate_limited" ? 429 : 403);
   }
@@ -120,6 +122,7 @@ Deno.serve(async (req) => {
   if (appr.error) return json({ status: "technical_error" }, 503);
   const c = await admin.rpc("commit_attachment_reply", { p_approval: appr.data, p_sender: uid, conv, p_body: body, p_key: key, p_reply: reply,
     p_mime: fc.mime, p_name: name, p_alt: alt, p_pages: fc.pages, p_data: "\\x" + hex(bytes.buffer as ArrayBuffer) });
+  if (c.error) { const limit = planLengthError(c.error.message, charCount(caption)); if (limit) return json(limit, 200); }
   if (c.error && /invalid_reply/.test(c.error.message)) return json({ error: "invalid_reply" }, 400);
   if (c.error && /idempotency_conflict/.test(c.error.message)) return json({ error: "idempotency_conflict" }, 409);
   if (c.error && /cannot_deliver/.test(c.error.message)) return json({ status: "cannot_deliver" }, 200);
