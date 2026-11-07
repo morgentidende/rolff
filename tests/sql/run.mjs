@@ -522,5 +522,62 @@ await t('Invitation af ekstra deltager kræver kun den inviterendes 79-plan', as
   await as(LP, `select consent_member_invitation($1)`, [r[0].invitation_id]);
   assert.ok((await as(LP, `select * from create_invitation($1,'parent')`, [await (async () => (await as(LP, `select create_conversation('ny') c`))[0].c)()]))[0].token);
 });
+// Additive reply contract: synthetic users, no AI/network.
+const [RA,RB,RX] = (await db.query(`insert into auth.users(email) values ('a@example.invalid'),('b@example.invalid'),('x@example.invalid') returning id`)).rows.map(r=>r.id);
+const rc=await mkConv(RA,RB), rcOther=await mkConv(RA,RX);
+const original=(await sendIn(rc,RA,'Kan vi mødes kl. 16?','reply-original-001'))[0].message_id;
+const elsewhere=(await sendIn(rcOther,RA,'Anden samtale','reply-other-001'))[0].message_id;
+let response;
+const replySend=async(target,key='reply-response-001')=>{
+ const text='Ja, kl. 16 passer.';
+ const ap=(await svc(`select issue_reply_approval($1,$2,$3,'test','m',$4) id`,[RB,rc,await hash(text),target]))[0].id;
+ return svc(`select * from commit_message_reply($1,$2,$3,$4,$5,$6)`,[ap,RB,rc,text,key,target]);
+};
+await t('Reply: visible target accepted atomically and persists',async()=>{response=(await replySend(original))[0].message_id; const rows=await as(RB,`select * from get_messages_v2($1)`,[rc]);const m=rows.find(m=>m.id===response);assert.equal(m.reply_to_id,original);assert.equal(m.reply_body,'Kan vi mødes kl. 16?');assert.equal(m.sender_email,'b@example.invalid');assert.equal(m.has_reply,true);});
+await t('Reply: actual email independent of private nickname; old RPC unchanged',async()=>{await as(RB,`select set_contact_alias($1,'Privat navn')`,[RA]); const m=(await as(RB,`select * from get_messages_v2($1)`,[rc])).find(m=>m.id===original);assert.equal(m.sender_name,'Privat navn');assert.equal(m.sender_email,'a@example.invalid');assert.ok(!('reply_to_id' in (await as(RB,`select * from get_messages($1)`,[rc]))[0]));});
+await t('Reply: cross-conversation target rejected, no storage',async()=>{await rejects(replySend(elsewhere,'reply-cross-001'),/invalid_reply/);assert.equal((await db.query(`select count(*)::int n from messages where idempotency_key='reply-cross-001'`)).rows[0].n,0);});
+await t('Reply: idempotent retry immutable; changed target rejected',async()=>{assert.equal((await replySend(original))[0].duplicate,true);await rejects(replySend(null),/idempotency_conflict/);});
+await t('Reply: old approval cannot be rebound to an original',async()=>{const ap=(await svc(`select issue_approval($1,$2,$3,'test','m') id`,[RB,rc,await hash('Test svar')]))[0].id;await rejects(svc(`select * from commit_message_reply($1,$2,$3,'Test svar','reply-unbound-001',$4)`,[ap,RB,rc,original]),/approval_invalid/);});
+await t('Reply: client cannot commit, mutate refs or read other conversation',async()=>{await rejects(as(RB,`select * from commit_message_reply(gen_random_uuid(),$1,$2,'hi','reply-forged-001',$3)`,[RB,rc,original]),/permission denied/);await rejects(as(RX,`select * from get_messages_v2($1)`,[rc]),/not_member/);await rejects(as(RB,`select * from message_replies`),/permission denied/);});
+await t('Reply: unreleased target is forbidden and not leaked in quotes',async()=>{
+ await db.query(`update message_deliveries set released_at=null where message_id=$1 and recipient_id=$2`,[original,RB]);
+ await db.query(`insert into receive_settings(user_id,timezone,enabled) values($1,'Europe/Copenhagen',true)`,[RB]);
+ const dow=(await db.query(`select extract(isodow from now() at time zone 'Europe/Copenhagen')::int d`)).rows[0].d;
+ await db.query(`insert into receive_windows(user_id,weekday,start_minute,end_minute) values($1,$2,1,2)`,[RB,dow===1?3:1]);
+ await rejects(svc(`select assert_reply_target($1,$2,$3)`,[RB,rc,original]),/invalid_reply/);
+ const m=(await as(RB,`select * from get_messages_v2($1)`,[rc])).find(m=>m.id===response);assert.equal(m.reply_body,null);
+ await db.query(`update receive_settings set enabled=false where user_id=$1`,[RB]);
+});
+await t('Reply: attachment uses same validated reference and exact retry identity',async()=>{
+ await as(RB,`select * from get_messages($1)`,[rc]);
+ await as(RB,`select * from set_my_plan_test('text_attachments')`);
+ const txt='Testfil',data=new Uint8Array([0x89,0x50,0x4e,0x47]);
+ const fh=(await db.query(`select encode(extensions.digest($1::bytea,'sha256'),'hex') h`,[data])).rows[0].h;
+ const ap=(await svc(`select issue_reply_approval($1,$2,$3,'test','m',$4) id`,[RB,rc,await hash(txt+'\n'+fh),original]))[0].id;
+ const params=[ap,RB,rc,txt,'reply-file-001','image/png','test.png','',null,data,original];
+ const sql=`select * from commit_attachment_reply($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::bytea,$11)`;
+ const result=await svc(sql,params);assert.equal(result[0].duplicate,false);
+ assert.equal((await svc(sql,params))[0].duplicate,true);
+ await rejects(svc(`select * from commit_message_reply(gen_random_uuid(),$1,$2,$3,'reply-file-001',$4)`,[RB,rc,txt,original]),/idempotency_conflict/);
+ const changed=[...params];changed[6]='changed.png';await rejects(svc(sql,changed),/idempotency_conflict/);
+ assert.equal((await as(RB,`select * from get_messages_v2($1)`,[rc])).find(m=>m.id===result[0].message_id).reply_to_id,original);
+});
+await t('Reply: membership and per-recipient retention apply to original and quote',async()=>{
+ await db.query(`update memberships set joined_at=now()-interval '3 years' where conversation_id=$1`,[rc]);
+ await db.query(`update messages set created_at=now()-interval '2 years' where id=$1`,[original]);
+ await as(RA,`select set_my_data_prefs(false,'5y')`);
+ assert.ok((await as(RA,`select * from get_messages_v2($1)`,[rc])).find(m=>m.id===response).reply_body);
+ assert.equal((await as(RB,`select * from get_messages_v2($1)`,[rc])).find(m=>m.id===response).reply_body,null);
+ await rejects(svc(`select assert_reply_target($1,$2,$3)`,[RB,rc,original]),/invalid_reply/);
+ assert.equal((await svc(`select * from commit_message_reply(gen_random_uuid(),$1,$2,'Ja, kl. 16 passer.','reply-response-001',$3)`,[RB,rc,original]))[0].duplicate,true);
+ await db.query(`update messages set created_at=now() where id=$1`,[original]);
+ await db.query(`update memberships set role='reader' where conversation_id=$1 and user_id=$2`,[rc,RB]);
+ await rejects(svc(`select assert_reply_target($1,$2,$3)`,[RB,rc,original]),/invalid_reply/);
+ await db.query(`update memberships set role='parent',joined_at=now()+interval '1 day' where conversation_id=$1 and user_id=$2`,[rc,RB]);
+ await rejects(svc(`select assert_reply_target($1,$2,$3)`,[RB,rc,original]),/invalid_reply/);
+ await db.query(`update memberships set joined_at=now()-interval '1 day' where conversation_id=$1 and user_id=$2`,[rc,RB]);
+});
+await t('Reply: deleted target no snapshot survives',async()=>{await db.query(`delete from messages where id=$1`,[original]);const m=(await as(RB,`select * from get_messages_v2($1)`,[rc])).find(m=>m.id===response);assert.equal(m.reply_to_id,null);assert.equal(m.reply_body,null);assert.equal(m.has_reply,true);});
+await t('Reply: identical retry after target deletion accepted, changed identity rejected',async()=>{assert.equal((await svc(`select * from commit_message_reply(gen_random_uuid(),$1,$2,'Ja, kl. 16 passer.','reply-response-001',$3)`,[RB,rc,original]))[0].duplicate,true);await rejects(svc(`select * from commit_message_reply(gen_random_uuid(),$1,$2,'Ja, kl. 16 passer.','reply-response-001',null)`,[RB,rc]),/idempotency_conflict/);});
 console.log(`\n${pass} bestået, ${fail} fejlet`);
 process.exit(fail ? 1 : 0);

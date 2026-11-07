@@ -6,3 +6,4 @@ dist/
 .secrets/
 *.log
 apps/web/public/api/config.php
+supabase/.temp/

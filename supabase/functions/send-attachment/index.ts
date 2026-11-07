@@ -5,6 +5,7 @@
 // on the transcript -> approval bound to sender+conversation+sha256(body+sha256(file)) -> atomic store.
 // Nothing is stored or delivered before moderation passes. Fail closed. No content in logs.
 import { authed, cors, json } from "../_shared/http.ts";
+import { normalizeReplyId } from "../_shared/replies.ts";
 import { checkPersonLimits } from "../_shared/limits.ts";
 import { checkRules, findBlockedWord } from "../_shared/rules.ts";
 import { charCount, ModerationTechnicalError, prefilter, timeoutFromEnv } from "../_shared/moderation.ts";
@@ -20,7 +21,7 @@ Deno.serve(async (req) => {
   const a = await authed(req); if (a instanceof Response) return a;
   const { uid, admin } = a;
   let input: any; try { input = await req.json(); } catch { return json({ error: "bad_request" }, 400); }
-  const conv = String(input?.conversation_id ?? ""); const key = String(input?.idempotency_key ?? "");
+  const conv = String(input?.conversation_id ?? "").toLowerCase(); const key = String(input?.idempotency_key ?? "");
   const caption = String(input?.caption ?? "").trim(); const alt = [...String(input?.alt ?? "").trim()].slice(0, 300).join("");
   const name = cleanName(String(input?.file_name ?? ""));
   if (!/^[0-9a-f-]{36}$/i.test(conv) || !/^[\w-]{8,80}$/.test(key)) return json({ error: "bad_request" }, 400);
@@ -29,10 +30,25 @@ Deno.serve(async (req) => {
   if (b64s.length > Math.ceil(MAX_BYTES / 3) * 4 + 8) return json({ error: "too_large" }, 413);
   let bytes: Uint8Array; try { bytes = Uint8Array.from(atob(b64s), (c) => c.charCodeAt(0)); } catch { return json({ error: "bad_request" }, 400); }
 
-  const prev = await admin.from("messages").select("id").eq("sender_id", uid).eq("idempotency_key", key).maybeSingle();
-  if (prev.data) return json({ status: "accepted", message_id: prev.data.id, duplicate: true });
-
   const body = caption || `Vedhæftning: ${name}`;
+  const reply = normalizeReplyId(input?.reply_to_id);
+  if (reply !== null && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reply)) return json({ error: "invalid_reply" }, 400);
+
+  const prev = await admin.from("messages").select("id,conversation_id,body,body_hash").eq("sender_id", uid).eq("idempotency_key", key).maybeSingle();
+  if (prev.error) return json({ status: "technical_error" }, 503);
+  if (prev.data) {
+    const oldReply = await admin.from("message_replies").select("target_fingerprint").eq("message_id", prev.data.id).maybeSingle();
+    if (oldReply.error) return json({ status: "technical_error" }, 503);
+    const oldFile = await admin.from("message_attachments").select("name,alt").eq("message_id", prev.data.id).maybeSingle();
+    if (oldFile.error) return json({ status: "technical_error" }, 503);
+    if (!oldFile.data || oldFile.data.name !== name || (oldFile.data.alt ?? "") !== alt || prev.data.body_hash !== await sha(body + "\n" + await sha(bytes))) return json({ error: "idempotency_conflict" }, 409);
+    if (prev.data.conversation_id !== conv || (oldReply.data?.target_fingerprint ?? null) !== (reply ? await sha(reply) : null)) return json({ error: "idempotency_conflict" }, 409);
+    return json({ status: "accepted", message_id: prev.data.id, duplicate: true });
+  }
+
+
+  const target = await admin.rpc("assert_reply_target", { p_sender: uid, conv, p_reply: reply });
+  if (target.error) return json({ error: "invalid_reply" }, 400);
 
   // Person limits (frequency, then length) before rate limit and AI.
   const pl = await checkPersonLimits(admin, conv, uid, charCount(caption));
@@ -100,10 +116,12 @@ Deno.serve(async (req) => {
   await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "allow", p_reason: "none" });
 
   const hash = await sha(body + "\n" + await sha(bytes));
-  const appr = await admin.rpc("issue_approval", { p_sender: uid, conv, p_hash: hash, p_provider: "openai", p_model: model });
+  const appr = await admin.rpc("issue_reply_approval", { p_sender: uid, conv, p_hash: hash, p_reply: reply, p_provider: "openai", p_model: model });
   if (appr.error) return json({ status: "technical_error" }, 503);
-  const c = await admin.rpc("commit_attachment_message", { p_approval: appr.data, p_sender: uid, conv, p_body: body, p_key: key,
+  const c = await admin.rpc("commit_attachment_reply", { p_approval: appr.data, p_sender: uid, conv, p_body: body, p_key: key, p_reply: reply,
     p_mime: fc.mime, p_name: name, p_alt: alt, p_pages: fc.pages, p_data: "\\x" + hex(bytes.buffer as ArrayBuffer) });
+  if (c.error && /invalid_reply/.test(c.error.message)) return json({ error: "invalid_reply" }, 400);
+  if (c.error && /idempotency_conflict/.test(c.error.message)) return json({ error: "idempotency_conflict" }, 409);
   if (c.error && /cannot_deliver/.test(c.error.message)) return json({ status: "cannot_deliver" }, 200);
   if (c.error && /person_frequency/.test(c.error.message)) { const again = await checkPersonLimits(admin, conv, uid, 0); return json(again && again !== "error" ? again : { status: "frequency_limit" }, 200); }
   if (c.error && /plan_required/.test(c.error.message)) return json({ error: "plan_required" }, 402);
