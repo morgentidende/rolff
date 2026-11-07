@@ -1,3 +1,5 @@
+import { ComposerInput } from "./ComposerInput";
+import { effectiveCharLimit, planCharLimit, textRetryKey } from "./composerLimits";
 import { MessageBubble, ReplyPreview, type Message } from "./MessageBubble";
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -16,7 +18,6 @@ type Other = { user_id: string; email: string; alias: string | null };
 type Conv = { id: string; role: string; members: number; others: Other[]; color: string | null; pending_invitee?: string | null };
 const convLabel = (c: Conv, da: boolean) => convDisplay(c, da).title;
 type Msg = Message;
-const MAX = 480;
 const count = (s: string) => [...s].length;
 
 type Peek = { inviter_email: string; invitee_email: string; expires_at: string };
@@ -169,14 +170,14 @@ function Faq({ lang }: { lang: Lang }) {
     ["Hvad bliver blokeret?", "Rolff stopper beskeder, der kan opfattes som sårende (tjekket af AI), beskeder der dikterer hvad den anden skal gøre (fx «du skal …» som en ordre – ikke venlige anmodninger, spørgsmål, egen grænsesætning eller neutrale citater), beskeder med emojis (de misforstås let – skriv det med ord), beskeder skrevet med store bogstaver (opleves som råb) og den samme besked sendt igen. Ved AI-/tone-afvisning kan du få et valgfrit forslag, hvis beskeden indeholder et konkret, legitimt praktisk ønske («Brug forslaget» kopierer det til skrivefeltet; du redigerer og sender selv, og det tjekkes igen). Ren kritik, trusler uden praktisk kerne eller lignende kan ikke omformuleres — så får du kun vejledning (ikke en sendbar tekst). Forslag erstatter ikke ordblokliste, længde- eller frekvensgrænser."],
     ["Hvordan blokerer jeg en samtale?", "Tryk ⋮ i samtalen → “Blokér samtale”. Så kan de andre ikke længere sende beskeder i samtalen; de får kun at vide, at beskeden ikke kan sendes – ikke hvem eller hvornår. Blokeringen udløber aldrig af sig selv. Den ophører kun, når du selv trykker “Afblokér”."],
     ["Hvad er “Blokerede ord”?", "Et valgfrit filter (slået fra som standard): Under ⋮ → “Blokerede ord” kan du tilføje enkeltord, udtryk på flere ord eller hele sætninger (op til 120 tegn), som ikke må nå frem til dig. Store/små bogstaver og accenter er ligegyldige (fx matcher “dårlig far” også “DÅRLIG FAR” og “darlig far”), og ordene skal stå i samme rækkefølge. Afslutter du med * (fx “pis*”), rammes også ord, der begynder sådan. Listen gælder den samtale, du står i, og er privat. Rammer en besked noget på listen, bliver den ikke leveret – afsenderen får at vide præcis hvilket ord eller udtryk, og at modtageren har blokeret det, og kan omformulere. Derfor skal du bekræfte det for hvert ord. Du kan fjerne ord igen når som helst."],
-    ["Kan jeg begrænse længden af beskeder fra en bestemt person?", "Ja. Under ⋮ → “Deltagere og roller” → “Indstillinger for denne person” vælger du maks. længde for beskeder fra den person til dig: ubegrænset (standard), 140, 250 eller et brugerdefineret tal fra 80 til 10.000 tegn (beskeder er dog altid højst 480 tegn). Grænsen gælder i alle dine samtaler med personen og kun nye beskeder. Er beskeden for lang, bliver den afvist før AI-tjekket, og afsenderen får at vide fx “X har sat en grænse på 140 tegn; din besked er 212”. Afsenderen ser kun selve grænsen. Er I flere, gælder den strengeste grænse. Ved vedhæftninger tæller kun billedteksten."],
+    ["Kan jeg begrænse længden af beskeder fra en bestemt person?", "Ja. Under ⋮ → “Deltagere og roller” → “Indstillinger for denne person” vælger du maks. længde for beskeder fra den person til dig: ubegrænset (standard), 140, 250 eller et brugerdefineret tal fra 80 til 10.000 tegn (planen til 49 kr. giver højst 160 tegn, og planen til 79 kr. giver højst 480 tegn). Grænsen gælder i alle dine samtaler med personen og kun nye beskeder. Er beskeden for lang, bliver den afvist før AI-tjekket, og afsenderen får at vide fx “X har sat en grænse på 140 tegn; din besked er 212”. Afsenderen ser kun selve grænsen. Er I flere, gælder den strengeste grænse. Ved vedhæftninger tæller kun billedteksten."],
     ["Kan jeg begrænse hvor tit en person skriver?", "Ja, samme sted: højst 1 besked pr. minut, pr. 5 minutter, pr. time eller et brugerdefineret antal minutter (1 til 1.440 = 24 timer). Standard er ingen grænse. Det regnes fra personens seneste leverede besked til dig i alle jeres samtaler; afviste beskeder tæller ikke, vedhæftninger tæller som en besked. For tidlige beskeder gemmes ikke, og afsenderen får at vide, hvornår der kan sendes igen. Er I flere, gælder den strengeste grænse."],
     ["Hvem kan tilføje en ekstra person til en samtale?", "At invitere den anden forælder, når du opretter en samtale, kan alle. At tilføje en ekstra person (fx advokat eller bedsteforælder) kræver, at DU som inviterer har planen “Tekst + vedhæftninger” (79 kr./md.). De andre deltagere og den inviterede må gerne have 49-planen. Nedgraderer du senere, bliver de nuværende deltagere."],
     ["Hvad kan de andre se om mig?", "Du logger ind med din e-mail. Som udgangspunkt er din e-mail også det navn, de andre i samtalen ser. Du kan når som helst vælge et kaldenavn under ⋮ → Visningsnavn – så ser de kun kaldenavnet, også i eksisterende samtaler, og din e-mail udleveres ikke længere til dem. Hver person kan desuden give dig et privat kaldenavn, som kun de selv ser. Glemt adgangskode: brug linket på login-siden. Skift e-mail eller adgangskode: ⋮ → Konto. Sletning af konto: ⋮ → Privatliv og sletning."],
     ["Hvordan rapporterer jeg noget?", "Tryk ⋮ i samtalen → “Rapportér”. Du vælger kategori, skriver selv hvad der er sket og kan markere de beskeder, du vil vedhæfte. Du ser en forhåndsvisning, og intet sendes før du bekræfter. Rapporten mailes til Rolffs udvikler (kontakt: nicolaipetersen108@gmail.com) med dit kaldenavn og bruger-id. Rolff gemmer kun kategori, tidspunkt og antal vedhæftede beskeder (til at begrænse misbrug) – ikke teksten. Der er ingen døgnvagt og ingen garanti for svar eller handling. Ved akut fare: ring 112."],
     ["Hvor ligger mine data, og hvor længe?", "På Supabase-servere i Frankfurt (EU). Du vælger selv opbevaring (1 år, 5 år eller ubegrænset) og sky-synk under ⋮ → Privatliv og sletning. Der kan du også downloade alle dine data (ZIP med JSON og CSV) og slette din konto. AI-tonetjekket bruger i testen OpenAI (USA/global behandling, ikke EU; ingen Zero Data Retention endnu; store:false). Læs mere i privatlivspolitikken (⋮ → Privatlivspolitik)."],
-    ["Kan jeg sende billeder og PDF'er?", "Ja, med planen “Tekst + vedhæftninger” (79 kr./md.). Du kan sende PNG, JPG, WebP, GIF (ikke animeret) og PDF (højst 4 MB og 5 sider). Før filen sendes, tjekker AI (OpenAI, gpt-6-luna) både billedet og al tekst i det – samme regler som beskeder. Er bare én linje sårende, eller er billedet upassende, bliver filen ikke sendt, og du får at vide hvorfor. Modtagerens blokerede ord gælder også tekst i filen. Alle i samtalen kan se vedhæftninger, de modtager, uanset plan. Læsere kan ikke sende filer."],
-    ["Hvad koster Rolff?", "Der er to planer: “Tekst” 49 kr./md. og “Tekst + vedhæftninger” 79 kr./md. Planen gælder dig som afsender, så to forældre kan have hver sin plan. Opgradering gælder straks, nedgradering fra næste periode. I testversionen er skiftet en testfunktion uden betaling."],
+    ["Kan jeg sende billeder og PDF'er?", "Ja, med planen “Tekst + vedhæftninger” (79 kr./md.). Brug papirclipsen til filvalg eller kameraikonet til et nyt billede. Telefonen styrer eventuelle kameratilladelser, når funktionen bruges; filvælgeren giver kun adgang til den valgte fil. En valgt fil sendes først, når du trykker på papirflyet. Du kan sende PNG, JPG, WebP, GIF (ikke animeret) og PDF (højst 4 MB og 5 sider). Før filen sendes, tjekker AI (OpenAI, gpt-6-luna) både billedet og al tekst i det – samme regler som beskeder. Er bare én linje sårende, eller er billedet upassende, bliver filen ikke sendt, og du får at vide hvorfor. Modtagerens blokerede ord gælder også tekst i filen. Alle i samtalen kan se vedhæftninger, de modtager, uanset plan. Læsere kan ikke sende filer."],
+    ["Hvad koster Rolff?", "Der er to planer: “Tekst” 49 kr./md. med højst 160 tegn pr. besked (én SMS-længde) og “Tekst + vedhæftninger” 79 kr./md. med højst 480 tegn (tre SMS-længder). Planen gælder dig som afsender, så to forældre kan have hver sin plan. Opgradering gælder straks, nedgradering fra næste periode. I testversionen er skiftet en testfunktion uden betaling."],
     ["Er det her den rigtige app?", "Nej, det er et testmiljø. Skriv kun opdigtede beskeder. AI-tjekket kører hos OpenAI (se ovenfor)."],
   ] : [
     ["Can the other person see if I read a message or am online?", "No. Rolff has no read receipts, no online status and no typing indicator."],
@@ -187,14 +188,14 @@ function Faq({ lang }: { lang: Lang }) {
     ["What gets blocked?", "Rolff stops messages that may come across as hurtful (checked by AI), messages that dictate what the other person must do (e.g. “you must …” as an order — not polite requests, questions, your own boundaries or neutral quotes), messages with emojis (easily misread – use words), messages in all caps (reads as shouting) and the same message sent twice. On AI/tone blocks you may get an optional rephrase only if the message contains a concrete legitimate practical wish (“Use suggestion” copies it into the composer; you edit and send yourself, and it is checked again). Pure criticism, threats without a practical core, and similar cannot be rewritten — you then get guidance only (not sendable text). Suggestions do not override blocked words, length or frequency limits."],
     ["How do I block a conversation?", "Tap ⋮ in the conversation → “Block conversation”. The others can then no longer send messages there; they are only told the message cannot be sent – not who or when. A block never expires by itself. It only ends when you tap “Unblock”."],
     ["What are “Blocked words”?", "An optional filter (off by default): under ⋮ → “Blocked words” you can add single words, multi-word expressions or whole sentences (up to 120 characters) that must not reach you. Case and accents are ignored, and words must appear in the same order. Ending with * (e.g. “pis*”) also matches words starting that way. The list applies to the current conversation and is private. If a message hits it, it is not delivered – the sender is told exactly which word or phrase and that the recipient blocked it, and can rephrase. That is why you confirm each word. You can remove words at any time."],
-    ["Can I limit the length of messages from a specific person?", "Yes. Under ⋮ → “Participants and roles” → “Settings for this person”: unlimited (default), 140, 250 or a custom number from 80 to 10,000 characters (messages are at most 480 anyway). It applies in all your conversations with that person, to new messages only. Too-long messages are rejected before the AI check and the sender is told e.g. “X has set a limit of 140 characters; yours is 212”. The sender only sees the limit. With several recipients the strictest applies. For attachments only the caption counts."],
+    ["Can I limit the length of messages from a specific person?", "Yes. Under ⋮ → “Participants and roles” → “Settings for this person”: unlimited (default), 140, 250 or a custom number from 80 to 10,000 characters (the 49 DKK plan allows up to 160 characters and the 79 DKK plan up to 480). It applies in all your conversations with that person, to new messages only. Too-long messages are rejected before the AI check and the sender is told e.g. “X has set a limit of 140 characters; yours is 212”. The sender only sees the limit. With several recipients the strictest applies. For attachments only the caption counts."],
     ["Can I limit how often a person writes?", "Yes, same place: at most 1 message per minute, per 5 minutes, per hour, or a custom number of minutes (1 to 1,440 = 24 hours). Default: no limit. It counts from the person's latest delivered message to you in any of your conversations; rejected messages do not count; attachments count as a message. Early messages are not stored and the sender is told when they can send again. With several recipients the strictest applies."],
     ["Who can add an extra person to a conversation?", "Anyone can invite the other parent when creating a conversation. Adding an extra person (e.g. a lawyer) requires that YOU, the inviter, are on “Text + attachments” (79 DKK/month). Other members and the invitee may be on 49. If you downgrade later, existing members stay."],
     ["What can others see about me?", "You log in with your e-mail. By default your e-mail is also the name others in the conversation see. You can choose a nickname at any time under ⋮ → Display name – then they only see the nickname, also in existing conversations, and your e-mail is no longer given to them. Each person can also give you a private nickname only they see. Forgot password: use the link on the login page. Change e-mail or password: ⋮ → Account. Account deletion: ⋮ → Privacy and deletion."],
     ["How do I report something?", "Tap ⋮ in the conversation → “Report”. You choose a category, write what happened and can tick the messages you want to attach. You see a preview and nothing is sent until you confirm. The report is e-mailed to Rolff's developer (contact: nicolaipetersen108@gmail.com) with your nickname and user id. Rolff stores only category, time and number of attached messages (to limit abuse) – not the text. There is no 24/7 staff and no guarantee of a reply or action. In an emergency: call 112."],
     ["Where is my data, and for how long?", "On Supabase servers in Frankfurt (EU). You choose retention (1 year, 5 years or unlimited) and cloud sync under ⋮ → Privacy and deletion, where you can also download all your data (ZIP with JSON and CSV) and delete your account. The AI tone check uses OpenAI during testing (US/global processing, not EU; no Zero Data Retention yet; store:false). See the privacy policy (⋮ → Privacy policy)."],
-    ["Can I send images and PDFs?", "Yes, with the “Text + attachments” plan (79 DKK/month). PNG, JPG, WebP, GIF (not animated) and PDF (max 4 MB, 5 pages). Before sending, AI (OpenAI, gpt-6-luna) checks the image and all text in it with the same rules as messages. If one line is hurtful or the image is inappropriate, it is not sent and you are told why. The recipient's blocked words also apply to text in the file. Everyone can view attachments they receive, whatever their plan. Readers cannot send files."],
-    ["What does Rolff cost?", "Two plans: “Text” 49 DKK/month and “Text + attachments” 79 DKK/month. The plan applies to you as sender, so two parents may have different plans. Upgrades apply immediately, downgrades from the next period. In the test version switching is a test feature without payment."],
+    ["Can I send images and PDFs?", "Yes, with the “Text + attachments” plan (79 DKK/month). Use the paperclip to choose a file or the camera to take a photo. Your phone manages any camera permission when used; the file picker grants access only to your chosen file. Nothing is sent until you press the paper plane. PNG, JPG, WebP, GIF (not animated) and PDF (max 4 MB, 5 pages). Before sending, AI (OpenAI, gpt-6-luna) checks the image and all text in it with the same rules as messages. If one line is hurtful or the image is inappropriate, it is not sent and you are told why. The recipient's blocked words also apply to text in the file. Everyone can view attachments they receive, whatever their plan. Readers cannot send files."],
+    ["What does Rolff cost?", "Two plans: “Text” 49 DKK/month with up to 160 characters per message (one SMS length) and “Text + attachments” 79 DKK/month with up to 480 (three SMS lengths). The plan applies to you as sender, so two parents may have different plans. Upgrades apply immediately, downgrades from the next period. In the test version switching is a test feature without payment."],
     ["Is this the real app?", "No, this is a test environment. Write made-up messages only. The AI check runs at OpenAI (see above)."],
   ];
   return <div className="faq">{qa.map(([q, a]) => <details key={q}><summary>{q}</summary><p>{a}</p></details>)}</div>;
@@ -573,8 +574,9 @@ function markAll(text: string, q: string, current: boolean): (string | React.Rea
 const Icon = ({ d }: { d: React.ReactNode }) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">{d}</svg>;
 
 function Chat({ lang, conv, back, menu, openPlans, planKey }: { lang: Lang; conv: Conv; back: () => void; menu: MenuItem[]; openPlans: () => void; planKey: Sheet }) {
-  const [plan, setPlan] = useState<string>("text");
-  useEffect(() => { supabase.rpc("get_my_plan").then(({ data }) => { if (data?.[0]) setPlan(data[0].plan); }); }, [planKey]);
+  const [plan, setPlan] = useState<string | null>(null);
+  const loadPlan = useCallback(() => { supabase.rpc("get_my_plan").then(({ data }) => { if (data?.[0]) setPlan(data[0].plan); }); }, []);
+  useEffect(() => { loadPlan(); }, [planKey, loadPlan]);
   const [others, setOthers] = useState<Other[]>(conv.others ?? []); const [color, setColor] = useState<string | null>(conv.color);
   const t = strings[lang]; const da = lang === "da";
   const draftKey = `draft:${conv.id}`; const replyKey = `draft-reply:${conv.id}`;
@@ -585,11 +587,16 @@ function Chat({ lang, conv, back, menu, openPlans, planKey }: { lang: Lang; conv
   const [status, setStatus] = useState<{ kind: string; spans?: string[]; blockedText?: string; suggestion?: string; reason?: string } | null>(null);
   const [busy, setBusy] = useState(false); const [attachmentBusy, setAttachmentBusy] = useState(false); const sending = busy || attachmentBusy;
   const [lim, setLim] = useState<SendLimits | null>(null);
+  const cap = effectiveCharLimit(plan, lim?.max_chars);
+  const [file, setFile] = useState<File | null>(null);
+  const retryKey = !file ? textRetryKey(localStorage.getItem(`idem:${conv.id}`), text, reply?.id ?? null) : null;
+  const attachmentSend = useRef<(() => void) | null>(null);
   const loadLim = useCallback(async () => { const { data } = await supabase.rpc("get_my_send_limits", { conv: conv.id }); setLim((data as SendLimits[])?.[0] ?? null); }, [conv.id]);
   useEffect(() => { loadLim(); }, [loadLim, msgs.length]);
   const [, tick] = useState(0); useEffect(() => { const i = setInterval(() => tick((x) => x + 1), 15000); return () => clearInterval(i); }, []);
   const who = (id?: string | null) => { const o = (others ?? []).find((x) => x.user_id === id); return o ? labelOf(o) : (da ? "Modtageren" : "The recipient"); };
   const limitMsg = (d: any): string | null => {
+    if (d?.status === "plan_length_limit") { loadPlan(); return da ? `Beskeden blev ikke sendt: Din plan tillader højst ${d.limit} tegn; din besked er ${d.count} tegn.` : `Not sent: your plan allows up to ${d.limit} characters; yours is ${d.count}.`; }
     if (d?.status === "length_limit") return da ? `Beskeden blev ikke sendt: ${who(d.by)} har sat en grænse på ${d.limit} tegn for beskeder fra dig; din besked er ${d.count} tegn.` : `Not sent: ${who(d.by)} has set a limit of ${d.limit} characters for messages from you; yours is ${d.count}.`;
     if (d?.status === "frequency_limit") return da ? `Beskeden blev ikke sendt: ${who(d.by)} har sat en frekvensgrænse; du kan sende igen ${waitText(d.retry_after_s, true)}.` : `Not sent: ${who(d.by)} has set a frequency limit; you can send again ${waitText(d.retry_after_s, false)}.`;
     return null;
@@ -616,10 +623,11 @@ function Chat({ lang, conv, back, menu, openPlans, planKey }: { lang: Lang; conv
   const curIdx = hits.length ? hits[Math.min(cur, hits.length - 1)] : -1;
   useEffect(() => { if (curIdx >= 0) listRef.current?.querySelector(`[data-i="${curIdx}"]`)?.scrollIntoView({ block: "center" }); }, [curIdx, q]);
   const send = async () => {
-    if (sending || !text.trim() || count(text) > MAX) return;
+    if (sending || !plan || !text.trim() || (count(text) > cap && !retryKey)) return;
     setBusy(true); setStatus(null);
-    const keyStore = `idem:${conv.id}`; let saved = JSON.parse(localStorage.getItem(keyStore) || "null");
-    if (!saved || saved.text !== text || (saved.reply ?? null) !== (reply?.id ?? null)) { saved = { text, reply: reply?.id ?? null, key: crypto.randomUUID() }; localStorage.setItem(keyStore, JSON.stringify(saved)); }
+    const keyStore = `idem:${conv.id}`;
+    const saved = { text, reply: reply?.id ?? null, key: retryKey ?? crypto.randomUUID() };
+    localStorage.setItem(keyStore, JSON.stringify(saved));
     let r; try { r = await callFn("send-message", { conversation_id: conv.id, body: text, reply_to_id: reply?.id ?? null, idempotency_key: saved.key }); } catch { r = { status: 0, data: null }; }
     setBusy(false);
     if (r.status === 200 && r.data?.status === "accepted") { setText(""); setReply(null); localStorage.removeItem(draftKey); localStorage.removeItem(replyKey); localStorage.removeItem(keyStore); setStatus({ kind: "accepted" }); load(); }
@@ -635,7 +643,6 @@ function Chat({ lang, conv, back, menu, openPlans, planKey }: { lang: Lang; conv
   };
   const receiveNow = async () => { await callFn("receive-now", {}); load(); };
   const answer = async (id: string, action: "consent" | "decline") => { await callFn("invite-email", { action, invitation_id: id }); load(); };
-  const n = count(text);
   const d = convDisplay({ others, pending_invitee: conv.pending_invitee }, da); const label = d.title;
   const roleTxt = (r: string) => r === "reader" ? (da ? "kun læse" : "read only") : (da ? "læse og skrive" : "read and write");
   return (
@@ -679,12 +686,10 @@ function Chat({ lang, conv, back, menu, openPlans, planKey }: { lang: Lang; conv
       {conv.role !== "reader" ? (
         <div className="card composer"><fieldset className="composer-fields" disabled={sending}>
           {reply && <div className="reply-composer"><div><span className="meta">{da ? "Besvarer" : "Replying"}</span><ReplyPreview body={reply?.body} unavailable={reply.body == null} lang={lang} /></div><button type="button" className="ghost" aria-label={da ? "Annullér svar" : "Cancel reply"} onClick={() => { setReply(null); composerRef.current?.focus(); }}>✕</button></div>}
-          <textarea ref={composerRef} aria-label={t.write} placeholder={t.write} rows={3} value={text} onChange={(e) => setText(e.target.value)} />
-          <AttachBar lang={lang} conv={conv.id} plan={plan} openPlans={openPlans} caption={text} replyTo={reply?.id ?? null} onBusy={setAttachmentBusy} limitMsg={limitMsg} sent={() => { setText(""); setReply(null); localStorage.removeItem(draftKey); localStorage.removeItem(replyKey); load(); loadLim(); }} />
-          {(() => { const cap = lim?.max_chars && lim.max_chars < MAX ? lim.max_chars : MAX; const wait = lim?.next_at ? Math.ceil((new Date(lim.next_at).getTime() - Date.now()) / 1000) : 0; return (<>
-          {lim?.max_chars && lim.max_chars < MAX ? <p className="meta" id="lenlim" style={{ margin: "4px 0" }}>{da ? `Grænse for dine beskeder her: ${lim.max_chars} tegn${lim.multi ? " (den strengeste grænse blandt modtagerne gælder)" : ""}.` : `Limit for your messages here: ${lim.max_chars} characters${lim.multi ? " (the strictest limit among recipients applies)" : ""}.`}</p> : null}
-          {wait > 0 && <p className="meta" role="status" style={{ margin: "4px 0" }}>{da ? `Frekvensgrænse: du kan sende igen ${waitText(wait, true)}${lim?.multi ? " (den strengeste grænse blandt modtagerne gælder)" : ""}.` : `Frequency limit: you can send again ${waitText(wait, false)}${lim?.multi ? " (strictest among recipients applies)" : ""}.`}</p>}
-          <div className="row"><span className="meta" aria-live="polite" aria-describedby={cap < MAX ? "lenlim" : undefined} style={{ color: n > cap ? "crimson" : undefined }}>{n}/{cap}</span><span className="spacer" /><button onClick={send} disabled={busy || !text.trim() || n > MAX}>{busy ? t.sending : t.send}</button></div></>); })()}
+          <ComposerInput lang={lang} text={text} onText={setText} textareaRef={composerRef} plan={plan} cap={cap} busy={sending} file={file} onFile={setFile} openPlans={openPlans} retry={!!retryKey} canSend={!!file || !!text.trim()} onSend={() => { if (file) attachmentSend.current?.(); else send(); }} />
+          <AttachBar lang={lang} conv={conv.id} plan={plan} openPlans={openPlans} caption={text} file={file} setFile={setFile} sendRef={attachmentSend} cap={cap} replyTo={reply?.id ?? null} onBusy={setAttachmentBusy} limitMsg={limitMsg} sent={() => { setText(""); setReply(null); localStorage.removeItem(draftKey); localStorage.removeItem(replyKey); load(); loadLim(); }} />
+          {lim?.max_chars && lim.max_chars < planCharLimit(plan) ? <p className="meta" style={{ margin: "4px 0" }}>{da ? `Modtagergrænse: ${lim.max_chars} tegn${lim.multi ? " (den strengeste grænse gælder)" : ""}.` : `Recipient limit: ${lim.max_chars} characters${lim.multi ? " (the strictest limit applies)" : ""}.`}</p> : null}
+          {(() => { const wait = lim?.next_at ? Math.ceil((new Date(lim.next_at).getTime() - Date.now()) / 1000) : 0; return wait > 0 ? <p className="meta" role="status">{da ? `Du kan sende igen ${waitText(wait, true)}.` : `You can send again ${waitText(wait, false)}.`}</p> : null; })()}
         </fieldset></div>) : <div className="notice" role="note">{t.readOnly}</div>}
       {blocked && <div className="notice" role="status">{da ? "Du har blokeret samtalen. De andre kan ikke sende beskeder her. " : "You blocked this conversation. The others cannot send messages here. "}<button className="ghost" onClick={() => setBlock(false)}>{da ? "Afblokér" : "Unblock"}</button></div>}
       {sheet === "report" && <SheetView title={da ? "Rapportér" : "Report"} close={() => setSheet(null)} lang={lang}><ReportForm lang={lang} conv={conv.id} msgs={msgs} /></SheetView>}
@@ -904,8 +909,8 @@ function AccountPanel({ lang }: { lang: Lang }) {
 
 // ---------- Plans (TEST FEATURE: no payment) ----------
 export const PLANS = [
-  { id: "text", price: 49, da: ["Tekst", "Tekstbeskeder med AI-tonetjek og samtale med den anden forælder. Du kan se vedhæftninger og deltage, når andre tilføjer dig."], en: ["Text", "Text messages with AI tone check. You can view attachments others send."] },
-  { id: "text_attachments", price: 79, da: ["Tekst + vedhæftninger", "Alt i Tekst, og du kan sende screenshots, billeder og PDF'er (tjekket af AI før afsendelse) og tilføje ekstra personer til samtaler."], en: ["Text + attachments", "Everything in Text, plus sending screenshots, images and PDFs (checked by AI before sending) and adding extra people to conversations."] },
+  { id: "text", price: 49, da: ["Tekst", "Op til 160 tegn pr. besked med AI-tonetjek og samtale med den anden forælder. Du kan se vedhæftninger og deltage, når andre tilføjer dig."], en: ["Text", "Up to 160 characters per message with AI tone check. You can view attachments others send."] },
+  { id: "text_attachments", price: 79, da: ["Tekst + vedhæftninger", "Op til 480 tegn pr. besked, og du kan sende screenshots, billeder og PDF'er (tjekket af AI før afsendelse) og tilføje ekstra personer til samtaler."], en: ["Text + attachments", "Up to 480 characters per message, plus sending screenshots, images and PDFs (checked by AI before sending) and adding extra people to conversations."] },
 ] as const;
 function Plans({ lang }: { lang: Lang }) {
   const da = lang === "da";
@@ -945,21 +950,22 @@ function Plans({ lang }: { lang: Lang }) {
 }
 
 // ---------- Attachments ----------
-const ACCEPT = "image/png,image/jpeg,image/webp,image/gif,application/pdf";
-const MAX_FILE = 4 * 1024 * 1024;
-function AttachBar({ lang, conv, plan, openPlans, caption, replyTo, onBusy, sent, limitMsg }: { lang: Lang; conv: string; plan: string; openPlans: () => void; caption: string; replyTo: string | null; onBusy: (value: boolean) => void; sent: () => void; limitMsg: (d: any) => string | null }) {
+function AttachBar({ lang, conv, plan, openPlans, caption, file, setFile, sendRef, cap, replyTo, onBusy, sent, limitMsg }: { lang: Lang; conv: string; plan: string | null; openPlans: () => void; caption: string; file: File | null; setFile: (file: File | null) => void; sendRef: React.MutableRefObject<(() => void) | null>; cap: number; replyTo: string | null; onBusy: (value: boolean) => void; sent: () => void; limitMsg: (d: any) => string | null }) {
   const da = lang === "da";
-  const [file, setFile] = useState<File | null>(null); const [alt, setAlt] = useState(""); const [busy, setBusy] = useState(false);
-  const [out, setOut] = useState<{ ok: boolean; text: string } | null>(null); const [locked, setLocked] = useState(false);
-  const ref = useRef<HTMLInputElement>(null);
+  const [alt, setAlt] = useState(""); const [busy, setBusy] = useState(false);
+  const [out, setOut] = useState<{ ok: boolean; text: string } | null>(null);
+  useEffect(() => { setOut(null); setAlt(""); }, [file]);
   const reasons: Record<string, string> = da ? { inappropriate_image: "billedet kan opfattes som upassende", controlling_demand: "teksten dikterer hvad den anden skal gøre", personal_attack: "teksten indeholder et personangreb", sarcasm_or_irony: "teksten er sarkastisk på en sårende måde", humiliation_mockery: "teksten er nedgørende", threat_intimidation: "teksten kan opfattes som en trussel", emotional_blackmail: "teksten lægger pres", false_politeness: "teksten er falsk høflig", slur_discrimination: "teksten er diskriminerende", other_harmful: "teksten kan opfattes som sårende eller aggressiv" }
     : { inappropriate_image: "the image may be inappropriate", controlling_demand: "the text dictates what the other person must do", personal_attack: "the text contains a personal attack", sarcasm_or_irony: "the text is hurtfully sarcastic", humiliation_mockery: "the text is belittling", threat_intimidation: "the text may read as a threat", emotional_blackmail: "the text applies pressure", false_politeness: "the text is falsely polite", slur_discrimination: "the text is discriminatory", other_harmful: "the text may come across as hurtful or aggressive" };
-  const errs: Record<string, string> = da ? { too_large: "Filen er for stor (højst 4 MB).", bad_type: "Kun PNG, JPG, WebP, GIF (ikke animeret) og PDF.", animated: "Animerede billeder kan ikke sendes.", too_many_pages: "PDF'en må højst have 5 sider.", encrypted_pdf: "Krypterede PDF'er kan ikke sendes.", empty: "Filen er tom.", read_only: "Du har rollen “Kun læse” og kan ikke sende.", rate_limited: "Du har sendt mange filer. Vent lidt og prøv igen.", plan_required: "Vedhæftninger kræver planen Tekst + vedhæftninger (79 kr./md.).", length: "Teksten er for lang (højst 300 tegn med vedhæftning)." }
-    : { too_large: "File too large (max 4 MB).", bad_type: "Only PNG, JPG, WebP, GIF (not animated) and PDF.", animated: "Animated images cannot be sent.", too_many_pages: "PDF max 5 pages.", encrypted_pdf: "Encrypted PDFs cannot be sent.", empty: "The file is empty.", read_only: "You are read-only.", rate_limited: "Too many files. Wait and try again.", plan_required: "Attachments require the Text + attachments plan (79 DKK/month).", length: "Text too long (max 300 characters with an attachment)." };
-  const pick = (f: File | null) => { setOut(null); if (!f) return; if (f.size > MAX_FILE) { setOut({ ok: false, text: errs.too_large }); return; } setFile(f); };
+  const errs: Record<string, string> = da ? { too_large: "Filen er for stor (højst 4 MB).", bad_type: "Kun PNG, JPG, WebP, GIF (ikke animeret) og PDF.", animated: "Animerede billeder kan ikke sendes.", too_many_pages: "PDF'en må højst have 5 sider.", encrypted_pdf: "Krypterede PDF'er kan ikke sendes.", empty: "Filen er tom.", read_only: "Du har rollen “Kun læse” og kan ikke sende.", rate_limited: "Du har sendt mange filer. Vent lidt og prøv igen.", plan_required: "Vedhæftninger kræver planen Tekst + vedhæftninger (79 kr./md.).", length: "Teksten er for lang (højst 480 tegn med vedhæftning)." }
+    : { too_large: "File too large (max 4 MB).", bad_type: "Only PNG, JPG, WebP, GIF (not animated) and PDF.", animated: "Animated images cannot be sent.", too_many_pages: "PDF max 5 pages.", encrypted_pdf: "Encrypted PDFs cannot be sent.", empty: "The file is empty.", read_only: "You are read-only.", rate_limited: "Too many files. Wait and try again.", plan_required: "Attachments require the Text + attachments plan (79 DKK/month).", length: "Text too long (max 480 characters with an attachment)." };
   const send = async () => {
-    if (!file || busy) return; setBusy(true); onBusy(true); setOut(null);
-    const buf = new Uint8Array(await file.arrayBuffer()); let bin = ""; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+    if (!file || busy || count(caption) > cap) return;
+    if (plan !== "text_attachments") { openPlans(); return; }
+    setBusy(true); onBusy(true); setOut(null);
+    let buf: Uint8Array;
+    try { buf = new Uint8Array(await file.arrayBuffer()); } catch { setBusy(false); onBusy(false); setOut({ ok: false, text: da ? "Filen kunne ikke læses. Vælg den igen." : "Could not read the file. Please select it again." }); return; }
+    let bin = ""; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
     let r; try { r = await callFn("send-attachment", { conversation_id: conv, idempotency_key: crypto.randomUUID(), file_b64: btoa(bin), file_name: file.name, reply_to_id: replyTo, caption: caption.trim(), alt: alt.trim() }); } catch { r = { status: 0, data: null as any }; }
     setBusy(false); onBusy(false); const d = r.data ?? {};
     if (r.status === 200 && d.status === "accepted") { setFile(null); setAlt(""); setOut({ ok: true, text: da ? "Vedhæftningen er sendt." : "Attachment sent." }); sent(); }
@@ -968,23 +974,19 @@ function AttachBar({ lang, conv, plan, openPlans, caption, replyTo, onBusy, sent
     else if (d.status === "blocked_word") setOut({ ok: false, text: da ? `Filen blev ikke sendt: Modtageren har blokeret ordet/sætningen "${d.word}", og det står i ${d.where === "caption" ? "din tekst" : "filen"}.` : `Not sent: the recipient blocked "${d.word}", which appears in ${d.where === "caption" ? "your text" : "the file"}.` });
     else if (d.status === "rule") setOut({ ok: false, text: da ? "Filen blev ikke sendt: Din tekst overholder ikke reglerne (emojis, store bogstaver eller gentagelse)." : "Not sent: your text breaks the rules (emoji, caps or repetition)." });
     else if (d.status === "cannot_deliver") setOut({ ok: false, text: da ? "Der kan ikke sendes i denne samtale." : "Cannot send in this conversation." });
-    else if (d.error && errs[d.error]) { setOut({ ok: false, text: errs[d.error] }); if (d.error === "plan_required") setLocked(true); }
+    else if (d.error && errs[d.error]) { setOut({ ok: false, text: errs[d.error] }); if (d.error === "plan_required") openPlans(); }
     else setOut({ ok: false, text: da ? "Teknisk fejl: Filen blev ikke tjekket og derfor ikke sendt. Prøv igen senere." : "Technical error: the file was not checked and therefore not sent." });
   };
-  if (plan !== "text_attachments" || locked) return (<div className="row attach">
-    <button className="ghost" aria-describedby="att-lock" onClick={openPlans}>{da ? "Vedhæft (låst)" : "Attach (locked)"}</button>
-    <span id="att-lock" className="meta">{da ? "Kræver planen Tekst + vedhæftninger (79 kr./md.)." : "Requires Text + attachments (79 DKK/month)."} <button className="linkish" onClick={openPlans}>{da ? "Se planer" : "See plans"}</button></span>
-    {out && <div className="notice" role="alert">{out.text}</div>}</div>);
+  useEffect(() => { sendRef.current = send; return () => { sendRef.current = null; }; });
   return (<div className="attach">
-    <input ref={ref} id={`file-${conv}`} type="file" accept={ACCEPT} hidden onChange={(e) => pick(e.target.files?.[0] ?? null)} />
-    {!file ? <button className="ghost" onClick={() => ref.current?.click()} aria-label={da ? "Vedhæft billede eller PDF" : "Attach image or PDF"}>{da ? "Vedhæft" : "Attach"}</button> : <div>
+    {file && <div>
       <p className="meta" style={{ margin: "4px 0" }}>{file.name} · {Math.ceil(file.size / 1024)} kB</p>
-      <label htmlFor={`alt-${conv}`}>{da ? "Kort beskrivelse af filen (alt-tekst, hjælper skærmlæsere)" : "Short description (alt text, helps screen readers)"}</label>
-      <input id={`alt-${conv}`} maxLength={300} value={alt} onChange={(e) => setAlt(e.target.value)} />
-      <p className="meta">{da ? "Filen og teksten i den tjekkes af AI (OpenAI) før afsendelse. Teksten i beskedfeltet sendes med som billedtekst." : "The file and its text are checked by AI (OpenAI) before sending. The message text is sent as a caption."}</p>
-      <div className="row"><button className="ghost" disabled={busy} onClick={() => { setFile(null); setOut(null); }}>{da ? "Fjern fil" : "Remove file"}</button><span className="spacer" /><button disabled={busy} onClick={send}>{busy ? (da ? "Tjekker fil…" : "Checking file…") : (da ? "Send fil" : "Send file")}</button></div>
+      <label htmlFor={`alt-${conv}`}>{da ? "Kort beskrivelse (alt-tekst til skærmlæsere)" : "Short description (alt text for screen readers)"}</label>
+      <input id={`alt-${conv}`} maxLength={300} value={alt} onChange={e => setAlt(e.target.value)} />
+      <p className="meta">{da ? "Filen og teksten i den tjekkes af AI før afsendelse. I testen må du kun bruge opdigtet indhold. Beskedfeltet sendes med som billedtekst." : "The file and its text are checked by AI before sending. Use synthetic content only in the test. The message is sent as its caption."}</p>
+      <button type="button" className="ghost" disabled={busy} onClick={() => { setFile(null); setAlt(""); setOut(null); }}>{da ? "Fjern fil" : "Remove file"}</button>
     </div>}
-    {out && <div className={out.ok ? "notice" : "notice"} role={out.ok ? "status" : "alert"}>{out.text}</div>}
+    {out && <div className="notice" role={out.ok ? "status" : "alert"}>{out.text}</div>}
   </div>);
 }
 function AttachmentView({ lang, m }: { lang: Lang; m: Msg }) {

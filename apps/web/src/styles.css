@@ -95,3 +95,13 @@ button.danger{background:#c0392b;color:#fff;border-color:#c0392b}button.danger:d
 .message-feedback{align-self:center;margin:0}.msg:focus-visible{outline:2px solid var(--accent)}
 
 .composer-fields{border:0;padding:0;margin:0;min-inline-size:0}
+
+/* Shared real chat/fixture composer: no manual resizing; grows with wrapped text. */
+.composer-input-row{display:flex;align-items:flex-end;gap:3px;min-width:0}
+.composer-input-row .message-input{flex:1;min-width:0;width:0;min-height:46px;max-height:180px;padding:11px 10px;line-height:24px;margin:0;resize:none;overflow-wrap:anywhere;white-space:pre-wrap;box-sizing:border-box}
+.composer-icon,.composer-send{flex:0 0 42px;width:42px;min-width:42px;height:46px;padding:9px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%}
+.composer-icon{background:transparent;color:var(--text);border:0}.composer-icon:hover{background:var(--card)}
+.composer-count{margin:5px 4px 0;font-size:.8rem}.composer-count.over-limit{color:#b42318}
+.composer-upgrade{background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:18px;max-width:min(440px,calc(100vw - 28px));padding:20px}
+.composer-upgrade::backdrop{background:#0008}.composer-upgrade h3{margin-top:0}.composer-upgrade .row{flex-wrap:wrap}
+@media(max-width:380px){.composer-input-row{gap:0}.composer-icon{flex-basis:36px;min-width:36px;width:36px;padding:6px}.composer-send{flex-basis:40px;min-width:40px;width:40px}}

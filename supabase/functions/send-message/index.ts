@@ -4,9 +4,10 @@
 // atomic consume + store (commit_message, idempotent). Fail closed on any error.
 import { authed, cors, json } from "../_shared/http.ts";
 import { normalizeReplyId } from "../_shared/replies.ts";
+import { checkPlanLength, planLengthError } from "../_shared/planLimits.ts";
 import { checkPersonLimits } from "../_shared/limits.ts";
 import { checkRules } from "../_shared/rules.ts";
-import { charCount, MAX_CHARS, moderate, ModerationTechnicalError, providerFromEnv, timeoutFromEnv } from "../_shared/moderation.ts";
+import { charCount, moderate, ModerationTechnicalError, providerFromEnv, timeoutFromEnv } from "../_shared/moderation.ts";
 
 async function sha256Hex(s: string) {
   const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
@@ -21,7 +22,7 @@ Deno.serve(async (req) => {
   let input: any; try { input = await req.json(); } catch { return json({ error: "bad_request" }, 400); }
   const conv = String(input?.conversation_id ?? "").toLowerCase(); const body = String(input?.body ?? ""); const key = String(input?.idempotency_key ?? "");
   if (!/^[0-9a-f-]{36}$/i.test(conv) || !/^[\w-]{8,80}$/.test(key)) return json({ error: "bad_request" }, 400);
-  if (body.trim().length === 0 || charCount(body) > MAX_CHARS) return json({ error: "length" }, 400);
+  if (body.trim().length === 0) return json({ error: "length" }, 400);
 
   const reply = normalizeReplyId(input?.reply_to_id);
   if (reply !== null && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reply)) return json({ error: "invalid_reply" }, 400);
@@ -39,6 +40,10 @@ Deno.serve(async (req) => {
     return json({ status: "accepted", message_id: prev.data.id, duplicate: true });
   }
 
+  const quota = await checkPlanLength(admin, uid, charCount(body));
+  if (quota === "error") return json({ status: "technical_error" }, 503);
+  if (quota) return json(quota, 200);
+
   const target = await admin.rpc("assert_reply_target", { p_sender: uid, conv, p_reply: reply });
   if (target.error) return json({ error: "invalid_reply" }, 400);
 
@@ -49,6 +54,7 @@ Deno.serve(async (req) => {
   const prep = await admin.rpc("prepare_send", { p_sender: uid, conv, p_body: body });
   if (prep.error) {
     const m = prep.error.message;
+    const limit = planLengthError(m, charCount(body)); if (limit) return json(limit, 200);
     const code = /read_only/.test(m) ? "read_only" : /rate_limited/.test(m) ? "rate_limited" : /length/.test(m) ? "length" : "forbidden";
     return json({ error: code }, code === "rate_limited" ? 429 : 403);
   }
@@ -87,6 +93,7 @@ Deno.serve(async (req) => {
   const appr = await admin.rpc("issue_reply_approval", { p_sender: uid, conv, p_hash: await sha256Hex(body), p_reply: reply, p_provider: provider.name, p_model: provider.model });
   if (appr.error) return json({ status: "technical_error" }, 503);
   const c = await admin.rpc("commit_message_reply", { p_approval: appr.data, p_sender: uid, conv, p_body: body, p_key: key, p_reply: reply });
+  if (c.error) { const limit = planLengthError(c.error.message, charCount(body)); if (limit) return json(limit, 200); }
   if (c.error && /invalid_reply/.test(c.error.message)) return json({ error: "invalid_reply" }, 400);
   if (c.error && /idempotency_conflict/.test(c.error.message)) return json({ error: "idempotency_conflict" }, 409);
   if (c.error && /cannot_deliver/.test(c.error.message)) return json({ status: "cannot_deliver" }, 200);
