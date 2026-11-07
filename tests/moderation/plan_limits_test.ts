@@ -12,11 +12,11 @@ Deno.test("plan lookup errors/unknown values fail closed", async () => {
   for (const data of [null, 0, 10000, "480"]) assertEquals(await checkPlanLength(admin(data),"fake",1), "error");
   assertEquals(await checkPlanLength(admin(480,{}),"fake",1),"error");
 });
-Deno.test("Unicode code points and stricter recipient limits", () => {
+Deno.test("Unicode code points; legacy recipient length cannot override sender plan", () => {
   assertEquals(messageCharCount("æøå𐀀"),4); assertEquals(messageCharCount("e\u0301"),2);
   for (const [plan,cap] of [["text",160],["text_attachments",480]] as const) {
-    assertEquals(effectiveCharLimit(plan,null),cap); assertEquals(effectiveCharLimit(plan,140),140);
-    assertEquals(effectiveCharLimit(plan,250),Math.min(cap,250)); assertEquals(effectiveCharLimit(plan,10000),cap);
+    assertEquals(effectiveCharLimit(plan,null),cap); assertEquals(effectiveCharLimit(plan,140),cap);
+    assertEquals(effectiveCharLimit(plan,250),cap); assertEquals(effectiveCharLimit(plan,10000),cap);
   }
 });
 Deno.test("commit-time downgrade has precise actionable quota", () => {
