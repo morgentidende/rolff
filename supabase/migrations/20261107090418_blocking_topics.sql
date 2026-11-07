@@ -9,7 +9,7 @@ create table public.conversation_blocked_topics (
 );
 alter table public.conversation_blocked_topics enable row level security;
 revoke all on public.conversation_blocked_topics from public,anon,authenticated;
-grant select,delete on public.conversation_blocked_topics to authenticated;
+grant select on public.conversation_blocked_topics to authenticated;
 grant all on public.conversation_blocked_topics to service_role;
 create policy cbt_own_select on public.conversation_blocked_topics for select to authenticated
  using(user_id=auth.uid() and public.is_active_member(conversation_id,auth.uid()));
@@ -59,9 +59,34 @@ end $$;
 revoke all on function public.add_blocked_topic(uuid,text) from public,anon,authenticated;
 grant execute on function public.add_blocked_topic(uuid,text) to authenticated;
 
+-- All client removal paths lock conversation/revision BEFORE taking an entry tuple lock.
+-- Direct DELETE takes its tuple lock before BEFORE triggers and can deadlock with a duplicate upsert.
+revoke delete on public.conversation_blocked_words,public.conversation_blocked_topics from public,anon,authenticated;
+create function public.remove_blocked_word(conv uuid,p_id uuid) returns void language plpgsql security definer set search_path=pg_catalog,public as $$
+begin
+ if auth.uid() is null or not public.is_active_member(conv,auth.uid()) then raise exception 'not_member' using errcode='42501'; end if;
+ perform 1 from public.conversations where id=conv for key share;
+ perform 1 from public.conversation_filter_revision where conversation_id=conv for update;
+ delete from public.conversation_blocked_words where conversation_id=conv and user_id=auth.uid() and id=p_id;
+end $$;
+revoke all on function public.remove_blocked_word(uuid,uuid) from public,anon,authenticated;
+grant execute on function public.remove_blocked_word(uuid,uuid) to authenticated;
+
+create function public.remove_blocked_topic(conv uuid,p_id uuid) returns void language plpgsql security definer set search_path=pg_catalog,public as $$
+begin
+ if auth.uid() is null or not public.is_active_member(conv,auth.uid()) then raise exception 'not_member' using errcode='42501'; end if;
+ perform 1 from public.conversations where id=conv for key share;
+ perform 1 from public.conversation_filter_revision where conversation_id=conv for update;
+ delete from public.conversation_blocked_topics where conversation_id=conv and user_id=auth.uid() and id=p_id;
+end $$;
+revoke all on function public.remove_blocked_topic(uuid,uuid) from public,anon,authenticated;
+grant execute on function public.remove_blocked_topic(uuid,uuid) to authenticated;
+
 create function public.reset_blocked_words(conv uuid) returns void language plpgsql security definer set search_path=pg_catalog,public as $$
 begin
  if auth.uid() is null or not public.is_active_member(conv,auth.uid()) then raise exception 'not_member' using errcode='42501'; end if;
+ perform 1 from public.conversations where id=conv for key share;
+ perform 1 from public.conversation_filter_revision where conversation_id=conv for update;
  delete from public.conversation_blocked_words where conversation_id=conv and user_id=auth.uid();
 end $$;
 revoke all on function public.reset_blocked_words(uuid) from public,anon,authenticated;

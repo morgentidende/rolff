@@ -36,5 +36,25 @@ try{
   await begin(edit,B);const pending=reflected(edit.query("select reset_blocked_words($1)",[cv]));await waitBlocked(edit,consumer);await consumer.query('commit');const result=await pending;if(result.error)throw result.error;await edit.query('commit');
   const retry=(await consumer.query("select * from commit_message_reply($1,$2,$3,$4,'synthetic-topic-valid',null)",[id,A,cv,text])).rows[0];assert.equal(retry.duplicate,true);assert.equal(retry.message_id,first.message_id);
  });
+ // Reproduce the previous lock inversion deterministically: pause duplicate add after taking
+ // its revision lock, queue removal, then exercise the conflicting upsert while removal waits.
+ // A tuple-first remover would deadlock; the owner RPC must wait BEFORE taking that tuple.
+ for(const [kind,reset] of [['topic',false],['word',false],['word',true]]) {
+  await test(`duplicate ${kind} add vs ${reset?'word reset':'scoped trash'} locks revision before tuple without deadlock`,async()=>{
+   const table=kind==='topic'?'conversation_blocked_topics':'conversation_blocked_words';
+   const word=`opdigtet parallel ${kind} ${reset?'reset':'trash'}`;
+   const entry=(await db.query(`insert into ${table}(conversation_id,user_id,word) values($1,$2,$3) returning id`,[cv,B,word])).rows[0].id;
+   const add=await client(),remove=await client();await begin(add,B);
+   await add.query('select 1 from conversations where id=$1 for key share',[cv]);
+   await add.query('select 1 from conversation_filter_revision where conversation_id=$1 for update',[cv]);
+   await begin(remove,B);
+   const pending=reflected(reset?remove.query('select reset_blocked_words($1)',[cv]):remove.query(`select remove_blocked_${kind}($1,$2)`,[cv,entry]));
+   await waitBlocked(remove,add);
+   const duplicate=(await add.query(kind==='topic'?'select add_blocked_topic($1,$2) id':'select add_blocked_word($1,$2,true) id',[cv,word])).rows[0].id;
+   assert.equal(duplicate,entry);await add.query('commit');
+   const result=await pending;if(result.error)throw result.error;await remove.query('commit');
+   assert.equal(Number((await db.query(`select count(*) n from ${table} where id=$1`,[entry])).rows[0].n),0);
+  });
+ }
  console.log(JSON.stringify({passed,backend:'PostgreSQL',locks:'real parallel connections',scope:'synthetic topic policy correctness only'}));
 }finally{await Promise.allSettled(clients.map(c=>c.query('rollback')));await Promise.allSettled(clients.map(c=>c.end()));await db.close();}

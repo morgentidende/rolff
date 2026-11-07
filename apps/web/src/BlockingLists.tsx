@@ -39,7 +39,7 @@ export function BlockingLists({ lang, conv, session }: { lang: Lang; conv: strin
   catch {if(g===generation.current)setErr(error);}
   finally {if(g===generation.current){inflight.current=false;setBusy(false);}}
  };
- const remove=(entry:BlockEntry,isTopic:boolean)=>change(`${isTopic?"conversation_blocked_topics":"conversation_blocked_words"}?id=eq.${entry.id}&conversation_id=eq.${conv}&user_id=eq.${session.user.id}`,"DELETE",undefined,()=>isTopic?setTopics(x=>x.filter(i=>i.id!==entry.id)):setWords(x=>x.filter(i=>i.id!==entry.id)));
+ const remove=(entry:BlockEntry,isTopic:boolean)=>change(`rpc/remove_blocked_${isTopic?"topic":"word"}`,"POST",{conv,p_id:entry.id},()=>isTopic?setTopics(x=>x.filter(i=>i.id!==entry.id)):setWords(x=>x.filter(i=>i.id!==entry.id)));
  const add=async(isTopic:boolean)=>{
   const value=(isTopic?topic:word).trim();
   await change(`rpc/${isTopic?"add_blocked_topic":"add_blocked_word"}`,"POST",{conv,p_word:value,...(isTopic?{}:{p_ack:ack})},async()=>{

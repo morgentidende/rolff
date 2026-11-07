@@ -13,7 +13,9 @@ export async function testBlockingTopics({db,as,svc,hash,t,assert}) {
   assert.equal((await as(B,`select word from conversation_blocked_topics where id=$1`,[topic]))[0].word,'omtaler mine forældre');
   assert.equal((await as(A,`select * from conversation_blocked_topics`)).length,0);
   assert.equal((await as(X,`select * from conversation_blocked_topics`)).length,0);
-  assert.equal((await as(A,`delete from conversation_blocked_topics where id=$1 returning id`,[topic])).length,0);
+  await assert.rejects(as(A,`delete from conversation_blocked_topics where id=$1 returning id`,[topic]),/permission denied/);
+  await as(A,`select remove_blocked_topic($1,$2)`,[cv,topic]);
+  assert.equal((await as(B,`select * from conversation_blocked_topics where id=$1`,[topic])).length,1);
   await assert.rejects(as(X,`select add_blocked_topic($1,'mit udseende')`,[cv]),/not_member/);
   await assert.rejects(as(B,`select add_blocked_topic($1,$2)`,[cv,'x'.repeat(241)]),/length/);
   await assert.rejects(as(B,`select recipient_filter_snapshot($1,$2)`,[cv,A]),/permission denied/);
@@ -33,6 +35,18 @@ export async function testBlockingTopics({db,as,svc,hash,t,assert}) {
   assert.deepEqual((await as(B,`select * from conversation_blocked_topics where id=$1`,[topic]))[0],before);
   await assert.rejects(as(X,`select reset_blocked_words($1)`,[cv]),/not_member/);
  });
+ await t('Topics: trash RPCs are owner-scoped, outsider forbidden and direct owner DELETE revoked',async()=>{
+  const ownWord=(await as(A,`select id from conversation_blocked_words where conversation_id=$1`,[cv]))[0].id;
+  await assert.rejects(as(A,`delete from conversation_blocked_words where id=$1`,[ownWord]),/permission denied/);
+  await assert.rejects(as(B,`delete from conversation_blocked_topics where id=$1`,[topic]),/permission denied/);
+  await as(B,`select remove_blocked_word($1,$2)`,[cv,ownWord]);
+  assert.equal((await as(A,`select * from conversation_blocked_words where id=$1`,[ownWord])).length,1);
+  await assert.rejects(as(X,`select remove_blocked_word($1,$2)`,[cv,ownWord]),/not_member/);
+  await assert.rejects(as(X,`select remove_blocked_topic($1,$2)`,[cv,topic]),/not_member/);
+  await as(A,`select remove_blocked_word($1,$2)`,[cv,ownWord]);
+  assert.equal((await as(A,`select * from conversation_blocked_words where id=$1`,[ownWord])).length,0);
+  assert.equal((await as(B,`select * from conversation_blocked_topics where id=$1`,[topic])).length,1);
+ });
  await t('Topics: change between snapshot/AI and issuer rejects stale evaluation',async()=>{
   const old=await snapshot();await as(B,`select add_blocked_topic($1,'omtaler mit udseende')`,[cv]);
   await assert.rejects(issue(old.revision),/recipient_policy_changed/);
@@ -40,7 +54,7 @@ export async function testBlockingTopics({db,as,svc,hash,t,assert}) {
  });
  await t('Topics: topic deletion between issuer and commit rejects, approval remains unconsumed',async()=>{
   const id=await issue((await snapshot()).revision);
-  await as(B,`delete from conversation_blocked_topics where id=$1`,[topic]);
+  await as(B,`select remove_blocked_topic($1,$2)`,[cv,topic]);
   await assert.rejects(svc(`select * from commit_message_reply($1,$2,$3,'Kalender vedlagt','topic-stale-0001',null)`,[id,A,cv]),/recipient_policy_changed/);
   assert.equal((await db.query(`select consumed_at from moderation_approvals where id=$1`,[id])).rows[0].consumed_at,null);
  });

@@ -5,7 +5,8 @@ Word matching itself is unchanged (`rules.ts`): the existing acknowledgment stil
 an exact matched word/phrase to a sender. The entire lists remain owner-only.
 
 - Alphabetical order uses the selected locale's `Intl.Collator` (Danish Æ, Ø, Å).
-- Oldest/newest order uses the existing database `created_at`, with deterministic ID ties.
+- Oldest/newest order normalizes the existing database `created_at` to fixed-width UTC microseconds,
+  with deterministic ID ties even for mixed fractional precision or UTC offsets.
   Display sorting never saves a reordered list or fabricates historical timestamps.
 - Each entry has an accessible SVG trash button with a 44px target. The reset modal clears
   only the current owner's words in the current conversation, never their topics.
@@ -43,7 +44,9 @@ same transaction. `issue_reply_approval_v3` compares the **evaluated** revision 
 consumption checks the same revision, holding the lock until the message transaction commits.
 A stale request cannot fetch a fresh revision merely to promote its old evaluation.
 
-Conversation-first key-share locks agree with existing membership RPC ordering. Replies,
+Conversation-first key-share locks agree with existing membership RPC ordering.
+Trash RPCs and word reset acquire the revision lock before entry tuple locks, matching duplicate
+upserts; direct client DELETE on both lists is revoked to prevent tuple/revision lock inversion. Replies,
 content/file hashes,60-second ticket lifetime, person/timezone rules, shared locks and160/480
 quotas are unchanged. Tickets carry only a revision, never private criteria.
 

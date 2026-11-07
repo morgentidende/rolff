@@ -18,7 +18,7 @@ w.fetch=async(url:string,opts:any)=>{
  const istopic=url.includes("topics")||url.includes("topic");
  if(opts.method==="GET")return response((istopic?topics:words).map(x=>({...x})));
  if(url.includes("reset_blocked_words")){words=[];return response(null);}
- if(opts.method==="DELETE"){const id=url.match(/id=eq\.([^&]+)/)?.[1];if(istopic)topics=topics.filter(x=>x.id!==id);else words=words.filter(x=>x.id!==id);return response(null,204);}
+ if(url.includes("remove_blocked_")){const id=body.p_id;if(istopic)topics=topics.filter(x=>x.id!==id);else words=words.filter(x=>x.id!==id);return response(null,204);}
  const id=String(20+w.QA.requests.length),entry=make(id,body.p_word,"2026-11-07T10:00:00+00:00");if(istopic)topics.push(entry);else words.push(entry);return response(id);
  };
  if(w.QA.pause)return new Promise(resolve=>w.QA.pending.push(()=>resolve(run())));
