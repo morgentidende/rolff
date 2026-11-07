@@ -1,0 +1,30 @@
+const fs = require('fs'), vm = require('vm'), assert = require('node:assert/strict');
+const esbuild = require('esbuild');
+const path = require('node:path');
+const { test } = require('node:test');
+const src = fs.readFileSync(path.resolve(__dirname, '../../src/backNavigation.ts'), 'utf8') + '\nexport {BackNavigation};';
+const code = esbuild.transformSync(src, { loader: 'ts', format: 'cjs' }).code;
+function env(entries = [null], index = entries.length - 1) { const micro = [], events = [], listeners = {}; const history = { entries: structuredClone(entries), index, get state() { return this.entries[this.index]; }, replaceState(s) { this.entries[this.index] = s; }, pushState(s) { this.entries.splice(this.index + 1); this.entries.push(s); this.index++; }, back() { if (this.index > 0) {
+        const target = this.index - 1;
+        events.push(() => { this.index = target; listeners.popstate?.(); });
+    } } }; const context = { exports: {}, require: n => n === 'react-dom' ? { flushSync: f => f() } : {}, crypto: { randomUUID: (() => { let n = 0; return () => `doc-${++n}`; })() }, history, window: { addEventListener: (n, f) => listeners[n] = f }, document: { addEventListener() { } }, queueMicrotask: f => micro.push(f) }; context.module = { exports: context.exports }; vm.runInNewContext(code, context); const n = new context.module.exports.BackNavigation; return { n, history, micro, events, popAt(i) { history.index = i; listeners.popstate?.(); }, drain() { let count = 0; while (micro.length || events.length) {
+        if (++count > 40)
+            throw Error('loop');
+        while (micro.length)
+            micro.shift()();
+        if (events.length)
+            events.shift()();
+    } } }; }
+test('nested Back each dismisses exactly one visible layer and final Home has no guard', () => { const e = env(); let offChat, offFaq; let closed = []; offChat = e.n.register({ id: 'chat', kind: 'view', dismiss: () => { closed.push('chat'); offChat(); } }); offFaq = e.n.register({ id: 'faq', kind: 'overlay', dismiss: () => { closed.push('faq'); offFaq(); } }); e.history.back(); e.drain(); assert.deepEqual(closed, ['faq']); assert.equal(e.history.state.__rolffBack.kind, 'guard'); e.history.back(); e.drain(); assert.deepEqual(closed, ['faq', 'chat']); assert.equal(e.history.index, 0); assert.equal(e.events.length, 0); });
+test('batched menu replacement does not prune or push second guard', () => { const e = env(); const off = e.n.register({ id: 'menu', kind: 'overlay', dismiss() { } }); off(); e.n.register({ id: 'faq', kind: 'overlay', dismiss() { } }); e.drain(); assert.equal(e.history.entries.length, 2); assert.equal(e.history.index, 1); });
+test('last explicit close prunes once', () => { const e = env(); const off = e.n.register({ id: 'faq', kind: 'overlay', dismiss() { } }); off(); e.drain(); assert.equal(e.history.index, 0); });
+test('reload guard normalizes current without traversing predecessor', () => { const e = env([{ foreign: 'keep' }, { __rolffBack: { v: 1, doc: 'old', kind: 'guard' } }]); e.n.attach(); e.drain(); assert.equal(e.history.index, 1); assert.equal(e.events.length, 0); assert.equal(e.history.state.__rolffBack.kind, 'base'); assert.equal(e.history.entries[0].__rolffBack, undefined); });
+test('orphan restored guard permits later navigation at index zero', () => { const e = env([{ __rolffBack: { v: 1, doc: 'old', kind: 'guard' } }]); e.n.attach(); e.drain(); e.n.register({ id: 'chat', kind: 'view', dismiss() { } }); e.drain(); assert.equal(e.history.entries.length, 2); assert.equal(e.history.state.__rolffBack.kind, 'guard'); });
+test('orphan restored guard with forward entries and history length greater than one', () => { const e = env([{ __rolffBack: { v: 1, doc: 'old', kind: 'guard' } }, { foreign: 'forward' }], 0); e.n.attach(); e.drain(); assert.equal(e.history.index, 0); assert.equal(e.events.length, 0); e.n.register({ id: 'chat', kind: 'view', dismiss() { } }); e.drain(); assert.equal(e.history.entries.length, 2); assert.equal(e.history.state.__rolffBack.kind, 'guard'); assert.equal(e.history.entries[1].foreign, undefined); });
+test('unknown unexpected pop during pending prune is not adopted', () => { const e = env([{ foreign: 'keep' }, null], 1); const off = e.n.register({ id: 'faq', kind: 'overlay', dismiss() { } }); off(); while (e.micro.length)
+    e.micro.shift()(); assert.equal(e.events.length, 1); e.popAt(0); assert.equal(e.history.state.__rolffBack, undefined); e.n.reset(); while (e.micro.length)
+    e.micro.shift()(); assert.equal(e.history.state.__rolffBack, undefined); e.drain(); assert.equal(e.history.entries[0].__rolffBack, undefined); });
+test('queued cleanup after unknown pop cannot create baseline or guard', () => { const e = env([{ foreign: 'keep' }, null], 1); const off = e.n.register({ id: 'chat', kind: 'view', dismiss() { } }); e.popAt(0); off(); e.drain(); assert.equal(e.history.index, 0); assert.equal(e.history.state.__rolffBack, undefined); assert.equal(e.history.entries.length, 3); });
+test('new layer after unknown boundary can establish owned guard intentionally', () => { const e = env([{ foreign: 'keep' }, null], 1); const off = e.n.register({ id: 'chat', kind: 'view', dismiss() { } }); e.popAt(0); off(); e.drain(); e.n.register({ id: 'faq', kind: 'overlay', dismiss() { } }); e.drain(); assert.equal(e.history.state.__rolffBack.kind, 'guard'); });
+test('retired baseline after reload skipped once to unknown boundary', () => { const e = env([{ foreign: 'keep' }, { __rolffBack: { v: 1, doc: 'old', kind: 'base' } }, { __rolffBack: { v: 1, doc: 'old', kind: 'guard' } }]); e.n.attach(); e.history.back(); e.drain(); assert.equal(e.history.index, 0); assert.equal(e.history.state.__rolffBack, undefined); assert.equal(e.events.length, 0); });
+test('Forward into retired guard returns to current baseline without reopening', () => { const e = env([{ __rolffBack: { v: 1, doc: 'old', kind: 'base' } }, { __rolffBack: { v: 1, doc: 'old', kind: 'guard' } }], 0); e.n.attach(); e.popAt(1); e.drain(); assert.equal(e.history.index, 0); assert.equal(e.history.state.__rolffBack.kind, 'base'); assert.equal(e.events.length, 0); });

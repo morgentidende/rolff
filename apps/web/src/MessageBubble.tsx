@@ -1,3 +1,4 @@
+import { useBackLayer } from "./backNavigation";
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -9,6 +10,7 @@ export function ReplyPreview({ body, unavailable = false, lang }: { body?: strin
 export function MessageBubble({ m, lang, children, onReply, canReply = true, hit = false, index }: { m: Message; lang: string; children?: React.ReactNode; onReply: (m: Message) => void; canReply?: boolean; hit?: boolean; index?: number }) {
   const da = lang === "da";
   const [panel, setPanel] = useState<"actions" | "info" | null>(null);
+  useBackLayer(panel!==null,()=>setPanel(panel==="info"?"actions":null));
   const [feedback, setFeedback] = useState("");
   const bubble = useRef<HTMLDivElement>(null), dialog = useRef<HTMLDivElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -20,7 +22,6 @@ export function MessageBubble({ m, lang, children, onReply, canReply = true, hit
     if (!panel) return;
     dialog.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
     const keys = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { e.preventDefault(); close(); }
       if (e.key === "Tab") {
         const buttons = Array.from(dialog.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? []);
         const first = buttons[0], last = buttons[buttons.length - 1];

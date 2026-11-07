@@ -113,12 +113,16 @@ Deno.serve(async (req) => {
   // Same blocked words and hard prefilter as normal messages, on the text found in the file.
   const w = findBlockedWord(res.transcript + "\n" + name, words);
   if (w) { await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "block", p_reason: "rule" }); return json({ status: "blocked_word", word: w, where: "file", meta }, 200); }
-  const pre = prefilter(res.transcript + "\n" + name);
+  const pre = prefilter(res.transcript) ?? prefilter(res.transcript + "\n" + name);
   if (pre) { await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "block", p_reason: pre.reason_code }); return json({ status: "blocked", reason_code: pre.reason_code, spans: pre.spans, suggestion: pre.suggestion, meta }, 200); }
+  if (res.decision === "clarify") {
+    await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "clarify", p_reason: "unclear_meaning" });
+    return json({ status: "clarification_required", meta }, 200);
+  }
   await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "allow", p_reason: "none" });
 
   const hash = await sha(body + "\n" + await sha(bytes));
-  const appr = await admin.rpc("issue_reply_approval", { p_sender: uid, conv, p_hash: hash, p_reply: reply, p_provider: "openai", p_model: model });
+  const appr = await admin.rpc("issue_reply_approval_v2", { p_sender: uid, conv, p_hash: hash, p_reply: reply, p_provider: "openai", p_model: model });
   if (appr.error) return json({ status: "technical_error" }, 503);
   const c = await admin.rpc("commit_attachment_reply", { p_approval: appr.data, p_sender: uid, conv, p_body: body, p_key: key, p_reply: reply,
     p_mime: fc.mime, p_name: name, p_alt: alt, p_pages: fc.pages, p_data: "\\x" + hex(bytes.buffer as ArrayBuffer) });

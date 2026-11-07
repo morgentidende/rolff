@@ -11,5 +11,8 @@
   "license": "ISC",
   "dependencies": {
     "@electric-sql/pglite": "^0.5.14"
+  },
+  "devDependencies": {
+    "pg": "^8.23.1"
   }
 }

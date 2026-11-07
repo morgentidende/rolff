@@ -89,8 +89,9 @@ Deno.serve(async (req) => {
   }
   await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: res.decision, p_reason: res.reason_code });
   if (res.decision === "block") return json({ status: "blocked", reason_code: res.reason_code, spans: res.spans, suggestion: res.suggestion }, 200);
+  if (res.decision === "clarify") return json({ status: "clarification_required" }, 200);
 
-  const appr = await admin.rpc("issue_reply_approval", { p_sender: uid, conv, p_hash: await sha256Hex(body), p_reply: reply, p_provider: provider.name, p_model: provider.model });
+  const appr = await admin.rpc("issue_reply_approval_v2", { p_sender: uid, conv, p_hash: await sha256Hex(body), p_reply: reply, p_provider: provider.name, p_model: provider.model });
   if (appr.error) return json({ status: "technical_error" }, 503);
   const c = await admin.rpc("commit_message_reply", { p_approval: appr.data, p_sender: uid, conv, p_body: body, p_key: key, p_reply: reply });
   if (c.error) { const limit = planLengthError(c.error.message, charCount(body)); if (limit) return json(limit, 200); }

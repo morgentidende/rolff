@@ -1,6 +1,6 @@
 // Attachment checks + AI moderation of files. Pure module (no Supabase deps), runs in Deno & tests.
 // Never log file content, transcripts or captions.
-import { ContextMsg, ModerationTechnicalError, REASON_CODES, SYSTEM_PROMPT, CTX_MAX, CTX_CHARS, sanitizeSuggestion } from "./moderation.ts";
+import { ContextMsg, ModerationTechnicalError, REASON_CODES, SYSTEM_PROMPT, CTX_MAX, CTX_CHARS, sanitizeSuggestion, DECISIONS, RESPONSE_SCHEMA, validateDecisionContract, type Decision } from "./moderation.ts";
 
 export const MAX_BYTES = 4 * 1024 * 1024, MAX_PAGES = 5;
 export type AttMime = "image/png" | "image/jpeg" | "image/webp" | "image/gif" | "application/pdf";
@@ -48,12 +48,12 @@ export const cleanName = (n: string) => ([...n.replace(/^.*[\\/]/, "").replace(/
 
 export const FILE_REASON_CODES = [...REASON_CODES, "inappropriate_image"] as const;
 export type FileReason = typeof FILE_REASON_CODES[number];
-export interface FileResult { decision: "allow" | "block"; reason_code: FileReason; spans: string[]; transcript: string; suggestion: string }
+export interface FileResult { decision: Decision; reason_code: FileReason; spans: string[]; transcript: string; suggestion: string }
 
 export const FILE_PROMPT = `${SYSTEM_PROMPT}
 
 FILE MODE: The NEW MESSAGE is an attached image (screenshot/photo) or PDF plus an optional caption and file name. Apply exactly the same rules to ALL text visible in the file (every page, every line, including screenshots of other apps such as school portals) and to the caption and file name. A file is blocked if ANY single line is a problem, even if the rest is friendly. Text in ALL CAPS or repeated many times to shout or pressure counts as aggression.
-Also BLOCK with reason_code "inappropriate_image" if the image itself (not its text) is inappropriate for a co-parenting/conflict chat: obscene or insulting gestures, nudity or sexual content, gore or violence, degrading or mocking pictures of a person, hateful symbols. Ordinary photos, documents, calendars, receipts and neutral screenshots are allowed.
+Also BLOCK with reason_code "inappropriate_image" if the image itself (not its text) is inappropriate for a co-parenting/conflict chat: obscene or insulting gestures, nudity or sexual content, gore or violence, degrading or mocking pictures of a person, hateful symbols. Ordinary photos, documents, calendars, receipts and neutral screenshots are allowed. A photo with no visible text is NOT unclear merely because transcript is empty. Apply the base understandability rule to the intended caption/visible message: unfamiliar file names or identifiers alone are not unclear. Recognizable harmful image/text takes priority over clarification.
 Add a field "transcript": the visible text of the file copied verbatim (max 4000 characters, "" if none). "spans" must be exact substrings of the transcript or the caption.
 When you BLOCK, set "suggestion" as in the base rules: only a short constructive rewrite of a concrete legitimate practical wish from caption/visible text; otherwise "". For inappropriate_image with no usable text wish, set "suggestion" to "".
 Respond ONLY with JSON: {"decision","reason_code" (one of ${FILE_REASON_CODES.join("|")}),"spans","transcript","suggestion"}.`;
@@ -70,15 +70,16 @@ export function validateFileResult(raw: unknown, caption: string): FileResult {
   if (typeof raw === "string") { try { o = JSON.parse(raw); } catch { throw new ModerationTechnicalError("invalid_json"); } }
   if (!o || typeof o !== "object" || Array.isArray(o)) throw new ModerationTechnicalError("invalid_shape");
   if (Object.keys(o).sort().join(",") !== "decision,reason_code,spans,suggestion,transcript") throw new ModerationTechnicalError("invalid_keys");
-  if (o.decision !== "allow" && o.decision !== "block") throw new ModerationTechnicalError("invalid_decision");
+  if (!(DECISIONS as readonly string[]).includes(o.decision)) throw new ModerationTechnicalError("invalid_decision");
   if (!(FILE_REASON_CODES as readonly string[]).includes(o.reason_code)) throw new ModerationTechnicalError("invalid_reason");
   if (typeof o.transcript !== "string") throw new ModerationTechnicalError("invalid_transcript");
   if (typeof o.suggestion !== "string") throw new ModerationTechnicalError("invalid_suggestion");
   if (!Array.isArray(o.spans) || o.spans.length > 5 || o.spans.some((s: unknown) => typeof s !== "string")) throw new ModerationTechnicalError("invalid_spans");
-  if ((o.decision === "allow") !== (o.reason_code === "none")) throw new ModerationTechnicalError("inconsistent");
+  validateDecisionContract(o);
   const transcript = [...o.transcript].slice(0, 4000).join("");
   const spans = (o.spans as string[]).filter((s) => s.length > 0 && (transcript.includes(s) || caption.includes(s)));
   if (o.decision === "allow") return { decision: "allow", reason_code: "none", spans: [], transcript, suggestion: "" };
+  if (o.decision === "clarify") return { decision: "clarify", reason_code: "unclear_meaning", spans: [], transcript, suggestion: "" };
   const reason = o.reason_code as FileReason;
   const seed = caption.trim() || transcript.slice(0, 200) || "fil";
   const suggestion = reason === "inappropriate_image"
@@ -87,16 +88,14 @@ export function validateFileResult(raw: unknown, caption: string): FileResult {
   return { decision: "block", reason_code: reason, spans, transcript, suggestion };
 }
 
-const SCHEMA = {
-  type: "object", additionalProperties: false,
+export const FILE_RESPONSE_SCHEMA = {
+  ...RESPONSE_SCHEMA, additionalProperties: false,
   properties: {
-    decision: { type: "string", enum: ["allow", "block"] },
+    ...RESPONSE_SCHEMA.properties,
     reason_code: { type: "string", enum: [...FILE_REASON_CODES] },
-    spans: { type: "array", items: { type: "string" }, maxItems: 5 },
     transcript: { type: "string" },
-    suggestion: { type: "string" },
   },
-  required: ["decision", "reason_code", "spans", "transcript", "suggestion"],
+  required: [...RESPONSE_SCHEMA.required, "transcript"],
 };
 
 export function b64(b: Uint8Array): string {
@@ -114,7 +113,7 @@ export async function openaiFileModerate(o: { apiKey: string; model: string; bas
     body: JSON.stringify({
       model: o.model, store: false, instructions: FILE_PROMPT,
       input: [{ role: "user", content: [{ type: "input_text", text: buildFilePayload(caption, f.name, ctx) }, part] }],
-      text: { format: { type: "json_schema", name: "file_moderation", strict: true, schema: SCHEMA } },
+      text: { format: { type: "json_schema", name: "file_moderation", strict: true, schema: FILE_RESPONSE_SCHEMA } },
     }),
   });
   if (!r.ok) throw new ModerationTechnicalError(`http_${r.status}`);

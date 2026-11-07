@@ -2,7 +2,8 @@ const assert = (value: boolean, label: string) => { if (!value) throw new Error(
 Deno.test("Real composer has paperclip/camera and a right-hand send plane", async () => {
  const s=await Deno.readTextFile("apps/web/src/ComposerInput.tsx");
  assert(s.indexOf('choose("file")') < s.indexOf('<textarea'),"paperclip is before textarea");
- assert(s.indexOf('choose("camera")') < s.indexOf('<textarea'),"camera is before textarea");
+ assert(s.indexOf('choose("camera")') > s.indexOf('<textarea') && s.indexOf('choose("camera")') < s.indexOf('className="composer-send"'),"camera follows text inside writing surface, before send plane");
+ assert(s.includes('className="composer-entry"'),"text and attachment icons share one writing surface");
  assert(s.indexOf('className="composer-send"') > s.indexOf('<textarea'),"plane is to right of textarea");
  assert(s.includes('capture="environment"'),"mobile camera capture");
  assert(s.indexOf('if (plan !== "text_attachments")') < s.indexOf('input.click()'),"upgrade before picker");
