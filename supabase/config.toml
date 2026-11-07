@@ -11,3 +11,6 @@ verify_jwt = true
 verify_jwt = true
 [functions.send-attachment]
 verify_jwt = true
+
+[functions.notification-dispatch]
+verify_jwt = false # x-cron-secret validated inside handler; never a public scheduler

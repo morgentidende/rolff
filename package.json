@@ -5,6 +5,7 @@
     "test:sql": "cd tests/sql && node run.mjs",
     "test:moderation-unit": "deno test tests/moderation/moderation_test.ts",
     "test:corpus": "deno run --allow-net=generativelanguage.googleapis.com,api.openai.com --allow-read --allow-write=tests/moderation --allow-env tests/moderation/run_corpus.ts",
-    "build:web": "cd apps/web && npm run build"
+    "build:web": "cd apps/web && npm run build",
+    "test:notifications": "node --test apps/web/tests/notifications/*.test.cjs && node tests/sql/notifications.mjs && node tests/sql/notifications-v3.mjs && ECE_KEYLOG=0 deno test --config supabase/functions/deno.json --cached-only --deny-net --allow-env=ECE_KEYLOG,DEBUG,NODE_DEBUG,FORCE_COLOR tests/notifications/transport_test.ts"
   }
 }

@@ -92,7 +92,7 @@ await t('Modtagetid: besked uden for vindue holdes tilbage', async () => {
 });
 await t('Afsender kan ikke se om modtageren har fået beskeden', async () => { const r = await as(A, `select * from get_messages($1)`, [conv]); assert.ok(r.every(m => !('released_at' in m))); });
 await t('Modtag nu frigiver ventende beskeder', async () => { assert.equal((await as(B, `select receive_now() n`))[0].n, 1); assert.equal((await as(B, `select * from get_messages($1)`, [conv])).length, 2); });
-await t('Indholdsløst notifikationsjob oprettet', async () => { const r = await db.query(`select * from notification_jobs where user_id=$1`, [B]); assert.ok(r.rows.length >= 1); assert.deepEqual(Object.keys(r.rows[0]).sort(), ['attempts', 'created_at', 'id', 'sent_at', 'user_id']); });
+await t('Indholdsløst notifikationsjob oprettet', async () => { const r = await db.query(`select * from notification_jobs where user_id=$1`, [B]); assert.ok(r.rows.length >= 1); assert.deepEqual(Object.keys(r.rows[0]).sort(), ['attempts', 'completed_at', 'created_at', 'id', 'prepared_at', 'sent_at', 'user_id']); });
 await t('Vindue over midnat + sommertid (DST) beregnes korrekt', async () => {
   await db.query(`delete from receive_windows where user_id=$1`, [B]);
   // Saturday 22:00 -> 07:00 (overnight)

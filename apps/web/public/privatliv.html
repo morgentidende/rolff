@@ -5,7 +5,7 @@
 <body>
 <p class="draft"><strong>UDKAST – skal gennemgås af jurist/DPO.</strong> Rolff er i test. Skriv kun opdigtede beskeder. <a href="#en">English below</a>.</p>
 <h1>Privatlivspolitik for Rolff</h1>
-<p>Sidst opdateret: 2. november 2026.</p>
+<p>Sidst opdateret: 7. november 2026.</p>
 
 <h2>1. Dataansvarlig</h2>
 <p>Nicolai Petersen / Rolff er dataansvarlig. Kontakt: <a href="mailto:nicolaipetersen108@gmail.com">nicolaipetersen108@gmail.com</a> (senere kontakt@rolffapp.com).</p>
@@ -44,9 +44,12 @@
 <li>Supabase (database, login, funktioner) – Frankfurt, EU.</li>
 <li>Hostinger (web-hosting og afsendelse af mail).</li>
 <li>OpenAI (AI-tonetjek, USA/global) / Google Gemini (reserve i test).</li>
-<li>Firebase (push-notifikationer – fremtidig mobilapp).</li>
+<li>Hvis web-notifikationer aktiveres efter frivilligt tilvalg: browserens push-tjeneste (Google for Chrome, Mozilla for Firefox eller Apple for Safari). Ikke et nyt Firebase-projekt eller en mobilbutik-konto. Browserens tjeneste kan behandle forbindelsesmetadata globalt.</li>
 </ul>
 
+<h3>Valgfrie web-notifikationer (endnu ikke aktiveret)</h3>
+<p>Når funktionen er tilgængelig, beder Rolff kun om browserens tilladelse, hvis du selv trykker Ja/Slå til. Vi gemmer dit valg og en enheds-tilmelding (push-endpoint, krypteringsnøgler, oprettelse og udløb) privat til din konto. Endpoint og nøgler er adgangsoplysninger og skrives ikke i logs. Der sendes kun en krypteret, neutral meddelelse efter frigivelse af beskeder: “ROLFF — Du har nye beskeder klar.” Ingen afsender, beskedtekst, e-mail eller samtalelink sendes til push-tjenesten eller vises i notifikationen. Aktuelle modtagetider og dit tilvalg kontrolleres, når afsendelsen sættes i gang. En afsendelse, der allerede er sat i gang, kan stadig nå frem efter ændring af tider eller fravalg. Telefonen og netværket kan forsinke eller undlade visning. Nøjagtig visningstid kan ikke garanteres.</p>
+<p>Slå fra eller fjern en tilmelding under ⋮ → Notifikationer. Logud rydder den lokale visning og forsøger at fjerne den gamle kontos tilmelding på serveren. Hvis du er offline, kan serverfjernelsen fejle; den gamle tilmelding vises ikke lokalt for en ny konto og udløber senest efter 90 dage. Du kan fjerne den fra en anden tilmeldt enhed. Notifikationer, som telefonen allerede har modtaget, kan ikke med sikkerhed trækkes tilbage. Jobmetadata gemmes højst 7 dage; tilmeldinger højst 90 dage fra tilmelding/fornyelse eller indtil fjernelse/kontosletning. På iPhone/iPad kræves iOS/iPadOS 16.4+ og hjemmeskærm-installation.</p>
 <h2>7. Dine rettigheder</h2>
 <ul>
 <li><strong>Indsigt/dataportabilitet:</strong> ⋮ → Privatliv og sletning → “Download mine data” (ZIP med JSON og CSV).</li>
@@ -82,7 +85,10 @@
 
 <h2>4. The other party's copy</h2><p>What you sent stays with the others in the conversation, also if you delete your account (shown as “Deleted user”). You may delete <em>your</em> data, but cannot demand deletion of the other party's copy.</p>
 <h2>5. Retention</h2><p>1 year (default), 5 years or unlimited. Cloud sync is optional and off by default (see Danish section for details). Inactive accounts are deleted after 90 days by default, with a warning 14 days before.</p>
-<h2>6. Processors</h2><p>Supabase (Frankfurt, EU), Hostinger, OpenAI (US/global) / Google Gemini (test fallback), Firebase (future push).</p>
+<h2>6. Processors</h2><p>Supabase (Frankfurt, EU), Hostinger, OpenAI (US/global) / Google Gemini (test fallback), when web notifications become available and you opt in, your browser’s push service (Google for Chrome, Mozilla for Firefox or Apple for Safari), potentially processing connection metadata globally.</p>
+<h3>Optional web notifications (not yet activated)</h3>
+<p>When available, Rolff requests browser permission only after your explicit Yes/Enable click. Your choice and private owner-scoped device registration (push endpoint, encryption keys, creation and expiry) are stored. Endpoints/keys are capabilities and are not logged. Only an encrypted generic notice after message release is sent: “ROLFF — Du har nye beskeder klar.” No sender, message text, email or conversation URL is sent to the push service or displayed. Your opt-in and current receive times are checked when dispatch is started. A dispatch already started may still arrive after changing times or opting out. Phone/network may delay or omit display, so precise timing is not guaranteed.</p>
+<p>Disable or remove registrations under ⋮ → Notifications. Logout clears local visibility and attempts server revocation; offline revocation may fail. The old registration is not displayed locally for a new account and expires within 90 days; it can be removed from another device. Notices already received by the phone cannot reliably be recalled. Job metadata is retained for at most 7 days; registrations for at most 90 days from enrollment/renewal, or until revocation/account deletion. iPhone/iPad requires iOS/iPadOS 16.4+ and a Home Screen installation.</p>
 <h2>7. Your rights</h2><p>Download my data and delete account under ⋮ → Privacy and deletion; change display name, e-mail and password in the app. You may complain to the Danish Data Protection Agency.</p>
 <h2>8. Children</h2><p>Users under 13 need consent from a parent/guardian.</p>
 <h2>9. Security</h2><p>HTTPS in transit. Rolff does <em>not</em> offer end-to-end encryption. A local browser copy is encrypted with a key that stays on the device.</p>
