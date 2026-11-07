@@ -1,3 +1,4 @@
+import { BlockingLists } from "./BlockingLists";
 import { resetBackNavigation, useBackLayer, useBackNavigationRoot, usePanelState } from "./backNavigation";
 import { ReceiveSettings } from "./ReceiveSettings";
 import { setReceiveTimezoneUser, syncReceiveTimezone } from "./receiveTimezone";
@@ -122,7 +123,7 @@ export function App() {
       {inviteMsg && <div className="notice" role="status">{inviteMsg}</div>}
       {session && !conv && <InstallPrompt lang={lang} />}
       {!session ? <Auth lang={lang} peek={inviteToken ? peek : undefined} />
-        : conv ? <Chat lang={lang} conv={conv} rename={setRenameContacts} back={() => setConv(null)} menu={menu} openPlans={() => setSheet("plans")} planKey={sheet} />
+        : conv ? <Chat session={session} key={session.user.id} lang={lang} conv={conv} rename={setRenameContacts} back={() => setConv(null)} menu={menu} openPlans={() => setSheet("plans")} planKey={sheet} />
         : <Home key={`home:${session.user.id}`} refreshKey={homeKey} lang={lang} open={setConv} rename={setRenameContacts} invite={() => setSheet("invite")} />}
       {sheet === "lang" && <SheetView title={t.lang} close={close} lang={lang}><Choice name="lang" value={lang} set={(v) => setLang(v as Lang)} opts={[["da", "Dansk"], ["en", "English"]]} /></SheetView>}
       {sheet === "theme" && <SheetView title={t.theme} close={close} lang={lang}><Choice name="theme" value={theme} set={setTheme} opts={[["dark", t.dark], ["light", t.light], ["system", t.system]]} /></SheetView>}
@@ -296,34 +297,6 @@ function PrivacyPanel({ lang }: { lang: Lang }) {
         <div className="row end"><button type="submit" className="danger" disabled={!ok || !pw || state === "busy"}>{da ? "Slet min konto permanent" : "Delete my account permanently"}</button></div>
         {state === "wrong" && <p className="err" role="alert">{da ? "Forkert adgangskode." : "Wrong password."}</p>}
         {state === "err" && <p className="err" role="alert">{da ? "Sletningen mislykkedes. Prøv igen." : "Deletion failed. Please try again."}</p>}
-      </form>
-    </div>
-  );
-}
-
-function BlockedWords({ lang, conv }: { lang: Lang; conv: string }) {
-  const da = lang === "da";
-  const [words, setWords] = useState<{ id: string; word: string }[]>([]); const [w, setW] = useState(""); const [ack, setAck] = useState(false); const [err, setErr] = useState("");
-  const load = () => supabase.from("conversation_blocked_words").select("id,word").eq("conversation_id", conv).order("created_at").then(({ data }) => setWords((data as any[]) ?? []));
-  useEffect(() => { load(); }, [conv]);
-  const add = async (e: React.FormEvent) => {
-    e.preventDefault(); setErr("");
-    const r = await supabase.rpc("add_blocked_word", { conv, p_word: w, p_ack: ack });
-    if (r.error) setErr(/too_many/.test(r.error.message) ? (da ? "Højst 50 ord." : "At most 50 words.") : /length/.test(r.error.message) ? (da ? "2–40 tegn." : "2–40 characters.") : (da ? "Kunne ikke tilføje." : "Could not add."));
-    else { setW(""); setAck(false); load(); }
-  };
-  return (
-    <div>
-      <p className="meta">{da ? "Valgfrit. Beskeder fra de andre, der indeholder et af dine ord eller sætninger, bliver ikke leveret til dig. Store/små bogstaver og accenter ignoreres. Kun du kan se din liste." : "Optional. Messages from the others containing one of your words or phrases are not delivered to you. Case and accents are ignored. Only you can see your list."}</p>
-      {words.length === 0 ? <p className="meta">{da ? "Ingen blokerede ord (slået fra)." : "No blocked words (off)."}</p> :
-        <ul className="words">{words.map((x) => <li key={x.id}><span>{x.word}</span><button className="ghost" onClick={async () => { await supabase.from("conversation_blocked_words").delete().eq("id", x.id); load(); }}>{da ? "Fjern" : "Remove"}</button></li>)}</ul>}
-      <form onSubmit={add}>
-        <label htmlFor="bw">{da ? "Tilføj ord eller sætning" : "Add word or phrase"}</label>
-        <input id="bw" maxLength={120} value={w} onChange={(e) => { setW(e.target.value); setAck(false); }} />
-        <p className="notice" role="note">{da ? "Bemærk: Hvis en besked bliver stoppet af dette ord, får afsenderen at vide præcis hvilket ord eller hvilken sætning der ramte – og at det er dig/modtageren, der har blokeret det. Resten af din liste ser de aldrig." : "Note: if a message is stopped by this word, the sender is told exactly which word or phrase matched – and that the recipient blocked it. They never see the rest of your list."}</p>
-        <label style={{ display: "flex", gap: 8 }}><input type="checkbox" style={{ width: 24, minHeight: 24 }} checked={ack} onChange={(e) => setAck(e.target.checked)} />{da ? "Jeg forstår, at afsenderen får ordet at se." : "I understand the sender will see the word."}</label>
-        <div className="row end"><button type="submit" disabled={!ack || w.trim().length < 2}>{da ? "Tilføj" : "Add"}</button></div>
-        {err && <p className="err" role="alert">{err}</p>}
       </form>
     </div>
   );
@@ -573,7 +546,7 @@ function markAll(text: string, q: string, current: boolean): (string | React.Rea
 
 const Icon = ({ d }: { d: React.ReactNode }) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">{d}</svg>;
 
-function Chat({ lang, conv, back, menu, openPlans, planKey, rename }: { lang: Lang; conv: Conv; back: () => void; menu: MenuItem[]; openPlans: () => void; planKey: Sheet; rename: (contacts: Other[]) => void }) {
+function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: { session: Session; lang: Lang; conv: Conv; back: () => void; menu: MenuItem[]; openPlans: () => void; planKey: Sheet; rename: (contacts: Other[]) => void }) {
   const [plan, setPlan] = useState<string | null>(null);
   const loadPlan = useCallback(() => { supabase.rpc("get_my_plan").then(({ data }) => { if (data?.[0]) setPlan(data[0].plan); }); }, []);
   useEffect(() => { loadPlan(); }, [planKey, loadPlan]);
@@ -635,6 +608,7 @@ function Chat({ lang, conv, back, menu, openPlans, planKey, rename }: { lang: La
     if (r.status === 200 && r.data?.status === "accepted") { setText(""); setReply(null); localStorage.removeItem(draftKey); localStorage.removeItem(replyKey); localStorage.removeItem(keyStore); setStatus({ kind: "accepted" }); load(); }
     else if (r.status === 200 && r.data?.status === "clarification_required") setStatus({ kind: "clarification" });
     else if (r.status === 200 && r.data?.status === "blocked") setStatus({ kind: "blocked", spans: r.data.spans ?? [], blockedText: text, suggestion: typeof r.data.suggestion === "string" ? r.data.suggestion : "", reason: r.data.reason_code });
+    else if (r.status === 200 && r.data?.status === "private_boundary") setStatus({ kind: "note", blockedText: da ? "Beskeden kan ikke sendes på grund af en privat modtagerindstilling. Ret beskeden og prøv igen." : "Not sent due to a private recipient setting. Edit your message and retry." });
     else if (r.status === 200 && r.data?.status === "blocked_word") setStatus({ kind: "note", blockedText: da ? `Beskeden blev ikke sendt: Modtageren har blokeret ordet/sætningen "${r.data.word}". Ret beskeden og prøv igen.` : `The message was not sent: the recipient has blocked the word/phrase "${r.data.word}". Edit the message and try again.` });
     else if (r.status === 200 && r.data?.status === "rule") setStatus({ kind: "note", blockedText: ({ emoji: da ? "Beskeden blev ikke sendt: Emojis er ikke tilladt i Rolff. Skriv det med ord." : "Not sent: emojis are not allowed in Rolff. Use words.", caps: da ? "Beskeden blev ikke sendt: Den er skrevet med store bogstaver, som kan opfattes som råb." : "Not sent: all caps can read as shouting.", repeat: da ? "Beskeden blev ikke sendt: Du har lige sendt den samme besked." : "Not sent: you just sent the same message." } as Record<string, string>)[r.data.rule] ?? "" });
     else if (r.status === 200 && limitMsg(r.data)) { setStatus({ kind: "note", blockedText: limitMsg(r.data)! }); loadLim(); }
@@ -658,7 +632,7 @@ function Chat({ lang, conv, back, menu, openPlans, planKey, rename }: { lang: La
         {conv.role === "parent" && <button className="icon" aria-label={da ? "Tilføj person" : "Add person"} onClick={() => setSheet("addMember")}><Icon d={<><circle cx="9" cy="8" r="4" /><path d="M2 21c0-4 3-6 7-6s7 2 7 6" /><path d="M19 8v6M16 11h6" /></>} /></button>}
         <Menu lang={lang} items={[{ label: da ? "Deltagere og roller" : "Participants and roles", run: () => setSheet("members") },
           { label: da ? "Eksportér samtale" : "Export conversation", run: () => setSheet("export") },
-          { label: da ? "Blokerede ord" : "Blocked words", run: () => setSheet("words") },
+          { label: da ? "Blokeringer" : "Blocking lists", run: () => setSheet("words") },
           { label: da ? "Rapportér" : "Report", run: () => setSheet("report") },
           blocked ? { label: da ? "Afblokér samtale" : "Unblock conversation", run: () => setBlock(false) } : { label: da ? "Blokér samtale" : "Block conversation", run: () => { if (confirm(da ? "Blokér samtalen? De andre kan ikke sende dig beskeder her, før du selv afblokerer. De får ikke at vide, at du har blokeret." : "Block this conversation? The others cannot send messages here until you unblock. They are not told that you blocked.")) setBlock(true); }, danger: true }, ...menu]} />
       </header>
@@ -696,7 +670,7 @@ function Chat({ lang, conv, back, menu, openPlans, planKey, rename }: { lang: La
         </fieldset></div>) : <div className="notice" role="note">{t.readOnly}</div>}
       {blocked && <div className="notice" role="status">{da ? "Du har blokeret samtalen. De andre kan ikke sende beskeder her. " : "You blocked this conversation. The others cannot send messages here. "}<button className="ghost" onClick={() => setBlock(false)}>{da ? "Afblokér" : "Unblock"}</button></div>}
       {sheet === "report" && <SheetView title={da ? "Rapportér" : "Report"} close={() => setSheet(null)} lang={lang}><ReportForm lang={lang} conv={conv.id} msgs={msgs} /></SheetView>}
-      {sheet === "words" && <SheetView title={da ? "Blokerede ord" : "Blocked words"} close={() => setSheet(null)} lang={lang}><BlockedWords lang={lang} conv={conv.id} /></SheetView>}
+      {sheet === "words" && <SheetView title={da ? "Blokeringer" : "Blocking lists"} close={() => setSheet(null)} lang={lang}><BlockingLists key={`${session.user.id}:${conv.id}`} session={session} lang={lang} conv={conv.id} /></SheetView>}
       {sheet === "members" && <SheetView title={da ? "Deltagere og roller" : "Participants and roles"} close={() => setSheet(null)} lang={lang}><Members lang={lang} conv={conv.id} isParent={conv.role === "parent"} left={back} openWords={() => setSheet("words")} /></SheetView>}
       {sheet === "export" && <SheetView title={da ? "Eksportér samtale" : "Export conversation"} close={() => setSheet(null)} lang={lang}><ExportPanel lang={lang} msgs={msgs} /></SheetView>}
       {sheet === "addMember" && <SheetView title={da ? "Tilføj person" : "Add person"} close={() => setSheet(null)} lang={lang}><AddMember lang={lang} conv={conv.id} done={load} openPlans={openPlans} /></SheetView>}
@@ -927,6 +901,7 @@ function AttachBar({ lang, conv, plan, openPlans, caption, file, setFile, sendRe
     else if (limitMsg(d)) setOut({ ok: false, text: limitMsg(d)! });
     else if (d.status === "clarification_required") setOut({ ok: false, text: da ? "Filen er ikke sendt. Vi er usikre på, hvad du mener. Vil du gøre teksten i filen eller din billedtekst lidt tydeligere?" : "Your file was not sent. We’re not sure what you mean. Could you make the text in the file or your caption a little clearer?" });
     else if (d.status === "blocked") setOut({ ok: false, text: (da ? "Filen blev ikke sendt: " : "Not sent: ") + (reasons[d.reason_code] ?? reasons.other_harmful) + "." + ((d.spans ?? []).length ? (da ? " Markeret: “" : " Flagged: “") + d.spans.join("”, “") + "”" : "") + (typeof d.suggestion === "string" && d.suggestion ? (da ? " Forslag: " : " Suggestion: ") + d.suggestion : "") });
+    else if (d.status === "private_boundary") setOut({ ok: false, text: da ? "Filen blev ikke sendt på grund af en privat modtagerindstilling." : "Not sent due to a private recipient setting." });
     else if (d.status === "blocked_word") setOut({ ok: false, text: da ? `Filen blev ikke sendt: Modtageren har blokeret ordet/sætningen "${d.word}", og det står i ${d.where === "caption" ? "din tekst" : "filen"}.` : `Not sent: the recipient blocked "${d.word}", which appears in ${d.where === "caption" ? "your text" : "the file"}.` });
     else if (d.status === "rule") setOut({ ok: false, text: da ? "Filen blev ikke sendt: Din tekst overholder ikke reglerne (emojis, store bogstaver eller gentagelse)." : "Not sent: your text breaks the rules (emoji, caps or repetition)." });
     else if (d.status === "cannot_deliver") setOut({ ok: false, text: da ? "Der kan ikke sendes i denne samtale." : "Cannot send in this conversation." });
