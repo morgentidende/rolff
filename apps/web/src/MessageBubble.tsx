@@ -1,4 +1,5 @@
 import { useBackLayer } from "./backNavigation";
+import { showToast } from "./toast";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { rectOf, useAnchoredPlacement } from "./anchoredPosition";
@@ -40,7 +41,6 @@ export function MessageBubble({ m, lang, children, onReply, canReply = true, hit
   // Ignore the trailing release/click and keep the panel non-interactive until then.
   const [armed, setArmed] = useState(false);
   useBackLayer(panel!==null,()=>setPanel(panel==="info"?"actions":null));
-  const [feedback, setFeedback] = useState("");
   const bubble = useRef<HTMLDivElement>(null), dialog = useRef<HTMLDivElement>(null), lifted = useRef<HTMLDivElement>(null);
   // The panel is anchored to the pressed bubble: below it, flipped above near
   // the bottom/keyboard, and aligned to the bubble's side. A non-interactive
@@ -125,8 +125,8 @@ export function MessageBubble({ m, lang, children, onReply, canReply = true, hit
     document.addEventListener("keydown", keys); return () => document.removeEventListener("keydown", keys);
   }, [panel, armed]);
   const copy = async () => {
-    try { await navigator.clipboard.writeText(m.body); setFeedback(da ? "Beskeden er kopieret." : "Message copied."); }
-    catch { setFeedback(da ? "Beskeden kunne ikke kopieres. Prøv igen." : "Could not copy. Try again."); }
+    try { await navigator.clipboard.writeText(m.body); showToast(da ? "Kopieret" : "Copied"); }
+    catch { showToast(da ? "Kunne ikke kopiere" : "Could not copy"); }
     close();
   };
   const guarded = (fn: () => void) => (e: React.MouseEvent) => {
@@ -143,7 +143,6 @@ export function MessageBubble({ m, lang, children, onReply, canReply = true, hit
       <div className="message-content">{children ?? m.body}</div>
       <time className="message-time" dateTime={m.created_at}>{messageTime(m.created_at, lang)}</time>
     </div>
-    {feedback && <p className="meta message-feedback" role="status">{feedback}</p>}
     {panel && createPortal(<div className="message-overlay" onPointerDown={e => { if (armed) { e.preventDefault(); return; } if (e.target === e.currentTarget) close(); }} onContextMenu={e => e.preventDefault()}>
       <div className="message-lifted" ref={lifted} aria-hidden="true" />
       <div className={`message-panel${panel === "info" ? " message-info" : ""}${pos ? " placed-" + pos.placement : ""}${armed ? " is-armed" : ""}`} ref={dialog} data-placement={pos?.placement} data-armed={armed ? "true" : undefined}

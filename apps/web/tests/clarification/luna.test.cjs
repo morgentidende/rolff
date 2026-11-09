@@ -39,10 +39,13 @@ for (const outcome of ['accepted', 'clarification_required']) test(`Luna robot s
       assert.ok(flashed, 'just-approved own bubble flashes');
       assert.match(flashed.textContent, /Det passer fint, vi ses fredag/);
       assert.equal(d.querySelectorAll('.msg.just-accepted').length, 1, 'only one bubble flashes');
+      assert.equal([...d.querySelectorAll('.notice')].filter(n => /accepteret/.test(n.textContent)).length, 0, 'no visible accepted notice');
+      const sr = d.querySelector('.sr-only[role="status"][aria-live="polite"]');
+      assert.ok(sr && sr.textContent === 'Rolff har accepteret beskeden.', 'screen readers still hear approval');
       assert.equal(d.querySelector('.msg.just-accepted:not(.mine)'), null, 'never flash their bubbles');
       await delay(1250);
       assert.equal(d.querySelector('.msg.just-accepted'), null, 'flash class clears after pulse');
-    } else assert.equal(d.querySelector('.luna-done'), null, 'no happy state when not accepted');
+    } else { assert.equal(d.querySelector('.luna-done'), null, 'no happy state when not accepted'); assert.equal(d.querySelector('.sr-only[role="status"]').textContent, '', 'no approval announcement when not accepted'); }
     assert.equal(d.querySelector('.luna-evaluating'), null, 'indicator fully gone');
     assert.equal(d.querySelector('.msg.just-accepted'), null, 'no flash when not accepted or after clear');
     assert.equal(w.QA.calls.filter(c => c.function === 'send-message').length, 1);
