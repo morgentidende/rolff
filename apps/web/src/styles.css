@@ -8,7 +8,7 @@
 h1{font-size:28px;margin:8px 0}h2{font-size:20px;margin:4px 0 8px}
 button{min-height:44px;padding:8px 16px;border-radius:10px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-text);font-size:16px;cursor:pointer}
 button.ghost{background:transparent;color:var(--accent)}button:disabled{opacity:.6;cursor:default}
-input,select,textarea{min-height:44px;padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:16px;width:100%}
+input,select,textarea{font-family:inherit;min-height:44px;padding:8px 10px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:16px;width:100%}
 label{display:block;margin:6px 0 2px;color:var(--muted);font-size:14px}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.spacer{flex:1}
 .notice{background:var(--warn);border:1px solid var(--warn-b);border-radius:10px;padding:8px 12px;font-size:14px;overflow-wrap:anywhere;word-break:break-word;max-width:100%}
@@ -89,10 +89,34 @@ button.icon:focus-visible,button:focus-visible{outline:2px solid var(--accent);o
 .choice input{width:20px;min-height:20px;accent-color:var(--accent)}.choice:has(input:checked){border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent)}
 .faq details{border-bottom:1px solid var(--border);padding:10px 0}.faq summary{cursor:pointer;font-weight:600;min-height:28px}.faq p{margin:8px 0 0;color:var(--muted)}
 .linkbtn{background:none;border:0;color:var(--accent);padding:0;min-height:0;text-decoration:underline;font-size:inherit}
-.searchbar{display:flex;align-items:center;gap:2px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:2px 2px 2px 8px;position:sticky;top:52px;z-index:3}
+.searchbar{display:flex;align-items:center;gap:2px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:2px 2px 2px 8px;position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);z-index:5;animation:search-in .12s ease-out}
+@keyframes search-in{from{opacity:0}to{opacity:1}}@media (prefers-reduced-motion:reduce){.searchbar{animation:none}}
 .searchbar input{border:0;min-width:0;flex:1;padding:6px 4px;background:transparent}.searchbar input:focus{outline:none}.searchbar .count{min-width:36px;text-align:right}
 .msg.hit{box-shadow:0 0 0 2px var(--accent)}mark.cur{background:var(--accent);color:var(--accent-text)}
-.invite-pending .row.end{margin-top:8px}
+/* Pending invitations: one thin amber line, collapsed by default; expands smoothly (grid 0fr→1fr). */
+.pendbar{background:var(--warn);border:1px solid var(--warn-b);border-left-width:3px;border-radius:10px;font-size:14px;overflow:hidden}
+.pendbar-head{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:8px;width:100%;min-height:36px;padding:6px 10px;cursor:pointer;color:var(--text)}
+.pendbar-head:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;border-radius:9px}
+.pendbar-dot{width:8px;height:8px;border-radius:50%;background:var(--warn-b);flex:none}
+.pendbar-sum{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+.pendbar.needs-me .pendbar-sum{font-weight:700}
+.pendbar-chev{flex:none;transition:transform .18s ease}.pendbar.is-open .pendbar-chev{transform:rotate(180deg)}
+.pendbar-body{display:grid;grid-template-rows:0fr;transition:grid-template-rows .18s ease}
+.pendbar.is-open .pendbar-body{grid-template-rows:1fr}
+.pendbar-body > *{min-height:0;overflow:hidden}
+.pendbar-body{overflow:hidden}
+.pendbar-list{list-style:none;margin:0;padding:0 10px;max-height:40vh;overflow-y:auto}
+.pendbar.is-open .pendbar-list{padding-bottom:4px}
+.pendrow{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid color-mix(in srgb,var(--warn-b) 35%,transparent)}
+.pendrow-main{flex:1;min-width:0}.pendrow-who{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pendrow .meta{font-size:12px;margin:0}
+.pendrow-act{display:flex;gap:2px;flex:none}
+.textbtn{background:none;border:0;color:var(--text);font:inherit;font-size:13px;padding:8px 8px;min-height:36px;border-radius:8px;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+.textbtn.strong{font-weight:700;color:var(--accent);text-decoration:none}
+.textbtn:focus-visible{outline:2px solid var(--accent)}
+.pendbar-note{font-size:12px;margin:0;padding:0 10px 6px}
+@media (prefers-reduced-motion:reduce){.pendbar-body,.pendbar-chev{transition:none}}
+.field-msg{margin:4px 0 0;font-size:14px}
 .times select,.times input{font-size:16px}
 .switch{display:flex;align-items:center;gap:10px;color:var(--text);font-size:16px;margin:6px 0 10px}.switch input{width:22px;min-height:22px;accent-color:var(--accent)}
 .wlist{display:flex;flex-direction:column;gap:8px;margin:12px 0}
@@ -106,7 +130,7 @@ button.danger{background:#c0392b;color:#fff;border-color:#c0392b}button.danger:d
 #inactivity,#delete{margin:18px 0 6px;font-size:1rem}
 .words{list-style:none;padding:0;margin:8px 0}.words li{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid color-mix(in srgb,currentColor 12%,transparent)}
 .linkish{background:none;border:0;padding:8px 0;min-height:44px;color:var(--accent,#016C72);text-decoration:underline;font:inherit;cursor:pointer;width:auto}
-.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:10px 0}.plan h3{margin:0 0 4px;font-size:18px}.plan .price{margin:0 0 6px}.plan.current{border:2px solid var(--accent)}.badge{display:inline-block;margin:0;padding:4px 10px;border-radius:999px;background:var(--accent);color:var(--accent-text);font-size:14px}
+.plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(136px,100%),1fr));gap:8px;margin:10px 0}.plan h3{margin:0 0 4px;font-size:18px}.plan .price{margin:0 0 6px}.plan.current{border:2px solid var(--accent)}.badge{display:inline-block;margin:0;padding:4px 10px;border-radius:999px;background:var(--accent);color:var(--accent-text);font-size:14px}
 .attach{margin-top:6px}.att{margin-top:6px;white-space:normal}button.linkish{min-height:0;padding:0;border:0;background:none;color:var(--accent);text-decoration:underline;font-size:inherit}
 
 .suggest{margin-top:8px;padding-top:8px;border-top:1px solid color-mix(in srgb,var(--warn-b) 40%,transparent);overflow-wrap:anywhere;max-width:100%}
@@ -192,7 +216,8 @@ button.danger{background:#c0392b;color:#fff;border-color:#c0392b}button.danger:d
 .chat-wrap > *{flex-shrink:0}
 /* The test-version note stays visible in the pinned chat, so keep it to one slim line; hide it while the keyboard is open. */
 .chat-wrap > .notice[role=note]:first-child{font-size:12px;line-height:1.35;padding:4px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-:root[data-kbd] .chat-wrap > .notice[role=note]:first-child{display:none}
+/* Keyboard open: hide the test banner to save room — but not while searching, so the header and invite card do not jump. */
+:root[data-kbd] .chat-wrap:not(:has(.searchbar)) > .notice[role=note]:first-child{display:none}
 .chat-wrap > .msgs{flex:1 1 0;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
 /* Android-SMS-style toast ("Kopieret"): floats above the composer, never affects layout. */
 .toast-region{position:fixed;left:0;right:0;z-index:1100;display:flex;justify-content:center;pointer-events:none;padding:0 16px}
@@ -204,7 +229,7 @@ button.danger{background:#c0392b;color:#fff;border-color:#c0392b}button.danger:d
 .toast-pill.is-success::before{content:"✓";display:inline-block;margin-right:8px;font-weight:700;color:#81c995}
 :root[data-theme="dark"] .toast-pill.is-success::before{color:#137333}
 /* Plan cards: equal height, quiet "Din plan" label at the top, actions pinned to the bottom. */
-.plan{display:flex;flex-direction:column;min-width:0}
+.plan{display:flex;flex-direction:column;min-width:0}.plans .plan.card{padding:12px}.plans .plan h3{font-size:16px}
 .plan-badge{align-self:flex-start;margin:0 0 8px;padding:2px 10px;border-radius:999px;background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent);font-size:12.5px;font-weight:600;line-height:1.6;letter-spacing:.01em}
 .plan-badge-spacer{visibility:hidden}
 .plan-foot{margin-top:auto;padding-top:10px;display:flex;flex-direction:column;gap:6px}
@@ -214,3 +239,92 @@ button.danger{background:#c0392b;color:#fff;border-color:#c0392b}button.danger:d
 .plan h3{overflow-wrap:anywhere;hyphens:auto}
 .plan.current{border:1px solid var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}
+/* Privatliv og sletning: equal section headings, themed checkboxes, delete in its own danger card. */
+.privacy .psec{margin:0 0 18px}
+.privacy .psec-h{font-size:17px;font-weight:650;line-height:1.3;margin:6px 0 8px}
+.privacy form{margin:0}
+.danger-card{border:1.5px solid #c0392b;border-radius:14px;padding:12px 14px 14px;background:color-mix(in srgb,#c0392b 5%,var(--card))}
+[data-theme=dark] .danger-card{border-color:#ff8a80;background:color-mix(in srgb,#ff8a80 6%,var(--card))}
+.check-row{display:flex;align-items:center;gap:12px;min-height:44px;padding:4px 0;cursor:pointer;font-size:inherit}
+.check-row span{flex:1}
+input.check{appearance:none;-webkit-appearance:none;flex:none;width:24px;height:24px;min-height:24px;margin:0;padding:0;border:2px solid var(--accent);border-radius:7px;background:var(--card);display:inline-grid;place-content:center;cursor:pointer;transition:background .12s}
+input.check:checked{background:var(--accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/18px no-repeat}
+[data-theme=dark] input.check:checked{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5' fill='none' stroke='%23102a26' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
+input.check:focus-visible{outline:3px solid color-mix(in srgb,var(--accent) 55%,transparent);outline-offset:2px}
+input.check:disabled{opacity:.5}
+/* Feedback: fixed-height text box (no drag-resize) with a small character counter. */
+textarea.feedback-text{resize:none;height:9.5em;min-height:9.5em;overflow-y:auto}
+.char-count{margin:4px 0 0;text-align:right;font-variant-numeric:tabular-nums}
+/* Front page: visible "Inviter person" button above the conversation list (also in the empty state). */
+.convlist-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.convlist-head h2{margin-right:auto}
+.invite-btn{display:inline-flex;align-items:center;gap:8px;background:var(--accent);color:#fff;border:1px solid var(--accent);border-radius:999px;padding:8px 16px 8px 12px;min-height:44px;font-weight:600}
+[data-theme=dark] .invite-btn{color:#102a26}
+.invite-btn svg{flex:none}
+.invite-btn-lg{padding:12px 22px 12px 16px;font-size:17px;margin-top:6px}
+.convempty{text-align:center;padding:18px 8px}
+/* In-app document screen (privacy policy): full screen inside the app shell. */
+.docview{position:fixed;inset:0;z-index:1000;background:var(--bg);display:flex;flex-direction:column;overflow:hidden;outline:none}
+.docbar{display:flex;align-items:center;gap:8px;flex:none}
+.docbar .doctitle{margin-left:auto;font-weight:600;font-size:15px;opacity:.85}
+.docbody{flex:1;overflow-y:auto;overscroll-behavior:contain;padding:4px 18px 32px;max-width:720px;width:100%;margin:0 auto;box-sizing:border-box}
+.policy{font-size:15.5px;line-height:1.55}
+.policy h1{font-size:1.35rem;margin:12px 0 4px}.policy h2{font-size:1.1rem;margin:1.4em 0 .4em}.policy h3{font-size:1rem;margin:1.1em 0 .3em}
+.policy ul{padding-left:20px}.policy li{margin:0 0 6px}
+.policy a{color:var(--accent);overflow-wrap:anywhere}
+.policy .draft{background:var(--warn);border:1px solid var(--warn-b);padding:10px 14px;border-radius:10px}
+
+/* In-app confirm dialog (replaces window.confirm). */
+.confirm-overlay{z-index:1050;align-items:center;padding:16px;animation:confirm-fade .12s ease-out}
+.confirm-card{background:var(--card);color:var(--text);width:min(360px,100%);border:1px solid var(--border);border-radius:16px;padding:18px 18px 16px;box-shadow:0 12px 36px rgba(0,0,0,.3)}
+.confirm-card h2{margin:0 0 8px;font-size:18px}
+.confirm-card p{margin:0 0 16px;font-size:15px;line-height:1.45;color:var(--muted)}
+.confirm-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.confirm-actions button{min-height:44px;width:100%;border-radius:10px;font-weight:600}
+.confirm-actions button.ghost{border-color:var(--border);color:var(--text)}
+@keyframes confirm-fade{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.confirm-overlay{animation:none}}
+.menu-sep{height:1px;margin:4px 8px;background:var(--border)}
+/* Danger menu items: red text only; a light red tint only on hover/focus/press. */
+.menu button.danger{background:transparent;border:0;color:#c0392b}
+[data-theme=dark] .menu button.danger{color:#ff8a80}
+.menu button.danger:hover,.menu button.danger:focus-visible,.menu button.danger:active{background:color-mix(in srgb,#c0392b 14%,transparent)}
+.menu button.danger:focus:not(:focus-visible){background:transparent}
+/* Rapportér sheet */
+.report{display:block}
+.report form{display:flex;flex-direction:column}
+.report label{margin-top:10px}
+.report select,.report textarea{width:100%;box-sizing:border-box;margin:4px 0 0}
+textarea.fixed-text{font:inherit;font-size:16px;line-height:1.4;resize:none;height:7.5em;min-height:7.5em;max-height:7.5em;overflow-y:auto;display:block}
+.notice.compact{font-size:13px;line-height:1.4;padding:6px 10px;margin:0 0 4px}
+.rm-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-top:12px}
+.rm-title{font-weight:600;font-size:15px}
+.rm-head .meta{white-space:nowrap;font-size:13px}
+.rm-sub{margin:2px 0 6px;font-size:13px}
+.report-msgs{list-style:none;margin:0;padding:0 10px;max-height:240px;overflow-y:auto;border:1px solid var(--border);border-radius:12px;background:var(--bg);overscroll-behavior:contain}
+.report-msgs li + li{border-top:1px solid var(--border)}
+.check-row.report-msg{align-items:flex-start;padding:8px 0;margin:0;min-height:48px}
+.check-row.report-msg input.check{margin-top:2px}
+.check-row.report-msg.is-disabled{opacity:.55;cursor:default}
+.rm-text{display:flex;flex-direction:column;min-width:0;gap:2px}
+.rm-meta{font-size:12px;color:var(--muted)}
+.rm-body{font-size:14px;line-height:1.4;overflow-wrap:anywhere;white-space:pre-wrap}
+.clamp2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:normal}
+.rm-more{align-self:flex-start;padding:2px 0;min-height:28px;font-size:12px}
+.sheet-actions{position:sticky;bottom:-16px;z-index:1;background:var(--card);margin:12px -16px -16px;padding:10px 16px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--border)}
+.sheet:not(.anchored-card) .sheet-actions{bottom:calc(-18px - env(safe-area-inset-bottom));margin:12px -18px calc(-18px - env(safe-area-inset-bottom));padding-left:18px;padding-right:18px}
+.sheet-actions button{width:100%;min-height:48px;border-radius:10px;font-weight:600;margin:0}
+.sheet-actions.two{display:grid;grid-template-columns:auto 1fr;gap:10px}
+.sheet-actions.two button.ghost{padding:8px 20px}
+.sheet-actions.two button{font-size:15px;white-space:nowrap}
+.sheet-actions button:disabled{opacity:1;background:color-mix(in srgb,var(--muted) 22%,var(--card));border-color:transparent;color:var(--muted)}
+.sheet-actions .sa-hint{margin:6px 0 0;font-size:12px;text-align:center}
+.report-summary{margin:6px 0 0;border:1px solid var(--border);border-radius:12px;background:var(--bg);padding:2px 12px}
+.rs-row{padding:10px 0}.rs-row + .rs-row{border-top:1px solid var(--border)}
+.rs-row dt{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:0 0 4px}
+.rs-row dd{margin:0;font-size:15px;line-height:1.45}
+.rs-body{white-space:pre-wrap;overflow-wrap:anywhere}
+.chip{display:inline-block;padding:3px 10px;border-radius:999px;font-size:14px;font-weight:600;background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--text);border:1px solid color-mix(in srgb,var(--accent) 45%,transparent)}
+.rs-quotes{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.rs-quotes li{display:flex;flex-direction:column;gap:2px;border-left:3px solid var(--border);padding:2px 0 2px 10px}
+.rs-foot{font-size:12px;margin:8px 0 0}

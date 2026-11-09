@@ -8,9 +8,11 @@ import { ComposerInput } from "./ComposerInput";
 import { effectiveCharLimit, textRetryKey } from "./composerLimits";
 import { MessageBubble, ReplyComposer, type Message } from "./MessageBubble";
 import { Toast, showToast } from "./toast";
+import { ConfirmHost, confirmDialog } from "./confirmDialog";
+import { PolicyView } from "./PolicyView";
 import { rectOf, useAnchoredPlacement, visibleViewport } from "./anchoredPosition";
 import type React from "react";
-import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { callFn, supabase } from "./supabase";
 import { detectLang, strings, type Lang } from "./i18n";
@@ -41,8 +43,8 @@ function readInviteToken(): string | null {
   return sessionStorage.getItem("invite");
 }
 
-type Sheet = "members" | "privacy" | "words" | null | "lang" | "theme" | "times" | "faq" | "feedback" | "invite" | "export" | "addMember" | "name" | "report" | "account" | "newpw" | "plans";
-export type MenuItem = { label: string; run: () => void; danger?: boolean };
+type Sheet = "members" | "privacy" | "words" | null | "lang" | "theme" | "times" | "faq" | "feedback" | "invite" | "export" | "addMember" | "report" | "account" | "newpw" | "plans";
+export type MenuItem = { label: string; run: () => void; danger?: boolean; divider?: boolean };
 
 export function App() {
   const [inviteToken, setInviteToken] = useState<string | null>(() => readInviteToken());
@@ -103,27 +105,31 @@ export function App() {
     return()=>{window.removeEventListener("focus",sync);window.removeEventListener("online",sync);document.removeEventListener("visibilitychange",sync);};
   },[session?.user.id]);
   const menu: MenuItem[] = [
+    // Front page only: app-wide settings. The conversation ⋮ menu has conversation actions only.
     { label: t.lang, run: () => setSheet("lang") },
     { label: t.theme, run: () => setSheet("theme") },
     { label: t.windows, run: () => setSheet("times") },
     { label: "FAQ", run: () => setSheet("faq") },
     { label: da ? "Abonnement" : "Plan", run: () => setSheet("plans") },
-    { label: conv ? (da ? "Kontaktens kaldenavn" : "Contact nickname") : (da ? "Mit visningsnavn" : "My display name"), run: () => conv ? setRenameContacts(conv.others) : setSheet("name") },
     { label: da ? "Konto (e-mail og adgangskode)" : "Account (email and password)", run: () => setSheet("account") },
     { label: da ? "Privatliv og sletning" : "Privacy and deletion", run: () => setSheet("privacy") },
-    { label: da ? "Privatlivspolitik" : "Privacy policy", run: () => { window.open("./privatliv.html" + (da ? "" : "#en"), "_blank", "noopener"); } },
+    // In-app screen (same text as the public privatliv.html); Back returns here instead of closing the PWA.
+    { label: da ? "Privatlivspolitik" : "Privacy policy", run: () => setPolicyOpen(true) },
     { label: "Feedback", run: () => setSheet("feedback") },
     { label: da ? "Inviter person" : "Invite person", run: () => setSheet("invite") },
     { label: t.logout, run: () => { resetBackNavigation(); setConv(null); resetSheet(); cacheClear().finally(() => supabase.auth.signOut()); }, danger: true },
   ];
   const close = () => setSheet(null);
+  // All sheets from the ⋮ menu open as a card under the ⋮ button at the top, like "Tilføj person".
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const [policyOpen, setPolicyOpen] = useState(false);
   useBackNavigationRoot();
   useBackLayer(!!conv,()=>setConv(null),"view");
   useBackLayer(!!renameContacts,()=>setRenameContacts(null));
   return (
     <div className={session && conv ? "wrap chat-wrap" : "wrap"}>
       {!(session && conv) && <header className="topbar"><img src="./favicon.svg" alt="" width={30} height={30} style={{ borderRadius: 8 }} /><strong className="brand">Rolff</strong><span className="spacer" />
-        {session ? <Menu lang={lang} items={menu} /> : <>
+        {session ? <Menu lang={lang} items={menu} buttonRef={menuButtonRef} /> : <>
           <select aria-label={t.lang} className="compact" value={lang} onChange={(e) => setLang(e.target.value as Lang)}><option value="da">Dansk</option><option value="en">English</option></select>
           <select aria-label={t.theme} className="compact" value={theme} onChange={(e) => setTheme(e.target.value)}><option value="system">{t.system}</option><option value="light">{t.light}</option><option value="dark">{t.dark}</option></select></>}
       </header>}
@@ -131,30 +137,30 @@ export function App() {
       {inviteMsg && <div className="notice" role="status">{inviteMsg}</div>}
       {session && !conv && <InstallPrompt lang={lang} />}
       {!session ? <Auth lang={lang} peek={inviteToken ? peek : undefined} />
-        : conv ? <Chat session={session} key={session.user.id} lang={lang} conv={conv} rename={setRenameContacts} back={() => setConv(null)} menu={menu} openPlans={() => setSheet("plans")} planKey={sheet} />
+        : conv ? <Chat session={session} key={session.user.id} lang={lang} conv={conv} rename={setRenameContacts} back={() => setConv(null)} openPlans={() => setSheet("plans")} planKey={sheet} menuButtonRef={menuButtonRef} />
         : <Home key={`home:${session.user.id}`} refreshKey={homeKey} lang={lang} open={setConv} rename={setRenameContacts} invite={() => setSheet("invite")} />}
-      {sheet === "lang" && <SheetView title={t.lang} close={close} lang={lang}><Choice name="lang" value={lang} set={(v) => setLang(v as Lang)} opts={[["da", "Dansk"], ["en", "English"]]} /></SheetView>}
-      {sheet === "theme" && <SheetView title={t.theme} close={close} lang={lang}><Choice name="theme" value={theme} set={setTheme} opts={[["dark", t.dark], ["light", t.light], ["system", t.system]]} /></SheetView>}
-      {sheet === "times" && <SheetView title={t.windows} close={close} lang={lang}><ReceiveSettings key={session?.user.id??"anonymous"} lang={lang} /></SheetView>}
-      {sheet === "plans" && <SheetView title={da ? "Abonnement" : "Plan"} close={close} lang={lang}><Plans lang={lang} /></SheetView>}
-      {sheet === "faq" && <SheetView title="FAQ" close={close} lang={lang}><Faq lang={lang} /></SheetView>}
-      {sheet === "name" && <SheetView title={da ? "Mit navn – det andre ser" : "My name – visible to others"} close={close} lang={lang}><PublicName lang={lang} /></SheetView>}
+      {sheet === "lang" && <SheetView title={t.lang} close={close} lang={lang} anchor={menuButtonRef}><Choice name="lang" value={lang} set={(v) => setLang(v as Lang)} opts={[["da", "Dansk"], ["en", "English"]]} /></SheetView>}
+      {sheet === "theme" && <SheetView title={t.theme} close={close} lang={lang} anchor={menuButtonRef}><Choice name="theme" value={theme} set={setTheme} opts={[["dark", t.dark], ["light", t.light], ["system", t.system]]} /></SheetView>}
+      {sheet === "times" && <SheetView title={t.windows} close={close} lang={lang} anchor={menuButtonRef}><ReceiveSettings key={session?.user.id??"anonymous"} lang={lang} /></SheetView>}
+      {sheet === "plans" && <SheetView title={da ? "Abonnement" : "Plan"} close={close} lang={lang} anchor={menuButtonRef}><Plans lang={lang} /></SheetView>}
+      {sheet === "faq" && <SheetView title="FAQ" close={close} lang={lang} anchor={menuButtonRef}><Faq lang={lang} /></SheetView>}
       {session && renameContacts && <ContactAliasDialog key={`alias:${session.user.id}`} lang={lang} contacts={renameContacts}
         close={() => setRenameContacts(null)} save={async (id, alias) => { const uid=session.user.id; const { error } = await supabase.rpc("set_contact_alias", { p_contact: id, p_alias: alias }).setHeader("Authorization", `Bearer ${session.access_token}`); if (error) throw error; if((await supabase.auth.getSession()).data.session?.user.id!==uid)return; const name=alias.trim()||null; setConv(c => c ? { ...c, others: c.others.map(o => o.user_id === id ? { ...o, alias:name } : o) } : c); setHomeKey(k => k + 1); }}
         saved={() => setRenameContacts(null)} />}
-      {session && !sheet && !renameContacts && <NameHint lang={lang} open={() => setSheet("name")} />}
-      {sheet === "account" && <SheetView title={da ? "Konto" : "Account"} close={close} lang={lang}><AccountPanel lang={lang} /></SheetView>}
-      {sheet === "newpw" && session && <SheetView title={da ? "Vælg ny adgangskode" : "Choose a new password"} close={close} lang={lang}><NewPassword lang={lang} done={close} /></SheetView>}
-      {sheet === "privacy" && <SheetView title={da ? "Privatliv og sletning" : "Privacy and deletion"} close={close} lang={lang}><PrivacyPanel lang={lang} /></SheetView>}
-      {sheet === "feedback" && <SheetView title="Feedback" close={close} lang={lang}><FeedbackForm lang={lang} /></SheetView>}
-      {sheet === "invite" && <SheetView title={da ? "Inviter person" : "Invite person"} close={close} lang={lang}><InviteByEmail lang={lang} done={() => setHomeKey(homeKey + 1)} /></SheetView>}
+      {sheet === "account" && <SheetView title={da ? "Konto" : "Account"} close={close} lang={lang} anchor={menuButtonRef}><AccountPanel lang={lang} /></SheetView>}
+      {sheet === "newpw" && session && <SheetView title={da ? "Vælg ny adgangskode" : "Choose a new password"} close={close} lang={lang} anchor={menuButtonRef}><NewPassword lang={lang} done={close} /></SheetView>}
+      {sheet === "privacy" && <SheetView title={da ? "Privatliv og sletning" : "Privacy and deletion"} close={close} lang={lang} anchor={menuButtonRef}><PrivacyPanel lang={lang} /></SheetView>}
+      {sheet === "feedback" && <SheetView title="Feedback" close={close} lang={lang} anchor={menuButtonRef}><FeedbackForm lang={lang} /></SheetView>}
+      {sheet === "invite" && <SheetView title={da ? "Inviter person" : "Invite person"} close={close} lang={lang} anchor={menuButtonRef}><InviteByEmail lang={lang} done={(toast) => { setHomeKey(homeKey + 1); close(); showToast(toast, { tone: "success", ms: 4000, at: "top" }); }} /></SheetView>}
+      {policyOpen && <PolicyView lang={lang} close={() => setPolicyOpen(false)} />}
       {/* One app-wide toast ("Kopieret", "Planen er skiftet") that floats above chat and sheets. */}
       <Toast />
+      <ConfirmHost />
     </div>
   );
 }
 
-function Menu({ lang, items }: { lang: Lang; items: MenuItem[] }) {
+function Menu({ lang, items, buttonRef }: { lang: Lang; items: MenuItem[]; buttonRef?: React.RefObject<HTMLButtonElement | null> }) {
   const [open, setOpen] = useState(false); const ref = useRef<HTMLDivElement>(null);
   useBackLayer(open,()=>setOpen(false));
   useEffect(() => {
@@ -166,10 +172,10 @@ function Menu({ lang, items }: { lang: Lang; items: MenuItem[] }) {
   }, [open]);
   return (
     <div className="menuwrap" ref={ref}>
-      <button type="button" className="icon" aria-label={lang === "da" ? "Menu" : "Menu"} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
+      <button type="button" ref={buttonRef} className="icon" aria-label={lang === "da" ? "Menu" : "Menu"} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
         <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><circle cx="12" cy="5" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="12" cy="19" r="2" /></svg>
       </button>
-      {open && <div className="menu" role="menu">{items.map((it) => <button key={it.label} type="button" role="menuitem" className={it.danger ? "danger" : ""} onClick={() => { setOpen(false); it.run(); }}>{it.label}</button>)}</div>}
+      {open && <div className="menu" role="menu">{items.map((it) => <Fragment key={it.label}>{it.divider && <div className="menu-sep" role="separator" />}<button type="button" role="menuitem" className={it.danger ? "danger" : ""} onClick={() => { setOpen(false); it.run(); }}>{it.label}</button></Fragment>)}</div>}
     </div>
   );
 }
@@ -219,8 +225,8 @@ function Faq({ lang }: { lang: Lang }) {
     ["Hvad er “Blokerede ord”?", "Et valgfrit filter (slået fra som standard): Under ⋮ → “Blokerede ord” kan du tilføje enkeltord, udtryk på flere ord eller hele sætninger (op til 120 tegn), som ikke må nå frem til dig. Store/små bogstaver og accenter er ligegyldige (fx matcher “dårlig far” også “DÅRLIG FAR” og “darlig far”), og ordene skal stå i samme rækkefølge. Afslutter du med * (fx “pis*”), rammes også ord, der begynder sådan. Listen gælder den samtale, du står i, og er privat. Rammer en besked noget på listen, bliver den ikke leveret – afsenderen får at vide præcis hvilket ord eller udtryk, og at modtageren har blokeret det, og kan omformulere. Derfor skal du bekræfte det for hvert ord. Du kan fjerne ord igen når som helst."],
     ["Kan jeg begrænse hvor tit en person skriver?", "Ja. Åbn “Deltagere og roller” og derefter “Indstillinger for denne person”. Vælg højst 1 besked pr. minut, pr. 5 minutter, pr. time eller et brugerdefineret antal minutter (1 til 1.440 = 24 timer). Standard er ingen grænse. Det regnes fra personens seneste leverede besked til dig i alle jeres samtaler; afviste beskeder tæller ikke, vedhæftninger tæller som en besked. For tidlige beskeder gemmes ikke, og afsenderen får at vide, hvornår der kan sendes igen. Er I flere, gælder den strengeste grænse."],
     ["Hvem kan tilføje en ekstra person til en samtale?", "At invitere den anden forælder, når du opretter en samtale, kan alle. At tilføje en ekstra person (fx advokat eller bedsteforælder) kræver, at DU som inviterer har planen “Tekst + vedhæftninger” (79 kr./md.). De andre deltagere og den inviterede må gerne have 49-planen. Nedgraderer du senere, bliver de nuværende deltagere."],
-    ["Hvad kan de andre se om mig?", "Du logger ind med din e-mail. Som udgangspunkt er din e-mail også det navn, de andre i samtalen ser. Du kan når som helst vælge et kaldenavn under ⋮ → Visningsnavn – så ser de kun kaldenavnet, også i eksisterende samtaler, og din e-mail udleveres ikke længere til dem. Hver person kan desuden give dig et privat kaldenavn, som kun de selv ser. Glemt adgangskode: brug linket på login-siden. Skift e-mail eller adgangskode: ⋮ → Konto. Sletning af konto: ⋮ → Privatliv og sletning."],
-    ["Hvordan rapporterer jeg noget?", "Tryk ⋮ i samtalen → “Rapportér”. Du vælger kategori, skriver selv hvad der er sket og kan markere de beskeder, du vil vedhæfte. Du ser en forhåndsvisning, og intet sendes før du bekræfter. Rapporten mailes til Rolffs udvikler (kontakt: nicolaipetersen108@gmail.com) med dit kaldenavn og bruger-id. Rolff gemmer kun kategori, tidspunkt og antal vedhæftede beskeder (til at begrænse misbrug) – ikke teksten. Der er ingen døgnvagt og ingen garanti for svar eller handling. Ved akut fare: ring 112."],
+    ["Hvad kan de andre se om mig?", "Du logger ind med din e-mail. Din e-mail er også det navn, de andre i samtalen ser – du kan ikke selv vælge et andet navn. Hver person kan give dig et privat kaldenavn, som kun de selv ser (hold fingeren på samtalen). Glemt adgangskode: brug linket på login-siden. Skift e-mail eller adgangskode: ⋮ → Konto. Sletning af konto: ⋮ → Privatliv og sletning."],
+    ["Hvordan rapporterer jeg noget?", "Tryk ⋮ i samtalen → “Rapportér”. Du vælger kategori, skriver selv hvad der er sket og kan markere de beskeder, du vil vedhæfte. Du ser en forhåndsvisning, og intet sendes før du bekræfter. Rapporten mailes til Rolffs udvikler (kontakt: nicolaipetersen108@gmail.com) med dit bruger-id. Rolff gemmer kun kategori, tidspunkt og antal vedhæftede beskeder (til at begrænse misbrug) – ikke teksten. Der er ingen døgnvagt og ingen garanti for svar eller handling. Ved akut fare: ring 112."],
     ["Hvor ligger mine data, og hvor længe?", "På Supabase-servere i Frankfurt (EU). Du vælger selv opbevaring (1 år, 5 år eller ubegrænset) og sky-synk under ⋮ → Privatliv og sletning. Der kan du også downloade alle dine data (ZIP med JSON og CSV) og slette din konto. AI-tonetjekket bruger i testen OpenAI (USA/global behandling, ikke EU; ingen Zero Data Retention endnu; store:false). Læs mere i privatlivspolitikken (⋮ → Privatlivspolitik)."],
     ["Kan jeg sende billeder og PDF'er?", "Ja, med planen “Tekst + vedhæftninger” (79 kr./md.). Brug papirclipsen til filvalg eller kameraikonet til et nyt billede. Telefonen styrer eventuelle kameratilladelser, når funktionen bruges; filvælgeren giver kun adgang til den valgte fil. En valgt fil sendes først, når du trykker på papirflyet. Du kan sende PNG, JPG, WebP, GIF (ikke animeret) og PDF (højst 4 MB og 5 sider). Før filen sendes, tjekker AI (OpenAI, gpt-6-luna) både billedet og al tekst i det – samme regler som beskeder. Er bare én linje sårende, eller er billedet upassende, bliver filen ikke sendt, og du får at vide hvorfor. Modtagerens blokerede ord gælder også tekst i filen. Alle i samtalen kan se vedhæftninger, de modtager, uanset plan. Læsere kan ikke sende filer."],
     ["Hvad koster Rolff?", "Der er to planer: “Tekst” 49 kr./md. med højst 160 tegn pr. besked (én SMS-længde) og “Tekst + vedhæftninger” 79 kr./md. med højst 480 tegn (tre SMS-længder). Planen gælder dig som afsender, så to forældre kan have hver sin plan. Opgradering gælder straks, nedgradering fra næste periode. I testversionen er skiftet en testfunktion uden betaling."],
@@ -236,8 +242,8 @@ function Faq({ lang }: { lang: Lang }) {
     ["What are “Blocked words”?", "An optional filter (off by default): under ⋮ → “Blocked words” you can add single words, multi-word expressions or whole sentences (up to 120 characters) that must not reach you. Case and accents are ignored, and words must appear in the same order. Ending with * (e.g. “pis*”) also matches words starting that way. The list applies to the current conversation and is private. If a message hits it, it is not delivered – the sender is told exactly which word or phrase and that the recipient blocked it, and can rephrase. That is why you confirm each word. You can remove words at any time."],
     ["Can I limit how often a person writes?", "Yes. Open “Participants and roles”, then “Settings for this person”. Choose at most 1 message per minute, per 5 minutes, per hour, or a custom number of minutes (1 to 1,440 = 24 hours). Default: no limit. It counts from the person's latest delivered message to you in any of your conversations; rejected messages do not count; attachments count as a message. Early messages are not stored and the sender is told when they can send again. With several recipients the strictest applies."],
     ["Who can add an extra person to a conversation?", "Anyone can invite the other parent when creating a conversation. Adding an extra person (e.g. a lawyer) requires that YOU, the inviter, are on “Text + attachments” (79 DKK/month). Other members and the invitee may be on 49. If you downgrade later, existing members stay."],
-    ["What can others see about me?", "You log in with your e-mail. By default your e-mail is also the name others in the conversation see. You can choose a nickname at any time under ⋮ → Display name – then they only see the nickname, also in existing conversations, and your e-mail is no longer given to them. Each person can also give you a private nickname only they see. Forgot password: use the link on the login page. Change e-mail or password: ⋮ → Account. Account deletion: ⋮ → Privacy and deletion."],
-    ["How do I report something?", "Tap ⋮ in the conversation → “Report”. You choose a category, write what happened and can tick the messages you want to attach. You see a preview and nothing is sent until you confirm. The report is e-mailed to Rolff's developer (contact: nicolaipetersen108@gmail.com) with your nickname and user id. Rolff stores only category, time and number of attached messages (to limit abuse) – not the text. There is no 24/7 staff and no guarantee of a reply or action. In an emergency: call 112."],
+    ["What can others see about me?", "You log in with your e-mail. Your e-mail is also the name others in the conversation see – you cannot choose a different name yourself. Each person can give you a private nickname that only they see (press and hold the conversation). Forgot password: use the link on the login page. Change e-mail or password: ⋮ → Account. Account deletion: ⋮ → Privacy and deletion."],
+    ["How do I report something?", "Tap ⋮ in the conversation → “Report”. You choose a category, write what happened and can tick the messages you want to attach. You see a preview and nothing is sent until you confirm. The report is e-mailed to Rolff's developer (contact: nicolaipetersen108@gmail.com) with your user id. Rolff stores only category, time and number of attached messages (to limit abuse) – not the text. There is no 24/7 staff and no guarantee of a reply or action. In an emergency: call 112."],
     ["Where is my data, and for how long?", "On Supabase servers in Frankfurt (EU). You choose retention (1 year, 5 years or unlimited) and cloud sync under ⋮ → Privacy and deletion, where you can also download all your data (ZIP with JSON and CSV) and delete your account. The AI tone check uses OpenAI during testing (US/global processing, not EU; no Zero Data Retention yet; store:false). See the privacy policy (⋮ → Privacy policy)."],
     ["Can I send images and PDFs?", "Yes, with the “Text + attachments” plan (79 DKK/month). Use the paperclip to choose a file or the camera to take a photo. Your phone manages any camera permission when used; the file picker grants access only to your chosen file. Nothing is sent until you press the paper plane. PNG, JPG, WebP, GIF (not animated) and PDF (max 4 MB, 5 pages). Before sending, AI (OpenAI, gpt-6-luna) checks the image and all text in it with the same rules as messages. If one line is hurtful or the image is inappropriate, it is not sent and you are told why. The recipient's blocked words also apply to text in the file. Everyone can view attachments they receive, whatever their plan. Readers cannot send files."],
     ["What does Rolff cost?", "Two plans: “Text” 49 DKK/month with up to 160 characters per message (one SMS length) and “Text + attachments” 79 DKK/month with up to 480 (three SMS lengths). The plan applies to you as sender, so two parents may have different plans. Upgrades apply immediately, downgrades from the next period. In the test version switching is a test feature without payment."],
@@ -265,8 +271,8 @@ function MyDataExport({ lang }: { lang: Lang }) {
   };
   return (
     <form onSubmit={go}>
-      <h3 id="export">{da ? "Download mine data" : "Download my data"}</h3>
-      <p className="meta">{da ? "En ZIP med JSON og CSV: konto, indstillinger, dine samtaler (det du selv kan se), egne kaldenavne, blokerede ord, invitationer, samtykker, feedback og metadata. Filen laves på din enhed. Højst 3 gange i døgnet." : "A ZIP with JSON and CSV: account, settings, your conversations (what you can see), own nicknames, blocked words, invitations, consents, feedback and metadata. Built on your device. At most 3 times a day."}</p>
+      <h3 id="export" className="psec-h">{da ? "Download mine data" : "Download my data"}</h3>
+      <p className="meta">{da ? "Hent en kopi af dine data: konto, indstillinger, dine samtaler (det, du selv kan se), kaldenavne, blokerede ord, invitationer, samtykker, feedback og metadata. Filen (ZIP) laves på din enhed. Højst 3 gange i døgnet." : "Get a copy of your data: account, settings, your conversations (what you can see yourself), nicknames, blocked words, invitations, consents, feedback and metadata. The file (ZIP) is made on your device. At most 3 times a day."}</p>
       <label htmlFor="xpw">{da ? "Bekræft med din adgangskode" : "Confirm with your password"}</label>
       <input id="xpw" type="password" autoComplete="current-password" value={pw} onChange={(e) => setPw(e.target.value)} required />
       <div className="row end"><button type="submit" disabled={st === "busy" || !pw}>{da ? "Download" : "Download"}</button></div>
@@ -293,109 +299,122 @@ function PrivacyPanel({ lang }: { lang: Lang }) {
     await cacheClear(); await supabase.auth.signOut({ scope: "local" }); location.replace(location.pathname + "?deleted=1");
   };
   return (
-    <div>
-      <h3 id="data">{da ? "Opbevaring og synkronisering" : "Retention and sync"}</h3>
+    <div className="privacy">
+      <section className="psec" aria-labelledby="data">
+      <h3 id="data" className="psec-h">{da ? "Opbevaring og synkronisering" : "Retention and sync"}</h3>
       {p && <>
         <label htmlFor="ret">{da ? "Behold mine beskeder i" : "Keep my messages for"}</label>
         <select id="ret" value={p.retention} onChange={(e) => saveData({ ...p, retention: e.target.value })}>
           <option value="1y">{da ? "1 år (standard)" : "1 year (default)"}</option><option value="5y">{da ? "5 år" : "5 years"}</option><option value="unlimited">{da ? "Ubegrænset" : "Unlimited"}</option></select>
-        <p className="meta">{da ? "Ældre beskeder skjules for dig med det samme og slettes fra serveren, når alle i samtalen har passeret deres egen grænse. Vælger modparten længere tid, beholder de deres kopi." : "Older messages are hidden for you at once and deleted from the server when everyone in the conversation has passed their own limit. If the other person chose longer, they keep their copy."}</p>
-        <label style={{ display: "flex", gap: 8 }}><input type="checkbox" style={{ width: 24, minHeight: 24 }} checked={p.cloud_sync} onChange={(e) => saveData({ ...p, cloud_sync: e.target.checked })} />
-          {da ? "Sky-synk (til flere enheder)" : "Cloud sync (for several devices)"}</label>
-        <p className="meta">{da ? "Valgfrit, slået fra som standard. Gemmes nu. I web-testversionen ligger beskederne altid på serveren (EU, Frankfurt), da browseren ikke er en sikker fast kopi. I mobilappen betyder “fra”, at serveren kun holder beskeden til den er leveret." : "Optional, off by default. Saved now. In the web test version messages always stay on the server (EU, Frankfurt) as the browser is not a safe permanent copy. In the mobile app “off” means the server only keeps a message until it is delivered."}</p></>}
-      <MyDataExport lang={lang} />
-      <h3 id="inactivity">{da ? "Automatisk sletning ved inaktivitet" : "Automatic deletion when inactive"}</h3>
+        <p className="meta">{da ? "Ældre beskeder forsvinder straks for dig. De slettes fra serveren, når alle i samtalen har nået deres egen grænse. Har den anden valgt længere tid, beholder de deres kopi." : "Older messages disappear for you right away. They are deleted from the server once everyone in the conversation has reached their own limit. If the other person chose a longer time, they keep their copy."}</p>
+        <CheckRow checked={p.cloud_sync} onChange={(v) => saveData({ ...p, cloud_sync: v })} label={da ? "Sky-synk (brug Rolff på flere enheder)" : "Cloud sync (use Rolff on several devices)"} />
+        <p className="meta">{da ? "Valgfrit og slået fra, til du selv slår det til. Ændringen gemmes med det samme. I denne testversion ligger dine beskeder altid på en server i EU (Frankfurt), uanset hvad du vælger. I mobilappen betyder “fra”, at serveren kun gemmer en besked, indtil den er leveret." : "Optional and off until you turn it on. The change is saved right away. In this test version your messages are always stored on a server in the EU (Frankfurt), whatever you choose. In the mobile app, “off” means the server only keeps a message until it has been delivered."}</p></>}
+      </section>
+      <section className="psec"><MyDataExport lang={lang} /></section>
+      <section className="psec" aria-labelledby="inactivity">
+      <h3 id="inactivity" className="psec-h">{da ? "Automatisk sletning ved inaktivitet" : "Automatic deletion when inactive"}</h3>
       {p && <>
-        <label style={{ display: "flex", gap: 8 }}><input type="checkbox" style={{ width: 24, minHeight: 24 }} checked={p.inactivity_delete} onChange={(e) => save({ ...p, inactivity_delete: e.target.checked })} />
-          {da ? "Slet min konto, hvis jeg ikke logger ind i" : "Delete my account if I do not log in for"}</label>
+        <CheckRow checked={p.inactivity_delete} onChange={(v) => save({ ...p, inactivity_delete: v })} label={da ? "Slet min konto, hvis jeg ikke logger ind i" : "Delete my account if I do not log in for"} />
         <select aria-label={da ? "Antal dage" : "Days"} disabled={!p.inactivity_delete} value={p.inactivity_days} onChange={(e) => save({ ...p, inactivity_days: +e.target.value })}>
           {[30, 60, 90].map((d) => <option key={d} value={d}>{d} {da ? "dage" : "days"}</option>)}</select>
         <p className="meta">{da ? "Du får en mail 14 dage før. Mailen indeholder ingen beskeder." : "You get an email 14 days before. It contains no messages."}</p></>}
-      <h3 id="delete">{da ? "Slet min konto" : "Delete my account"}</h3>
-      <p>{da ? "Sletter din konto, dine indstillinger, kaldenavne, farver og feedback på serveren samt alt, Rolff har gemt på denne enhed. Det kan ikke fortrydes." : "Deletes your account, settings, aliases, colours and feedback on the server, plus everything Rolff stored on this device. This cannot be undone."}</p>
+      </section>
+      <section className="psec danger-card" aria-labelledby="delete">
+      <h3 id="delete" className="psec-h">{da ? "Slet min konto" : "Delete my account"}</h3>
+      <p className="meta">{da ? "Sletter din konto, dine indstillinger, kaldenavne, farver og feedback på serveren samt alt, Rolff har gemt på denne enhed. Det kan ikke fortrydes." : "Deletes your account, settings, aliases, colours and feedback on the server, plus everything Rolff stored on this device. This cannot be undone."}</p>
       <p className="notice">{evidenceNote(lang)}</p>
       <form onSubmit={del}>
         <label htmlFor="delpw">{da ? "Bekræft med din adgangskode" : "Confirm with your password"}</label>
         <PasswordInput id="delpw" lang={lang} value={pw} onChange={(v) => { setPw(v); setState(""); }} minLength={1} autoComplete="current-password" />
-        <label style={{ display: "flex", gap: 8 }}><input type="checkbox" style={{ width: 24, minHeight: 24 }} checked={ok} onChange={(e) => setOk(e.target.checked)} />{da ? "Jeg forstår, at sletningen er endelig." : "I understand that deletion is final."}</label>
+        <CheckRow checked={ok} onChange={setOk} label={da ? "Jeg forstår, at sletningen er endelig." : "I understand that deletion is final."} />
         <div className="row end"><button type="submit" className="danger" disabled={!ok || !pw || state === "busy"}>{da ? "Slet min konto permanent" : "Delete my account permanently"}</button></div>
         {state === "wrong" && <p className="err" role="alert">{da ? "Forkert adgangskode." : "Wrong password."}</p>}
         {state === "err" && <p className="err" role="alert">{da ? "Sletningen mislykkedes. Prøv igen." : "Deletion failed. Please try again."}</p>}
       </form>
+      </section>
     </div>
   );
 }
+/** Checkbox in Rolff's theme colours with a full-row tap target (native input kept for a11y). */
+function CheckRow({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
+  return <label className="check-row"><input type="checkbox" className="check" checked={checked} onChange={(e) => onChange(e.target.checked)} /><span>{label}</span></label>;
+}
 
 export const emailVisibleNote = (lang: Lang) => lang === "da"
-  ? "De andre i samtalen ser din e-mail som dit navn, indtil du vælger et kaldenavn (⋮ → Mit visningsnavn). Du logger altid ind med din e-mail."
-  : "Others in the conversation see your e-mail as your name until you choose a nickname (⋮ → My display name). You always log in with your e-mail.";
-function NameHint({ lang, open }: { lang: Lang; open: () => void }) {
-  const da = lang === "da";
-  const [show, setShow] = useState(false);
-  useEffect(() => { if (localStorage.getItem("nameHintSeen")) return; supabase.rpc("get_my_public_name").then(({ data, error }) => { if (!error && !data) setShow(true); }); }, []);
-  if (!show) return null;
-  const done = () => { localStorage.setItem("nameHintSeen", "1"); setShow(false); };
-  return <div className="notice" role="note">{emailVisibleNote(lang)} <div className="row end"><button className="ghost" onClick={done}>{da ? "OK" : "OK"}</button><button onClick={() => { done(); open(); }}>{da ? "Vælg kaldenavn" : "Choose nickname"}</button></div></div>;
-}
-function PublicName({ lang }: { lang: Lang }) {
-  const da = lang === "da";
-  const [v, setV] = useState(""); const [msg, setMsg] = useState("");
-  useEffect(() => { supabase.rpc("get_my_public_name").then(({ data }) => setV((data as string) ?? "")); }, []);
-  const save = async (name: string | null) => {
-    const r = await supabase.rpc("set_my_public_name", { p_name: name });
-    setMsg(r.error ? (da ? "Højst 40 tegn, uden @ og linjeskift." : "Max 40 characters, no @ or line breaks.") : (da ? "Gemt. Gælder straks i alle samtaler." : "Saved. Applies at once in all conversations."));
-    if (!r.error && name === null) setV("");
-  };
-  return (
-    <form onSubmit={(e) => { e.preventDefault(); save(v.trim() || null); }}>
-      <p className="meta">{da ? "Det navn, de andre ser. Står feltet tomt, ser de din e-mail. Din e-mail er stadig dit login." : "The name others see. If empty, they see your e-mail. Your e-mail is still your login."}</p>
-      <label htmlFor="pn">{da ? "Kaldenavn" : "Nickname"}</label>
-      <input id="pn" maxLength={40} value={v} onChange={(e) => setV(e.target.value)} />
-      <div className="row end"><button type="button" className="ghost" onClick={() => save(null)}>{da ? "Vis min e-mail" : "Show my e-mail"}</button><button type="submit">{da ? "Gem" : "Save"}</button></div>
-      {msg && <p className="meta" role="status">{msg}</p>}
-    </form>);
-}
+  ? "De andre i samtalen ser din e-mail. De kan selv give dig et privat kaldenavn, som kun de ser. Du logger altid ind med din e-mail."
+  : "Others in the conversation see your e-mail. They can give you a private nickname that only they see. You always log in with your e-mail.";
 export const REPORT_CATS: [string, string, string][] = [["harassment", "Chikane/trusler", "Harassment/threats"], ["inappropriate", "Upassende indhold", "Inappropriate content"], ["child_safety", "Børns sikkerhed", "Child safety"], ["other", "Andet", "Other"]];
 export const reportHonesty = (da: boolean) => da
   ? "Rapporten sendes som en e-mail til Rolffs udvikler. Der er ingen døgnvagt og ingen garanti for svar eller handling. Er nogen i akut fare, så ring 112 eller kontakt politiet (114)."
   : "The report is sent as an e-mail to Rolff's developer. There is no 24/7 staff and no guarantee of a reply or action. If someone is in immediate danger, call 112 or the police.";
-function ReportForm({ lang, conv, msgs }: { lang: Lang; conv: string; msgs: Msg[] }) {
+const REPORT_MAX = 2000, REPORT_MAX_MSGS = 20; // also enforced by the report Edge function / submit_report
+function reportTime(iso: string, da: boolean) {
+  return new Intl.DateTimeFormat(da ? "da-DK" : "en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(iso));
+}
+function ClampText({ text, da }: { text: string; da: boolean }) {
+  const [open, setOpen] = useState(false); const long = text.length > 90 || text.includes("\n");
+  return <><span className={open ? "rm-body" : "rm-body clamp2"}>{text}</span>{long && <button type="button" className="textbtn rm-more" aria-expanded={open} onClick={(e) => { e.preventDefault(); e.stopPropagation(); setOpen(!open); }}>{open ? (da ? "Vis mindre" : "Show less") : (da ? "Vis mere" : "Show more")}</button>}</>;
+}
+function ReportForm({ lang, conv, msgs, who, onStep, done }: { lang: Lang; conv: string; msgs: Msg[]; who: (m: Msg) => string; onStep: (s: "edit" | "preview") => void; done: () => void }) {
   const da = lang === "da";
   const [cat, setCat] = useState("harassment"); const [body, setBody] = useState(""); const [sel, setSel] = useState<string[]>([]);
-  const [step, setStep] = useState<"edit" | "preview" | "busy" | "ok" | "err" | "limit">("edit");
-  const chosen = msgs.filter((m) => sel.includes(m.id));
+  const [step, setStepRaw] = useState<"edit" | "preview">("edit");
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState<"" | "err" | "limit">("");
+  const busyRef = useRef(false); const rootRef = useRef<HTMLDivElement>(null);
+  const setStep = (s: "edit" | "preview") => { setStepRaw(s); onStep(s); setErr(""); requestAnimationFrame(() => { const c = rootRef.current?.closest(".sheet"); if (c) c.scrollTop = 0; }); };
+  // Newest first; only the last 50 are offered.
+  const list = msgs.slice(-50).reverse();
+  const chosen = msgs.filter((m) => sel.includes(m.id)).reverse();
+  const text = (m: Msg) => m.body?.trim() || (m.att_name ? (da ? `[Vedhæftning: ${m.att_name}]` : `[Attachment: ${m.att_name}]`) : "–");
+  const ready = !!cat && (!!body.trim() || sel.length > 0);
+  const catLabel = REPORT_CATS.find((c) => c[0] === cat)![da ? 1 : 2];
   const send = async () => {
-    setStep("busy");
+    if (busyRef.current) return; busyRef.current = true; setBusy(true); setErr("");
     let r; try { r = await callFn("report", { conversation_id: conv, category: cat, body: body.trim(), message_ids: sel }); } catch { r = { status: 0, data: null as any }; }
-    setStep(r.status === 200 ? "ok" : r.status === 429 ? "limit" : "err");
+    busyRef.current = false; setBusy(false);
+    if (r.status === 200) { done(); showToast(da ? "Rapporten er sendt" : "The report has been sent", { tone: "success", at: "top", ms: 3500 }); }
+    else setErr(r.status === 429 ? "limit" : "err");
   };
-  if (step === "ok") return <p className="notice" role="status">{da ? "Rapporten er sendt. Tak." : "The report has been sent. Thank you."} {reportHonesty(da)}</p>;
-  if (step !== "edit") return (
-    <div>
-      <p className="meta">{da ? "Forhåndsvisning – præcis dette sendes, og intet andet:" : "Preview – exactly this is sent, nothing else:"}</p>
-      <p><strong>{REPORT_CATS.find((c) => c[0] === cat)![da ? 1 : 2]}</strong></p>
-      <p style={{ whiteSpace: "pre-wrap" }}>{body.trim() || "–"}</p>
-      <p className="meta">{da ? `Valgte beskeder (${chosen.length}):` : `Selected messages (${chosen.length}):`}</p>
-      <ul className="words">{chosen.map((m) => <li key={m.id}><span>{m.sender_name}: {m.body}</span></li>)}</ul>
-      <p className="meta">{da ? "Sammen med dit kaldenavn, bruger-id og samtale-id." : "Together with your nickname, user id and conversation id."}</p>
-      <p className="notice" role="note">{reportHonesty(da)}</p>
-      {step === "limit" && <p className="err" role="alert">{da ? "Du kan højst sende 3 rapporter pr. døgn." : "At most 3 reports per day."}</p>}
-      {step === "err" && <p className="err" role="alert">{da ? "Kunne ikke sende. Prøv igen senere." : "Could not send. Try again later."}</p>}
-      <div className="row end"><button className="ghost" onClick={() => setStep("edit")}>{da ? "Ret" : "Edit"}</button><button className="danger" disabled={step === "busy"} onClick={send}>{da ? "Bekræft og send rapport" : "Confirm and send report"}</button></div>
+  const meta = (m: Msg) => <span className="rm-meta">{who(m)} · <time dateTime={m.created_at}>{reportTime(m.created_at, da)}</time></span>;
+  if (step === "preview") return (
+    <div className="report" ref={rootRef}>
+      <p className="meta">{da ? "Tjek rapporten. Det her sendes:" : "Check the report. This is what is sent:"}</p>
+      <dl className="report-summary">
+        <div className="rs-row"><dt>{da ? "Kategori" : "Category"}</dt><dd><span className="chip">{catLabel}</span></dd></div>
+        <div className="rs-row"><dt>{da ? "Beskrivelse" : "Description"}</dt><dd className="rs-body">{body.trim() || "–"}</dd></div>
+        <div className="rs-row"><dt>{da ? `Vedhæftede beskeder (${chosen.length})` : `Attached messages (${chosen.length})`}</dt>
+          <dd>{chosen.length ? <ul className="rs-quotes">{chosen.map((m) => <li key={m.id}>{meta(m)}<ClampText text={text(m)} da={da} /></li>)}</ul> : <span className="meta">{da ? "Ingen" : "None"}</span>}</dd></div>
+      </dl>
+      <p className="meta rs-foot">{da ? "Sendes sammen med dit bruger-id og samtale-id. I rapporten står afsenderne af vedhæftede beskeder med deres e-mail." : "Sent together with your user id and conversation id. In the report, senders of attached messages are shown by their email."}</p>
+      {err === "limit" && <p className="err" role="alert">{da ? "Du kan højst sende 3 rapporter pr. døgn." : "At most 3 reports per day."}</p>}
+      {err === "err" && <p className="err" role="alert">{da ? "Kunne ikke sende. Prøv igen senere." : "Could not send. Try again later."}</p>}
+      <div className="sheet-actions two">
+        <button type="button" className="ghost" disabled={busy} onClick={() => setStep("edit")}>{da ? "Ret" : "Edit"}</button>
+        <button type="button" className="danger" disabled={busy} aria-busy={busy || undefined} onClick={send}>{busy ? (da ? "Sender…" : "Sending…") : (da ? "Bekræft og send rapport" : "Confirm and send report")}</button>
+      </div>
     </div>);
   return (
-    <form onSubmit={(e) => { e.preventDefault(); setStep("preview"); }}>
-      <p className="notice" role="note">{reportHonesty(da)}</p>
+    <div className="report" ref={rootRef}><form onSubmit={(e) => { e.preventDefault(); if (ready) setStep("preview"); }}>
+      <p className="notice compact" role="note">{reportHonesty(da)}</p>
       <label htmlFor="rc">{da ? "Kategori" : "Category"}</label>
       <select id="rc" value={cat} onChange={(e) => setCat(e.target.value)}>{REPORT_CATS.map(([k, d, en]) => <option key={k} value={k}>{da ? d : en}</option>)}</select>
       <label htmlFor="rb">{da ? "Beskriv hvad der er sket" : "Describe what happened"}</label>
-      <textarea id="rb" maxLength={2000} rows={4} value={body} onChange={(e) => setBody(e.target.value)} />
-      <p className="meta">{da ? "Vedhæft beskeder (valgfrit, højst 20). Kun dem, du markerer, sendes." : "Attach messages (optional, max 20). Only those you tick are sent."}</p>
-      <div style={{ maxHeight: 220, overflow: "auto" }}>{msgs.slice(-50).map((m) => <label key={m.id} style={{ display: "flex", gap: 8 }}><input type="checkbox" style={{ width: 24, minHeight: 24 }} checked={sel.includes(m.id)} disabled={!sel.includes(m.id) && sel.length >= 20} onChange={(e) => setSel(e.target.checked ? [...sel, m.id] : sel.filter((x) => x !== m.id))} /><span>{m.sender_name}: {m.body.slice(0, 80)}</span></label>)}</div>
-      <div className="row end"><button type="submit" disabled={!body.trim() && sel.length === 0}>{da ? "Se forhåndsvisning" : "Preview"}</button></div>
-    </form>);
+      <textarea id="rb" className="fixed-text" maxLength={REPORT_MAX} rows={5} aria-describedby="rb-count" value={body} onChange={(e) => setBody(e.target.value.slice(0, REPORT_MAX))} />
+      <p id="rb-count" className="meta char-count" aria-live="polite">{body.length}/{REPORT_MAX}</p>
+      <div className="rm-head"><span className="rm-title">{da ? "Vedhæft beskeder (valgfrit)" : "Attach messages (optional)"}</span><span className="meta" aria-live="polite">{da ? `Valgt ${sel.length} af højst ${REPORT_MAX_MSGS}` : `Selected ${sel.length} of max ${REPORT_MAX_MSGS}`}</span></div>
+      <p className="meta rm-sub">{da ? "Nyeste øverst. Kun dem, du markerer, sendes." : "Newest first. Only those you tick are sent."}</p>
+      {list.length ? <ul className="report-msgs" aria-label={da ? "Beskeder" : "Messages"}>{list.map((m) => { const on = sel.includes(m.id); const full = !on && sel.length >= REPORT_MAX_MSGS; return <li key={m.id}>
+        <label className={`check-row report-msg${full ? " is-disabled" : ""}`}><input type="checkbox" className="check" checked={on} disabled={full} onChange={(e) => setSel(e.target.checked ? (sel.length < REPORT_MAX_MSGS ? [...sel, m.id] : sel) : sel.filter((x) => x !== m.id))} />
+          <span className="rm-text">{meta(m)}<span className="rm-body clamp2">{text(m)}</span></span></label></li>; })}</ul>
+        : <p className="meta">{da ? "Ingen beskeder i samtalen endnu." : "No messages in this conversation yet."}</p>}
+      <div className="sheet-actions">
+        <button type="submit" className="wide" disabled={!ready}>{da ? "Se forhåndsvisning" : "Preview"}</button>
+        {!ready && <p className="meta sa-hint">{da ? "Skriv hvad der er sket, eller vælg mindst én besked." : "Describe what happened, or pick at least one message."}</p>}
+      </div>
+    </form></div>);
 }
 
+const FEEDBACK_MAX = 2000; // also enforced by the feedback Edge function and a DB check
 function FeedbackForm({ lang }: { lang: Lang }) {
   const da = lang === "da";
   const [cat, setCat] = useState("suggestion"); const [body, setBody] = useState(""); const [state, setState] = useState<"" | "busy" | "ok" | "err" | "limit">("");
@@ -406,11 +425,12 @@ function FeedbackForm({ lang }: { lang: Lang }) {
   };
   return (
     <form onSubmit={submit}>
-      <p className="meta">{da ? "Skriv ikke samtaleindhold eller personoplysninger, du ikke vil dele. Feedback sendes til Rolff sammen med dit kaldenavn og bruger-id – ikke dine samtaler." : "Do not write conversation content or personal data you do not want to share. Feedback is sent to Rolff with your nickname and user id – not your conversations."}</p>
+      <p className="meta">{da ? "Skriv ikke samtaleindhold eller personoplysninger, du ikke vil dele. Feedback sendes til Rolff sammen med dit bruger-id – ikke dine samtaler." : "Do not write conversation content or personal data you do not want to share. Feedback is sent to Rolff with your user id – not your conversations."}</p>
       <label htmlFor="fc">{da ? "Kategori" : "Category"}</label>
-      <select id="fc" value={cat} onChange={(e) => setCat(e.target.value)}><option value="suggestion">{da ? "Forslag" : "Suggestion"}</option><option value="complaint">{da ? "Klage" : "Complaint"}</option><option value="filter">{da ? "Filter-feedback" : "Filter feedback"}</option></select>
+      <select id="fc" value={cat} onChange={(e) => setCat(e.target.value)}><option value="suggestion">{da ? "Forslag" : "Suggestion"}</option><option value="complaint">{da ? "Klage" : "Complaint"}</option></select>
       <label htmlFor="fb">{da ? "Din feedback" : "Your feedback"}</label>
-      <textarea id="fb" rows={5} maxLength={2000} required value={body} onChange={(e) => { setBody(e.target.value); setState(""); }} />
+      <textarea id="fb" className="feedback-text" rows={6} maxLength={FEEDBACK_MAX} required aria-describedby="fb-count" value={body} onChange={(e) => { setBody(e.target.value); setState(""); }} />
+      <p id="fb-count" className="meta char-count" aria-live="off">{[...body].length}/{FEEDBACK_MAX}</p>
       <div className="row end"><button type="submit" disabled={state === "busy" || !body.trim()}>{da ? "Send feedback" : "Send feedback"}</button></div>
       {state === "ok" && <p className="meta" role="status">{da ? "Tak! Din feedback er sendt." : "Thanks! Your feedback was sent."}</p>}
       {state === "limit" && <p className="err" role="alert">{da ? "Du har sendt meget feedback i dag. Prøv igen i morgen." : "Too much feedback today. Try again tomorrow."}</p>}
@@ -511,6 +531,8 @@ function ColorDot({ lang, conv, label, initial, changed }: { lang: Lang; conv: C
 
 type ConvRow = Conv & ConvPreview;
 
+/** Person with a plus: used on the front-page "Inviter person" button. Decorative (the text is the label). */
+const InviteIcon = () => <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c.6-3.6 3.3-5.5 6.5-5.5s5.9 1.9 6.5 5.5" /><path d="M19 8v6M16 11h6" /></svg>;
 function Home({ lang, open, invite, rename, refreshKey }: { lang: Lang; open: (c: Conv) => void; invite: () => void; rename: (contacts: Other[]) => void; refreshKey: number }) {
   const t = strings[lang]; const da = lang === "da";
   const [convs, setConvs] = useState<ConvRow[] | null>(null);
@@ -525,8 +547,12 @@ function Home({ lang, open, invite, rename, refreshKey }: { lang: Lang; open: (c
   useEffect(() => { const f = () => { if (document.visibilityState === "visible") load(); }; document.addEventListener("visibilitychange", f); return () => document.removeEventListener("visibilitychange", f); }, [load]);
   const now = new Date();
   return (
-    <section className="convlist" aria-labelledby="convlist-title"><h2 id="convlist-title">{t.conversations}</h2>
-      {convs?.length === 0 && <div className="convempty"><p>{da ? "Ingen samtaler endnu." : "No conversations yet."}</p><button type="button" onClick={invite}>{da ? "Inviter en person" : "Invite someone"}</button></div>}
+    <section className="convlist" aria-labelledby="convlist-title">
+      <div className="convlist-head"><h2 id="convlist-title">{t.conversations}</h2>
+        {!!convs?.length && <button type="button" className="invite-btn" aria-haspopup="dialog" onClick={invite}><InviteIcon />{da ? "Inviter person" : "Invite person"}</button>}</div>
+      {convs?.length === 0 && <div className="convempty"><p><strong>{da ? "Ingen samtaler endnu." : "No conversations yet."}</strong></p>
+        <p className="meta">{da ? "Inviter den person, du vil skrive med – fx den anden forælder. I får en fælles samtale, så snart invitationen er taget imod." : "Invite the person you want to write with – e.g. the other parent. You get a shared conversation as soon as the invitation is accepted."}</p>
+        <button type="button" className="invite-btn invite-btn-lg" aria-haspopup="dialog" onClick={invite}><InviteIcon />{da ? "Inviter person" : "Invite person"}</button></div>}
       {!!convs?.length && <ul className="convitems">
         {convs.map((c) => { const d = convDisplay(c, da); const prev = previewText(c, da); const time = listTime(c.last_at, lang, now); return (
           <li key={c.id} className="convrow">
@@ -542,23 +568,31 @@ function Home({ lang, open, invite, rename, refreshKey }: { lang: Lang; open: (c
   );
 }
 
-function InviteByEmail({ lang, done }: { lang: Lang; done: () => void }) {
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+/** Shared input props for invite e-mail fields: mobile keyboard shows @ and a "send" key. */
+const inviteEmailProps = { type: "email", inputMode: "email", enterKeyHint: "send", autoComplete: "off", autoCapitalize: "none", autoCorrect: "off", spellCheck: false, maxLength: 254 } as const;
+function blurActive() { const a = document.activeElement; if (a instanceof HTMLElement) a.blur(); }
+
+function InviteByEmail({ lang, done }: { lang: Lang; done: (toast: string) => void }) {
   const da = lang === "da";
   const [email, setEmail] = useState(""); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState<{ ok: boolean; text: string; plan?: boolean } | null>(null);
   const submit = async (e: React.FormEvent) => {
-    e.preventDefault(); setBusy(true); setMsg(null);
-    let r; try { r = await callFn("invite-email", { email }); } catch { r = { status: 0, data: null as any }; }
+    e.preventDefault(); if (busy) return;
+    const addr = email.trim();
+    if (!EMAIL_RE.test(addr)) { setMsg({ ok: false, text: da ? "Skriv en gyldig e-mailadresse, fx navn@eksempel.dk." : "Enter a valid email address, e.g. name@example.com." }); return; }
+    setBusy(true); setMsg(null);
+    let r; try { r = await callFn("invite-email", { email: addr, lang }); } catch { r = { status: 0, data: null as any }; }
     setBusy(false);
-    if (r.status === 200) { setMsg({ ok: true, text: da ? `Invitationen er sendt til ${email}. Du får en kopi på mail.` : `Invitation sent to ${email}. You will get a copy by email.` }); setEmail(""); done(); }
+    if (r.status === 200) { blurActive(); done(da ? `Invitation sendt til ${addr}. Du får en kopi på mail.` : `Invitation sent to ${addr}. You will get a copy by email.`); }
     else setMsg({ ok: false, text: r.data?.error === "rate_limited" ? (da ? "Du har sendt mange invitationer i dag. Prøv igen i morgen." : "Too many invitations today.")
       : r.data?.error === "bad_input" ? (da ? "Tjek e-mailadressen." : "Check the email address.") : (da ? "Mailen kunne ikke sendes. Prøv igen senere." : "The email could not be sent. Try again later.") });
   };
   return (
-    <form onSubmit={submit}><p className="meta" role="note">{evidenceNote(lang)} {emailVisibleNote(lang)}</p>
+    <form onSubmit={submit} noValidate><p className="meta" role="note">{evidenceNote(lang)} {emailVisibleNote(lang)}</p>
       <p className="meta">{da ? "Der oprettes en ny samtale mellem jer to. Den inviterede ser kun beskeder fra efter, hun eller han er kommet med." : "A new conversation is created for the two of you. The invitee only sees messages from after joining."}</p>
-      <label htmlFor="ie">{da ? "E-mail" : "Email"}</label><input id="ie" type="email" required maxLength={254} value={email} onChange={(e) => setEmail(e.target.value)} />
+      <label htmlFor="ie">{da ? "E-mail" : "Email"}</label><input id="ie" {...inviteEmailProps} required aria-invalid={msg && !msg.ok ? true : undefined} aria-describedby={msg && !msg.ok ? "ie-err" : undefined} value={email} onChange={(e) => { setEmail(e.target.value); if (msg && !msg.ok) setMsg(null); }} />
+      {msg && <p id="ie-err" ref={(el) => el?.scrollIntoView?.({ block: "nearest" })} className={msg.ok ? "meta field-msg" : "err field-msg"} role={msg.ok ? "status" : "alert"}>{msg.text}</p>}
       <div className="row end"><button type="submit" disabled={busy}>{busy ? (da ? "Sender…" : "Sending…") : "Send invitation"}</button></div>
-      {msg && <p className={msg.ok ? "meta" : "err"} role={msg.ok ? "status" : "alert"}>{msg.text}</p>}
     </form>
   );
 }
@@ -582,7 +616,7 @@ function markAll(text: string, q: string, current: boolean): (string | React.Rea
 
 const Icon = ({ d }: { d: React.ReactNode }) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">{d}</svg>;
 
-function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: { session: Session; lang: Lang; conv: Conv; back: () => void; menu: MenuItem[]; openPlans: () => void; planKey: Sheet; rename: (contacts: Other[]) => void }) {
+function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButtonRef }: { session: Session; lang: Lang; conv: Conv; back: () => void; openPlans: () => void; planKey: Sheet; rename: (contacts: Other[]) => void; menuButtonRef?: React.RefObject<HTMLButtonElement | null> }) {
   const [plan, setPlan] = useState<string | null>(null);
   const loadPlan = useCallback(() => { supabase.rpc("get_my_plan").then(({ data }) => { if (data?.[0]) setPlan(data[0].plan); }); }, []);
   useEffect(() => { loadPlan(); }, [planKey, loadPlan]);
@@ -629,11 +663,24 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
   };
   const [blocked, setBlocked] = useState(false);
   useEffect(() => { supabase.from("conversation_blocks").select("user_id").eq("conversation_id", conv.id).then(({ data }) => setBlocked((data ?? []).length > 0)); }, [conv.id]);
+  const [reportStep, setReportStep] = useState<"edit" | "preview">("edit");
   const setBlock = async (on: boolean) => { const r = await supabase.rpc(on ? "block_conversation" : "unblock_conversation", { conv: conv.id }); if (!r.error) setBlocked(on); };
+  const askBlock = async (on: boolean) => {
+    const ok = await confirmDialog(on
+      ? { title: da ? "Blokér samtalen?" : "Block this conversation?", body: da ? "De andre kan ikke sende dig beskeder her, før du afblokerer. De får ikke besked om det." : "The others can't send you messages here until you unblock. They are not told.", confirm: da ? "Blokér" : "Block", cancel: da ? "Annuller" : "Cancel", danger: true }
+      : { title: da ? "Afblokér samtalen?" : "Unblock this conversation?", body: da ? "De andre kan igen sende dig beskeder her." : "The others can send you messages here again.", confirm: da ? "Afblokér" : "Unblock", cancel: da ? "Annuller" : "Cancel" });
+    if (!ok) return;
+    const r = await supabase.rpc(on ? "block_conversation" : "unblock_conversation", { conv: conv.id });
+    if (r.error) { showToast(da ? "Det lykkedes ikke. Prøv igen." : "That didn't work. Try again.", { at: "top", ms: 3000 }); return; }
+    setBlocked(on); showToast(on ? (da ? "Samtalen er blokeret" : "Conversation blocked") : (da ? "Samtalen er afblokeret" : "Conversation unblocked"), { tone: "success", at: "top", ms: 3000 });
+  };
   const [sheet, setSheet, resetSheet] = usePanelState<Sheet>(null);
   const addPersonRef = useRef<HTMLButtonElement>(null);
   const [q, setQ] = useState<string | null>(null); const [cur, setCur] = useState(0);
-  useBackLayer(q!==null,()=>setQ(null));
+  // Closing search (✕, Escape or Android back) returns focus to the search button.
+  const refocusSearchBtn = useRef(false);
+  const closeSearch = () => { refocusSearchBtn.current = true; setQ(null); };
+  useBackLayer(q!==null,closeSearch);
   const endRef = useRef<HTMLDivElement>(null); const listRef = useRef<HTMLDivElement>(null);
   const load = useCallback(async () => {
     const uid = (await supabase.auth.getSession()).data.session?.user.id;
@@ -687,6 +734,13 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
   }, [replyFocus, toBottom]);
   useEffect(() => { localStorage.setItem(draftKey, text); }, [text, draftKey]);
   useEffect(() => { if (reply) localStorage.setItem(replyKey, reply.id); else localStorage.removeItem(replyKey); }, [reply?.id, replyKey]);
+  const searchRef = useRef<HTMLInputElement>(null); const searchBtnRef = useRef<HTMLButtonElement>(null);
+  const searchOpen = q !== null;
+  // Focus without letting the browser scroll anything into view (that caused the jump).
+  useLayoutEffect(() => {
+    if (searchOpen) searchRef.current?.focus({ preventScroll: true });
+    else if (refocusSearchBtn.current) { refocusSearchBtn.current = false; searchBtnRef.current?.focus({ preventScroll: true }); }
+  }, [searchOpen]);
   const hits = q ? findHits(msgs.map((m) => m.body), q) : [];
   const curIdx = hits.length ? hits[Math.min(cur, hits.length - 1)] : -1;
   useEffect(() => { if (curIdx >= 0) listRef.current?.querySelector(`[data-i="${curIdx}"]`)?.scrollIntoView({ block: "center" }); }, [curIdx, q]);
@@ -712,7 +766,19 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
     else setStatus({ kind: "techError" });
   };
   const receiveNow = async () => { await callFn("receive-now", {}); load(); };
-  const answer = async (id: string, action: "consent" | "decline") => { await callFn("invite-email", { action, invitation_id: id }); load(); };
+  const answer = async (id: string, action: "consent" | "decline") => {
+    const iv = invs.find((x) => x.id === id);
+    if (action === "decline") {
+      const withdraw = !!iv?.mine && !!iv?.i_consented; const who = iv?.invitee_email ?? (da ? "personen" : "this person");
+      const ok = await confirmDialog(withdraw
+        ? { title: da ? "Træk invitationen tilbage?" : "Withdraw the invitation?", body: da ? `${who} bliver ikke inviteret. Du kan sende en ny senere.` : `${who} will not be invited. You can send a new one later.`, confirm: da ? "Træk tilbage" : "Withdraw", cancel: da ? "Annuller" : "Cancel", danger: true }
+        : { title: da ? "Afvis invitationen?" : "Reject the invitation?", body: da ? `Ét afslag stopper invitationen af ${who}.` : `One rejection stops the invitation of ${who}.`, confirm: da ? "Afvis" : "Reject", cancel: da ? "Annuller" : "Cancel", danger: true });
+      if (!ok) return;
+    }
+    const r = await callFn("invite-email", { action, invitation_id: id, lang }).catch(() => ({ status: 0 }));
+    load();
+    showToast(r.status !== 200 ? (da ? "Det lykkedes ikke. Prøv igen." : "That didn't work. Try again.") : action === "consent" ? (da ? "Du har godkendt" : "You approved") : (da ? "Invitationen er stoppet" : "Invitation stopped"), { tone: r.status === 200 ? "success" : "neutral", at: "top", ms: 3000 });
+  };
   const d = convDisplay({ others, pending_invitee: conv.pending_invitee }, da); const label = d.title;
   const roleTxt = (r: string) => r === "reader" ? (da ? "kun læse" : "read only") : (da ? "læse og skrive" : "read and write");
   const replyWho = (m: Pick<ReplyTarget, "mine" | "sender_id" | "sender_name" | "sender_email">) => {
@@ -733,29 +799,26 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
         <button className="icon" onClick={back} aria-label={t.back}><Icon d={<path d="M15 18l-6-6 6-6" />} /></button>
         <ColorDot lang={lang} conv={{ ...conv, color }} label={label} initial={d.initial} changed={setColor} />
         <div role="heading" aria-level={2} className="chattitle">{others.length ? others.map((o) => <button key={o.user_id} type="button" className="contact-heading" title={da ? "Privat kaldenavn" : "Private nickname"} onClick={() => rename([o])}>{labelOf(o)}</button>) : <><span className="convname">{d.title}</span>{d.status && <span className="meta convstatus"> · {d.status}</span>}</>}</div>
-        <button className="icon" aria-label={da ? "Søg i samtalen" : "Search conversation"} aria-pressed={q !== null} onClick={() => { setQ(q === null ? "" : null); setCur(0); }}><Icon d={<><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></>} /></button>
+        <button ref={searchBtnRef} className="icon" aria-label={da ? "Søg i samtalen" : "Search conversation"} aria-pressed={q !== null} onClick={() => { setQ(q === null ? "" : null); setCur(0); }}><Icon d={<><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></>} /></button>
         {conv.role === "parent" && <button ref={addPersonRef} className="icon" aria-label={da ? "Tilføj person" : "Add person"} aria-haspopup="dialog" aria-expanded={sheet === "addMember"} onClick={() => setSheet("addMember")}><Icon d={<><circle cx="9" cy="8" r="4" /><path d="M2 21c0-4 3-6 7-6s7 2 7 6" /><path d="M19 8v6M16 11h6" /></>} /></button>}
-        <Menu lang={lang} items={[{ label: da ? "Deltagere og roller" : "Participants and roles", run: () => setSheet("members") },
+        {/* Conversation-only actions; app-wide settings live on the front-page menu. */}
+        <Menu lang={lang} buttonRef={menuButtonRef} items={[{ label: da ? "Deltagere og roller" : "Participants and roles", run: () => setSheet("members") },
+          ...(others.length ? [{ label: da ? "Kontaktens kaldenavn" : "Contact nickname", run: () => rename(others) }] : []),
           { label: da ? "Eksportér samtale" : "Export conversation", run: () => setSheet("export") },
           { label: da ? "Blokeringer" : "Blocking lists", run: () => setSheet("words") },
-          { label: da ? "Rapportér" : "Report", run: () => setSheet("report") },
-          blocked ? { label: da ? "Afblokér samtale" : "Unblock conversation", run: () => setBlock(false) } : { label: da ? "Blokér samtale" : "Block conversation", run: () => { if (confirm(da ? "Blokér samtalen? De andre kan ikke sende dig beskeder her, før du selv afblokerer. De får ikke at vide, at du har blokeret." : "Block this conversation? The others cannot send messages here until you unblock. They are not told that you blocked.")) setBlock(true); }, danger: true }, ...menu]} />
+          { label: da ? "Rapportér" : "Report", run: () => setSheet("report"), divider: true },
+          blocked ? { label: da ? "Afblokér samtale" : "Unblock conversation", run: () => { void askBlock(false); } } : { label: da ? "Blokér samtale" : "Block conversation", run: () => { void askBlock(true); }, danger: true }]} />
+        {/* Search overlays the header row (no layout shift: the invite card and messages stay put). */}
+          {q !== null && <div className="searchbar" role="search">
+          <input type="search" ref={searchRef} aria-label={da ? "Søg i viste beskeder" : "Search visible messages"} placeholder={da ? "Søg i viste beskeder" : "Search visible messages"} value={q} onChange={(e) => { setQ(e.target.value); setCur(0); }}
+            onKeyDown={(e) => { if (e.key === "Enter" && hits.length) setCur((cur + (e.shiftKey ? hits.length - 1 : 1)) % hits.length); }} />
+          <span className="meta count" aria-live="polite">{q.trim() ? (hits.length ? `${Math.min(cur, hits.length - 1) + 1}/${hits.length}` : "0/0") : ""}</span>
+          <button className="icon" aria-label={da ? "Forrige" : "Previous"} disabled={!hits.length} onClick={() => setCur((cur + hits.length - 1) % hits.length)}><Icon d={<path d="M6 15l6-6 6 6" />} /></button>
+          <button className="icon" aria-label={da ? "Næste" : "Next"} disabled={!hits.length} onClick={() => setCur((cur + 1) % hits.length)}><Icon d={<path d="M6 9l6 6 6-6" />} /></button>
+          <button className="icon" aria-label={da ? "Luk søgning" : "Close search"} onClick={closeSearch}>✕</button>
+        </div>}
       </header>
-      {q !== null && <div className="searchbar" role="search">
-        <input type="search" autoFocus aria-label={da ? "Søg i viste beskeder" : "Search visible messages"} placeholder={da ? "Søg i viste beskeder" : "Search visible messages"} value={q} onChange={(e) => { setQ(e.target.value); setCur(0); }}
-          onKeyDown={(e) => { if (e.key === "Enter" && hits.length) setCur((cur + (e.shiftKey ? hits.length - 1 : 1)) % hits.length); }} />
-        <span className="meta count" aria-live="polite">{q.trim() ? (hits.length ? `${Math.min(cur, hits.length - 1) + 1}/${hits.length}` : "0/0") : ""}</span>
-        <button className="icon" aria-label={da ? "Forrige" : "Previous"} disabled={!hits.length} onClick={() => setCur((cur + hits.length - 1) % hits.length)}><Icon d={<path d="M6 15l6-6 6 6" />} /></button>
-        <button className="icon" aria-label={da ? "Næste" : "Next"} disabled={!hits.length} onClick={() => setCur((cur + 1) % hits.length)}><Icon d={<path d="M6 9l6 6 6-6" />} /></button>
-        <button className="icon" aria-label={da ? "Luk søgning" : "Close search"} onClick={() => setQ(null)}>✕</button>
-      </div>}
-      {invs.map((iv) => <div key={iv.id} className="notice invite-pending" role="status">
-        <div><strong>{iv.invitee_email}</strong> · {roleTxt(iv.role)}</div>
-        <div className="meta">{iv.consents >= iv.required ? (da ? "Alle har godkendt. Invitationen er sendt og venter på, at personen tager imod." : "Everyone approved. The invitation was sent and awaits acceptance.")
-          : da ? `Afventer godkendelse: ${iv.consents} af ${iv.required} har godkendt. Ét afslag stopper invitationen.` : `Awaiting approval: ${iv.consents} of ${iv.required} approved. One rejection stops it.`}</div>
-        {!iv.i_consented ? <div className="row end"><button className="ghost" onClick={() => answer(iv.id, "decline")}>{da ? "Afvis" : "Reject"}</button><button onClick={() => answer(iv.id, "consent")}>{da ? "Godkend" : "Approve"}</button></div>
-          : iv.mine ? <div className="row end"><button className="ghost" onClick={() => answer(iv.id, "decline")}>{da ? "Træk tilbage" : "Withdraw"}</button></div> : null}
-      </div>)}
+      <PendingBar lang={lang} invs={invs} answer={answer} roleTxt={roleTxt} />
       {pending > 0 && <div className="notice row"><span>{t.pending(pending)}</span><span className="spacer" /><button onClick={receiveNow}>{t.receiveNow}</button></div>}
       <div className="msgs" aria-live="polite" ref={listRef}>
         {msgs.length === 0 && <p className="meta">{t.empty}</p>}
@@ -775,12 +838,12 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
           <AttachBar lang={lang} conv={conv.id} plan={plan} openPlans={openPlans} caption={text} file={file} setFile={setFile} sendRef={attachmentSend} cap={cap} replyTo={reply?.id ?? null} onBusy={setAttachmentBusy} limitMsg={limitMsg} sent={(messageId) => { setText(""); setReply(null); localStorage.removeItem(draftKey); localStorage.removeItem(replyKey); setStatus({ kind: "accepted" }); setAcceptedSeq((x) => x + 1); armFlash(messageId); load(); loadLim(); }} />
           {(() => { const wait = lim?.next_at ? Math.ceil((new Date(lim.next_at).getTime() - Date.now()) / 1000) : 0; return wait > 0 ? <p className="meta" role="status">{da ? `Du kan sende igen ${waitText(wait, true)}.` : `You can send again ${waitText(wait, false)}.`}</p> : null; })()}
         </fieldset></div>) : <div className="notice" role="note">{t.readOnly}</div>}
-      {blocked && <div className="notice" role="status">{da ? "Du har blokeret samtalen. De andre kan ikke sende beskeder her. " : "You blocked this conversation. The others cannot send messages here. "}<button className="ghost" onClick={() => setBlock(false)}>{da ? "Afblokér" : "Unblock"}</button></div>}
-      {sheet === "report" && <SheetView title={da ? "Rapportér" : "Report"} close={() => setSheet(null)} lang={lang}><ReportForm lang={lang} conv={conv.id} msgs={msgs} /></SheetView>}
+      {blocked && <div className="notice" role="status">{da ? "Du har blokeret samtalen. De andre kan ikke sende beskeder her. " : "You blocked this conversation. The others cannot send messages here. "}<button className="ghost" onClick={() => { void askBlock(false); }}>{da ? "Afblokér" : "Unblock"}</button></div>}
+      {sheet === "report" && <SheetView title={reportStep === "preview" ? (da ? "Rapportér · Tjek og send" : "Report · Check and send") : (da ? "Rapportér" : "Report")} close={() => { setSheet(null); setReportStep("edit"); }} lang={lang} anchor={menuButtonRef}><ReportForm lang={lang} conv={conv.id} msgs={msgs} who={(m) => m.mine ? (da ? "Dig" : "You") : replyWho(m)} onStep={setReportStep} done={() => { setSheet(null); setReportStep("edit"); }} /></SheetView>}
       {sheet === "words" && <SheetView title={da ? "Blokeringer" : "Blocking lists"} close={() => setSheet(null)} lang={lang}><BlockingLists key={`${session.user.id}:${conv.id}`} session={session} lang={lang} conv={conv.id} /></SheetView>}
       {sheet === "members" && <SheetView title={da ? "Deltagere og roller" : "Participants and roles"} close={() => setSheet(null)} lang={lang}><Members lang={lang} conv={conv.id} isParent={conv.role === "parent"} left={back} openWords={() => setSheet("words")} /></SheetView>}
       {sheet === "export" && <SheetView title={da ? "Udskrift af samtale" : "Conversation transcript"} close={() => setSheet(null)} lang={lang}><ConversationExport lang={lang} conv={conv.id} plan={plan} ownEmail={session.user.email ?? ""} openPlans={() => { setSheet(null); openPlans(); }} /></SheetView>}
-      {sheet === "addMember" && <SheetView title={da ? "Tilføj person" : "Add person"} close={() => setSheet(null)} lang={lang} anchor={addPersonRef}><AddMember lang={lang} conv={conv.id} done={load} openPlans={openPlans} /></SheetView>}
+      {sheet === "addMember" && <SheetView title={da ? "Tilføj person" : "Add person"} close={() => setSheet(null)} lang={lang} anchor={addPersonRef}><AddMember lang={lang} conv={conv.id} done={(toast) => { load(); setSheet(null); showToast(toast, { tone: "success", ms: 4000, at: "top" }); }} openPlans={openPlans} /></SheetView>}
     </>
   );
 }
@@ -793,10 +856,12 @@ function Members({ lang, conv, isParent, left, openWords }: { lang: Lang; conv: 
   const [ms, setMs] = useState<Member[] | null>(null); const [err, setErr] = useState("");
   const load = useCallback(async () => { const { data, error } = await supabase.rpc("list_conversation_members", { conv }); if (error) setErr(da ? "Kunne ikke hente deltagere." : "Could not load participants."); else setMs((data as Member[]) ?? []); }, [conv, da]);
   useEffect(() => { load(); }, [load]);
-  const act = async (fn: string, args: Record<string, unknown>, q: string) => {
-    if (!confirm(q)) return; setErr("");
+  const act = async (fn: string, args: Record<string, unknown>, c: { title: string; body?: string; confirm: string; danger?: boolean; done?: string }) => {
+    if (!await confirmDialog({ ...c, cancel: da ? "Annuller" : "Cancel" })) return; setErr("");
+    const done = c.done;
     const { error } = await supabase.rpc(fn, { conv, ...args });
     if (error) { setErr(da ? "Handlingen mislykkedes." : "The action failed."); return; }
+    if (done) showToast(done, { tone: "success", at: "top", ms: 3000 });
     if (fn === "leave_conversation") left(); else load();
   };
   if (!ms) return <p className="meta" role="status">{err || (da ? "Henter…" : "Loading…")}</p>;
@@ -806,38 +871,76 @@ function Members({ lang, conv, isParent, left, openWords }: { lang: Lang; conv: 
       <ul className="words">{ms.map((m) => <li key={m.user_id}>
         <span>{m.me ? (da ? "Dig" : "You") : m.label} · <strong>{roleName(m.role, da)}</strong></span>
         {isParent && !m.me && m.role !== "parent" && <span className="row">
-          {m.role === "writer" && <button type="button" className="ghost" onClick={() => act("set_member_role", { p_user: m.user_id, p_role: "reader" }, da ? `Gør ${m.label} til "Kun læse"?` : `Make ${m.label} read only?`)}>{da ? "Gør til kun læse" : "Make read only"}</button>}
-          <button type="button" className="ghost danger" onClick={() => act("remove_member", { p_user: m.user_id }, da ? `Fjern ${m.label} fra samtalen? Personen kan ikke længere se nye eller gamle beskeder her.` : `Remove ${m.label}? They can no longer see messages here.`)}>{da ? "Fjern" : "Remove"}</button>
+          {m.role === "writer" && <button type="button" className="ghost" onClick={() => act("set_member_role", { p_user: m.user_id, p_role: "reader" }, { title: da ? `Gør ${m.label} til "Kun læse"?` : `Make ${m.label} read only?`, body: da ? "Personen kan stadig læse med, men ikke skrive. Skriveadgang kræver en ny invitation." : "They can still read but not write. Write access needs a new invitation.", confirm: da ? "Gør til kun læse" : "Make read only", done: da ? "Rollen er ændret" : "Role changed" })}>{da ? "Gør til kun læse" : "Make read only"}</button>}
+          <button type="button" className="ghost danger" onClick={() => act("remove_member", { p_user: m.user_id }, { title: da ? `Fjern ${m.label} fra samtalen?` : `Remove ${m.label}?`, body: da ? "Personen kan ikke længere se nye eller gamle beskeder her." : "They can no longer see new or old messages here.", confirm: da ? "Fjern" : "Remove", danger: true, done: da ? "Personen er fjernet" : "Person removed" })}>{da ? "Fjern" : "Remove"}</button>
         </span>}
         {!m.me && <button type="button" className="ghost" aria-expanded={open === m.user_id} onClick={() => setOpen(open === m.user_id ? null : m.user_id)}>{da ? "Indstillinger for denne person" : "Settings for this person"}</button>}
         {open === m.user_id && <PersonSettings lang={lang} sender={m.user_id} label={m.label} openWords={openWords} />}
       </li>)}</ul>
       <p className="meta">{da ? "Parterne kan fjerne ekstra deltagere eller gøre en skrivende deltager til kun læse. At give skriveadgang kræver en ny invitation, som alle parter skal godkende." : "Parties can remove extra participants or make a writer read only. Granting write access needs a new invitation that all parties approve."}</p>
-      {me && <div className="row end"><button type="button" className="danger" onClick={() => act("leave_conversation", {}, da ? "Forlad samtalen? Du kan kun komme ind igen via en ny invitation. Det, du har skrevet, bliver hos de andre." : "Leave the conversation? You can only return with a new invitation. What you wrote stays with the others.")}>{da ? "Forlad samtalen" : "Leave conversation"}</button></div>}
+      {me && <div className="row end"><button type="button" className="danger" onClick={() => act("leave_conversation", {}, { title: da ? "Forlad samtalen?" : "Leave the conversation?", body: da ? "Du kan kun komme ind igen via en ny invitation. Det, du har skrevet, bliver hos de andre." : "You can only return with a new invitation. What you wrote stays with the others.", confirm: da ? "Forlad" : "Leave", danger: true, done: da ? "Du har forladt samtalen" : "You left the conversation" })}>{da ? "Forlad samtalen" : "Leave conversation"}</button></div>}
       {err && <p className="err" role="alert">{err}</p>}
     </div>);
 }
 
-function AddMember({ lang, conv, done, openPlans }: { lang: Lang; conv: string; done: () => void; openPlans: () => void }) {
+/** Compact, collapsed-by-default bar for pending invitations (one thin line; tap to expand a short list). */
+function PendingBar({ lang, invs, answer, roleTxt }: { lang: Lang; invs: Pending[]; answer: (id: string, action: "consent" | "decline") => void; roleTxt: (r: string) => string }) {
+  const da = lang === "da";
+  const [open, setOpen] = useState(false);
+  const listId = useId();
+  if (!invs.length) return null;
+  const mail = (iv: Pending) => iv.invitee_email ?? (da ? "(ukendt e-mail)" : "(unknown email)");
+  const needMe = invs.filter((iv) => !iv.i_consented).length;
+  const summary = invs.length === 1
+    ? (needMe ? (da ? `Venter på din godkendelse: ${mail(invs[0])}` : `Needs your approval: ${mail(invs[0])}`) : (da ? `Afventer godkendelse: ${mail(invs[0])}` : `Awaiting approval: ${mail(invs[0])}`))
+    : (da ? `${invs.length} afventer godkendelse` : `${invs.length} awaiting approval`) + (needMe ? (da ? ` · ${needMe} venter på dig` : ` · ${needMe} need you`) : "");
+  return (
+    <div className={`pendbar${open ? " is-open" : ""}${needMe ? " needs-me" : ""}`}>
+      <button type="button" className="pendbar-head" aria-expanded={open} aria-controls={listId} onClick={() => setOpen(!open)}>
+        <span className="pendbar-dot" aria-hidden="true" />
+        <span className="pendbar-sum">{summary}</span>
+        <svg className="pendbar-chev" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
+      </button>
+      <div className="pendbar-body" id={listId} inert={!open} aria-hidden={!open}><div className="pendbar-inner">
+        <ul className="pendbar-list">
+          {invs.map((iv) => <li key={iv.id} className="pendrow">
+            <div className="pendrow-main">
+              <div className="pendrow-who"><strong>{mail(iv)}</strong></div>
+              <div className="meta">{roleTxt(iv.role)} · {iv.consents >= iv.required ? (da ? "Alle har godkendt – venter på, at personen tager imod." : "Everyone approved – awaiting acceptance.") : (da ? `${iv.consents} af ${iv.required} har godkendt` : `${iv.consents} of ${iv.required} approved`)}</div>
+            </div>
+            {!iv.i_consented ? <div className="pendrow-act"><button type="button" className="textbtn" onClick={() => answer(iv.id, "decline")}>{da ? "Afvis" : "Reject"}</button><button type="button" className="textbtn strong" onClick={() => answer(iv.id, "consent")}>{da ? "Godkend" : "Approve"}</button></div>
+              : iv.mine ? <div className="pendrow-act"><button type="button" className="textbtn" onClick={() => answer(iv.id, "decline")}>{da ? "Træk tilbage" : "Withdraw"}</button></div> : null}
+          </li>)}
+        </ul>
+        {invs.some((iv) => !iv.i_consented) && <p className="meta pendbar-note">{da ? "Ét afslag stopper invitationen." : "One rejection stops the invitation."}</p>}
+      </div></div>
+    </div>
+  );
+}
+
+function AddMember({ lang, conv, done, openPlans }: { lang: Lang; conv: string; done: (toast: string) => void; openPlans: () => void }) {
   const da = lang === "da";
   const [email, setEmail] = useState(""); const [role, setRole] = useState("reader"); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState<{ ok: boolean; text: string; plan?: boolean } | null>(null);
   const submit = async (e: React.FormEvent) => {
-    e.preventDefault(); setBusy(true); setMsg(null);
-    let r; try { r = await callFn("invite-email", { action: "member", conversation_id: conv, email, role }); } catch { r = { status: 0, data: null as any }; }
+    e.preventDefault(); if (busy) return;
+    const addr = email.trim();
+    if (!EMAIL_RE.test(addr)) { setMsg({ ok: false, text: da ? "Skriv en gyldig e-mailadresse, fx navn@eksempel.dk." : "Enter a valid email address, e.g. name@example.com." }); return; }
+    setBusy(true); setMsg(null);
+    let r; try { r = await callFn("invite-email", { action: "member", conversation_id: conv, email: addr, role, lang }); } catch { r = { status: 0, data: null as any }; }
     setBusy(false);
-    if (r.status === 200) { setMsg({ ok: true, text: r.data?.data?.status === "sent" ? (da ? `Invitationen er sendt til ${email}.` : `Invitation sent to ${email}.`) : (da ? "Anmodningen er sendt. De øvrige i samtalen skal godkende, før personen inviteres." : "Request sent. The others must approve before the person is invited.") }); setEmail(""); done(); }
+    if (r.status === 200) { blurActive(); done(r.data?.data?.status === "sent" ? (da ? `Invitation sendt til ${addr}.` : `Invitation sent to ${addr}.`) : (da ? `Anmodning sendt for ${addr} – afventer godkendelse.` : `Request sent for ${addr} – awaiting approval.`)); }
     else if (r.data?.error === "plan_required") setMsg({ ok: false, text: da ? "Kun brugere på planen Tekst + vedhæftninger (79 kr./md.) kan tilføje ekstra personer. Du kan skifte plan under Abonnement (testfunktion – ingen betaling)." : "Only users on Text + attachments (79 DKK/month) can add extra people. You can switch under Plan (test feature – no payment).", plan: true });
     else setMsg({ ok: false, text: r.data?.error === "rate_limited" ? (da ? "Du har sendt mange invitationer i dag." : "Too many invitations today.") : r.data?.error === "bad_input" ? (da ? "Tjek e-mailadressen. Personen må ikke allerede være med." : "Check the email. The person must not already be a member.") : (da ? "Invitationen kunne ikke oprettes." : "The invitation could not be created.") });
   };
   return (
-    <form onSubmit={submit}>
+    <form onSubmit={submit} noValidate>
       <p className="meta">{da ? "Fx advokat eller sagsbehandler. Personen får først adgang, når alle i samtalen har godkendt. Ét afslag stopper det. Personen ser ingen beskeder fra før." : "E.g. a lawyer or caseworker. Access only after everyone approves. One rejection stops it. No earlier history is shown."}</p>
-      <label htmlFor="me">{da ? "E-mail" : "Email"}</label><input id="me" type="email" required maxLength={254} value={email} onChange={(e) => setEmail(e.target.value)} />
+      <label htmlFor="me">{da ? "E-mail" : "Email"}</label><input id="me" {...inviteEmailProps} required aria-invalid={msg && !msg.ok ? true : undefined} aria-describedby={msg && !msg.ok ? "me-err" : undefined} value={email} onChange={(e) => { setEmail(e.target.value); if (msg && !msg.ok) setMsg(null); }} />
+      {msg && !msg.plan && <p id="me-err" ref={(el) => el?.scrollIntoView?.({ block: "nearest" })} className={msg.ok ? "meta field-msg" : "err field-msg"} role={msg.ok ? "status" : "alert"}>{msg.text}</p>}
       <label>{da ? "Rolle" : "Role"}</label>
       <Choice name="role" value={role} set={setRole} opts={[["reader", da ? "Kun læse" : "Read only"], ["writer", da ? "Læse og skrive" : "Read and write"]]} />
       <div className="row end"><button type="submit" disabled={busy}>{busy ? (da ? "Sender…" : "Sending…") : (da ? "Send til godkendelse" : "Send for approval")}</button></div>
-      {msg && <p className={msg.ok ? "meta" : "err"} role={msg.ok ? "status" : "alert"}>{msg.text}</p>}
-      {msg?.plan && <div className="row end"><button type="button" onClick={openPlans}>{da ? "Se planer" : "See plans"}</button></div>}
+      {msg?.plan && <><p className="err" role="alert">{msg.text}</p><div className="row end"><button type="button" onClick={openPlans}>{da ? "Se planer" : "See plans"}</button></div></>}
     </form>
   );
 }
@@ -886,6 +989,8 @@ function AccountPanel({ lang }: { lang: Lang }) {
       : [false, err === "wrong_password" ? (da ? "Adgangskoden er forkert." : "Wrong password.")
         : err === "rate_limited" ? (da ? "For mange forsøg. Prøv igen om en time." : "Too many attempts. Try again in an hour.")
         : err === "email_taken" ? (da ? "Den e-mail kan ikke bruges." : "That email cannot be used.")
+        : err === "address_rejected" ? (da ? "Denne e-mailadresse kan ikke bruges i Rolff, fordi den kan opfattes som sårende. Vælg en anden." : "This e-mail address cannot be used in Rolff because it may be seen as hurtful. Please choose another one.")
+        : err === "check_unavailable" ? (da ? "E-mailadressen kunne ikke tjekkes lige nu. Prøv igen senere." : "The e-mail address could not be checked right now. Please try again later.")
         : err === "test_mail_blocked" ? (da ? "I testversionen kan der kun sendes til godkendte testadresser." : "In the test version mail only goes to approved test addresses.")
         : (da ? "Noget gik galt. Prøv igen." : "Something went wrong. Try again.")]);
     if (r.status === 200) setEp("");
@@ -904,7 +1009,7 @@ function AccountPanel({ lang }: { lang: Lang }) {
       <h2>{da ? "Skift e-mail" : "Change email"}</h2>
       <label htmlFor="ne">{da ? "Ny e-mail" : "New email"}</label><input id="ne" type="email" required autoComplete="email" value={ne} onChange={(e) => setNe(e.target.value)} />
       <label htmlFor="ep">{da ? "Din adgangskode" : "Your password"}</label><PasswordInput id="ep" lang={lang} value={ep} onChange={setEp} minLength={1} autoComplete="current-password" />
-      <p className="meta">{da ? "Vi sender et bekræftelseslink til den nye adresse og en besked til den nuværende." : "We send a confirmation link to the new address and a notice to the current one."}</p>
+      <p className="meta">{da ? "Vi sender et bekræftelseslink til den nye adresse og en besked til den nuværende. Din e-mail er dit navn over for andre, så den nye adresse tjekkes først for sårende indhold, og de andre i dine samtaler får en lille besked, når skiftet er bekræftet." : "We send a confirmation link to the new address and a notice to the current one. Your e-mail is your name towards others, so the new address is checked for hurtful content first, and the others in your conversations get a small notice once the change is confirmed."}</p>
       {eMsg && <p className={eMsg[0] ? "notice" : "err"} role={eMsg[0] ? "status" : "alert"}>{eMsg[1]}</p>}
       <button type="submit" disabled={busy}>{da ? "Skift e-mail" : "Change email"}</button>
     </form>
@@ -929,7 +1034,7 @@ function Plans({ lang }: { lang: Lang }) {
     if (r.error) { setErr(da ? "Planen kunne ikke skiftes. Prøv igen." : "Could not change plan. Try again."); return; }
     const d = r.data?.[0]; await load();
     // Confirmation is a short floating pill (same as "Kopieret"), not a warning box.
-    showToast(d?.pending_plan ? (da ? `Skiftet er planlagt og gælder fra ${new Date(d.period_end).toLocaleDateString("da")}.` : `The change is scheduled from ${new Date(d.period_end).toLocaleDateString("en")}.`)
+    showToast(d?.pending_plan ? (da ? `Skiftet er planlagt og gælder fra ${new Date(d.period_end).toLocaleDateString("da-DK", { dateStyle: "long" })}.` : `The change is scheduled from ${new Date(d.period_end).toLocaleDateString("en-GB", { dateStyle: "long" })}.`)
       : (da ? "Planen er skiftet." : "Plan changed."), { tone: "success", ms: PLAN_TOAST_MS });
   };
   if (!p) return <p className="meta" role="status">{da ? "Henter…" : "Loading…"}</p>;
@@ -954,7 +1059,7 @@ function Plans({ lang }: { lang: Lang }) {
       <button className="ghost" disabled={busy} onClick={() => change(p.pending_plan!, true)}>{da ? "Skift straks (kun test)" : "Switch now (test only)"}</button></div>}
     <p className="meta plan-rule">{da ? "Opgradering gælder med det samme. Nedgradering gælder fra næste periode." : "Upgrades apply right away. Downgrades apply from the next period."}</p>
     <p className="meta plan-rule">{da ? "Planen gælder kun dig – den anden forælder kan have en anden plan, og alle kan altid se vedhæftninger, de modtager." : "The plan only applies to you – the other parent may have a different plan, and everyone can always see attachments they receive."}</p>
-    {p.period_end && <p className="meta">{da ? "Periode slutter" : "Period ends"}: {new Date(p.period_end).toLocaleDateString(lang)}</p>}
+    {p.period_end && <p className="meta">{da ? "Periode slutter" : "Period ends"}: {new Date(p.period_end).toLocaleDateString(da ? "da-DK" : "en-GB", { dateStyle: "long" })}</p>}
     {err && <p className="notice" role="alert">{err}</p>}
   </div>);
 }

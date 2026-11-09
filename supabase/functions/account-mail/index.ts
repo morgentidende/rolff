@@ -1,6 +1,7 @@
 // Forgot password + change e-mail. Mails go through our own PHP mailer (not Supabase SMTP).
 // POST {action:"recover", email}                 – no login; always answers {ok:true} (no account enumeration)
-// POST {action:"change_email", password, new_email} – logged in; re-auth with password, then mails
+// POST {action:"change_email", password, new_email} – logged in; re-auth with password, checks the new
+//      address for provocative content (address_rejected / check_unavailable, fail closed), then mails
 //      a confirmation link to the NEW address (proves ownership) and a notice without link to the
 //      current address. The account owner is proven by the password. (Admin-generated "current" links
 //      were found to switch the e-mail on their own, without the new address confirming – so not used.)
@@ -12,6 +13,8 @@ import { authed, cors, json } from "../_shared/http.ts";
 import { recoveryMail, emailChangeMail, sendMail } from "../_shared/email.ts";
 import { allowed, authLink, EMAIL } from "../_shared/authmail.ts";
 import { appUrl } from "../_shared/links.ts";
+import { checkAddress } from "../_shared/addressCheck.ts";
+import { timeoutFromEnv } from "../_shared/moderation.ts";
 const sha = async (s: string) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s.trim().toLowerCase())))].map((b) => b.toString(16).padStart(2, "0")).join("");
 const admin = () => createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}").default, { auth: { persistSession: false } });
 
@@ -44,6 +47,11 @@ Deno.serve(async (req) => {
     if (check.error || check.data.user?.id !== u.uid) return json({ error: "wrong_password" }, 403);
     if (!(await u.admin.rpc("auth_mail_allow", { p_hash: await sha(cur), p_kind: "email_change" })).data) return json({ error: "rate_limited" }, 429);
     if (!allowed(cur, env, allow) || !allowed(next, env, allow)) return json({ error: "test_mail_blocked" }, 403);
+    // The e-mail is the name others see: refuse provocative/insulting addresses (word filter, then Luna).
+    // Fails closed: no confirmation is sent if the check cannot be completed. The address is never logged.
+    try {
+      if (await checkAddress(Deno.env, next, Math.min(8000, timeoutFromEnv(Deno.env))) === "block") return json({ error: "address_rejected" }, 422);
+    } catch { console.log(JSON.stringify({ evt: "address_check_unavailable" })); return json({ error: "check_unavailable" }, 503); }
     const gn = await u.admin.auth.admin.generateLink({ type: "email_change_new", email: cur, newEmail: next });
     const otp = gn.data?.properties?.email_otp;
     if (!otp) return json({ error: /already|exists|registered/i.test(gn.error?.message ?? "") ? "email_taken" : "failed" }, 400);
