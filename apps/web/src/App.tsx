@@ -6,6 +6,7 @@ import { ContactAliasDialog, ContactButton } from "./ContactAlias";
 import { ComposerInput } from "./ComposerInput";
 import { effectiveCharLimit, textRetryKey } from "./composerLimits";
 import { MessageBubble, ReplyComposer, type Message } from "./MessageBubble";
+import { Toast } from "./toast";
 import { rectOf, useAnchoredPlacement, visibleViewport } from "./anchoredPosition";
 import type React from "react";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -117,7 +118,7 @@ export function App() {
   useBackLayer(!!conv,()=>setConv(null),"view");
   useBackLayer(!!renameContacts,()=>setRenameContacts(null));
   return (
-    <div className="wrap">
+    <div className={session && conv ? "wrap chat-wrap" : "wrap"}>
       {!(session && conv) && <header className="topbar"><img src="./favicon.svg" alt="" width={30} height={30} style={{ borderRadius: 8 }} /><strong className="brand">Rolff</strong><span className="spacer" />
         {session ? <Menu lang={lang} items={menu} /> : <>
           <select aria-label={t.lang} className="compact" value={lang} onChange={(e) => setLang(e.target.value as Lang)}><option value="da">Dansk</option><option value="en">English</option></select>
@@ -581,6 +582,7 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
   const [invs, setInvs] = useState<Pending[]>([]);
   const [text, setText] = useState(localStorage.getItem(draftKey) ?? "");
   const [status, setStatus] = useState<{ kind: string; spans?: string[]; blockedText?: string; suggestion?: string; reason?: string } | null>(null);
+  const [acceptedSeq, setAcceptedSeq] = useState(0);
   const [busy, setBusy] = useState(false); const [attachmentBusy, setAttachmentBusy] = useState(false); const sending = busy || attachmentBusy;
   // Soft one-shot glow on the just-approved own bubble (not history / initial load).
   const [flashId, setFlashId] = useState<string | null>(null);
@@ -624,7 +626,28 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
     const i = await supabase.rpc("list_pending_invitations", { conv: conv.id }); setInvs((i.data as Pending[]) ?? []);
   }, [conv.id]);
   useEffect(() => { load(); const i = setInterval(load, 8000); return () => clearInterval(i); }, [load]);
-  useEffect(() => { if (q === null) endRef.current?.scrollIntoView({ block: "end" }); }, [msgs.length]);
+  // The chat is a fixed-height column: only the message list scrolls, so the
+  // composer stays pinned at the bottom. Never use scrollIntoView here — it also
+  // scrolls the page and pushed the composer off-screen after approval.
+  const atBottom = useRef(true);
+  const toBottom = useCallback(() => { const l = listRef.current; if (l) { l.scrollTop = l.scrollHeight; atBottom.current = true; } }, []);
+  useLayoutEffect(() => { if (q === null) toBottom(); }, [msgs.length, toBottom]);
+  useEffect(() => {
+    const l = listRef.current; if (!l) return;
+    const onScroll = () => { atBottom.current = l.scrollHeight - l.scrollTop - l.clientHeight < 24; };
+    // Notices, Luna, the reply bar or the keyboard can shrink the list; keep the newest message in view.
+    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => { if (atBottom.current) l.scrollTop = l.scrollHeight; });
+    l.addEventListener("scroll", onScroll, { passive: true }); ro?.observe(l);
+    return () => { l.removeEventListener("scroll", onScroll); ro?.disconnect(); };
+  }, []);
+  // Track the visible viewport (mobile keyboard) so the column fits above it.
+  useEffect(() => {
+    const v = window.visualViewport, root = document.documentElement;
+    let full = window.innerHeight, width = window.innerWidth;
+    const fit = () => { if (window.innerWidth !== width) { width = window.innerWidth; full = window.innerHeight; } full = Math.max(full, window.innerHeight); const h = Math.round(v ? v.height : window.innerHeight); root.style.setProperty("--app-h", `${h}px`); if (h < full * 0.75) root.dataset.kbd = ""; else delete root.dataset.kbd; if (window.scrollY && !v?.offsetTop) window.scrollTo(0, 0); };
+    fit(); v?.addEventListener("resize", fit); window.addEventListener("resize", fit);
+    return () => { v?.removeEventListener("resize", fit); window.removeEventListener("resize", fit); root.style.removeProperty("--app-h"); delete root.dataset.kbd; };
+  }, []);
   // Every Besvar must bring the composer into view and focus it — even when
   // the same message is already selected, the keyboard is open, or focus was kept.
   useLayoutEffect(() => {
@@ -632,8 +655,7 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
     let cancelled = false;
     const bring = () => {
       if (cancelled) return;
-      endRef.current?.scrollIntoView({ block: "end" });
-      if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
+      toBottom();
       composerRootRef.current?.scrollIntoView({ block: "nearest" });
       const input = composerRef.current;
       if (!input) return;
@@ -643,7 +665,7 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
     };
     const id = requestAnimationFrame(() => requestAnimationFrame(bring));
     return () => { cancelled = true; cancelAnimationFrame(id); };
-  }, [replyFocus]);
+  }, [replyFocus, toBottom]);
   useEffect(() => { localStorage.setItem(draftKey, text); }, [text, draftKey]);
   useEffect(() => { if (reply) localStorage.setItem(replyKey, reply.id); else localStorage.removeItem(replyKey); }, [reply?.id, replyKey]);
   const hits = q ? findHits(msgs.map((m) => m.body), q) : [];
@@ -657,7 +679,7 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
     localStorage.setItem(keyStore, JSON.stringify(saved));
     let r; try { r = await callFn("send-message", { conversation_id: conv.id, body: text, reply_to_id: reply?.id ?? null, idempotency_key: saved.key }); } catch { r = { status: 0, data: null }; }
     setBusy(false);
-    if (r.status === 200 && r.data?.status === "accepted") { setText(""); setReply(null); localStorage.removeItem(draftKey); localStorage.removeItem(replyKey); localStorage.removeItem(keyStore); setStatus({ kind: "accepted" }); armFlash(r.data?.message_id); load(); }
+    if (r.status === 200 && r.data?.status === "accepted") { setText(""); setReply(null); localStorage.removeItem(draftKey); localStorage.removeItem(replyKey); localStorage.removeItem(keyStore); setStatus({ kind: "accepted" }); setAcceptedSeq((x) => x + 1); armFlash(r.data?.message_id); load(); }
     else if (r.status === 200 && r.data?.status === "clarification_required") setStatus({ kind: "clarification" });
     else if (r.status === 200 && r.data?.status === "blocked") setStatus({ kind: "blocked", spans: r.data.spans ?? [], blockedText: text, suggestion: typeof r.data.suggestion === "string" ? r.data.suggestion : "", reason: r.data.reason_code });
     else if (r.status === 200 && r.data?.status === "private_boundary") setStatus({ kind: "note", blockedText: da ? "Beskeden kan ikke sendes på grund af en privat modtagerindstilling. Ret beskeden og prøv igen." : "Not sent due to a private recipient setting. Edit your message and retry." });
@@ -725,11 +747,13 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
       {status?.kind === "blocked" && <div className="notice" role="alert"><p style={{ margin: 0 }}>{t.blocked}</p>{status.spans!.length > 0 && <p className="meta" style={{ marginBottom: 0 }}>{t.flagged}: {highlight(status.blockedText!, status.spans!)}</p>}{status.suggestion ? <div className="suggest"><p className="meta" style={{ margin: "8px 0 4px" }}><strong>{t.suggestionLabel}</strong></p><p style={{ margin: "0 0 8px" }}>{status.suggestion}</p><button type="button" className="ghost" onClick={() => { setText(applySuggestion(text, status.suggestion)); setStatus(null); }}>{t.useSuggestion}</button><p className="meta" style={{ margin: "6px 0 0" }}>{da ? "Forslaget kopieres til skrivefeltet. Du kan rette det og skal selv trykke Send — det tjekkes igen. Originalteksten står stadig i feltet, indtil du vælger forslaget." : "The suggestion is copied into the composer. You can edit it and must press Send yourself — it is checked again. Your original text stays until you use the suggestion."}</p></div> : <div className="suggest"><p className="meta" style={{ margin: "8px 0 4px" }}><strong>{t.guidanceLabel}</strong></p><p className="meta" style={{ margin: 0 }}>{t.blockGuidance}</p></div>}</div>}
       {status?.kind === "clarification" && <div className="notice" role="alert">{da ? "Beskeden er ikke sendt. Vi er usikre på, hvad du mener. Vil du skrive det lidt tydeligere?" : "Your message was not sent. We’re not sure what you mean. Could you write it a little more clearly?"}</div>}
       {status?.kind === "note" && <div className="notice" role="alert">{status.blockedText}</div>}
-      {status && status.kind !== "blocked" && status.kind !== "note" && status.kind !== "clarification" && <div className={status.kind === "accepted" ? "notice" : "err"} role="status">{(t as any)[status.kind]}</div>}
+      {status && status.kind !== "blocked" && status.kind !== "note" && status.kind !== "clarification" && status.kind !== "accepted" && <div className="err" role="status">{(t as any)[status.kind]}</div>}
+      {/* Approval is shown visually by the bubble flash; screen readers get a polite, visually hidden announcement. */}
+      <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">{status?.kind === "accepted" && <span key={acceptedSeq}>{t.accepted}</span>}</div>
       {conv.role !== "reader" ? (
         <div className="card composer" ref={composerRootRef}><fieldset className="composer-fields" disabled={sending}>
           <ComposerInput lang={lang} text={text} onText={setText} textareaRef={composerRef} plan={plan} cap={cap} busy={sending} file={file} onFile={setFile} openPlans={openPlans} retry={!!retryKey} canSend={!!file || !!text.trim()} onSend={() => { if (file) attachmentSend.current?.(); else send(); }} leading={reply ? <ReplyComposer who={replyWho(reply)} body={reply.body} unavailable={reply.body == null} lang={lang} onCancel={() => { setReply(null); composerRef.current?.focus(); }} /> : null} statusSlot={<LunaIndicator checking={sending} accepted={status?.kind === "accepted"} label={t.sending} pendingText={sending ? (file ? (text.trim() || file.name) : text) : undefined} />} />
-          <AttachBar lang={lang} conv={conv.id} plan={plan} openPlans={openPlans} caption={text} file={file} setFile={setFile} sendRef={attachmentSend} cap={cap} replyTo={reply?.id ?? null} onBusy={setAttachmentBusy} limitMsg={limitMsg} sent={(messageId) => { setText(""); setReply(null); localStorage.removeItem(draftKey); localStorage.removeItem(replyKey); setStatus({ kind: "accepted" }); armFlash(messageId); load(); loadLim(); }} />
+          <AttachBar lang={lang} conv={conv.id} plan={plan} openPlans={openPlans} caption={text} file={file} setFile={setFile} sendRef={attachmentSend} cap={cap} replyTo={reply?.id ?? null} onBusy={setAttachmentBusy} limitMsg={limitMsg} sent={(messageId) => { setText(""); setReply(null); localStorage.removeItem(draftKey); localStorage.removeItem(replyKey); setStatus({ kind: "accepted" }); setAcceptedSeq((x) => x + 1); armFlash(messageId); load(); loadLim(); }} />
           {(() => { const wait = lim?.next_at ? Math.ceil((new Date(lim.next_at).getTime() - Date.now()) / 1000) : 0; return wait > 0 ? <p className="meta" role="status">{da ? `Du kan sende igen ${waitText(wait, true)}.` : `You can send again ${waitText(wait, false)}.`}</p> : null; })()}
         </fieldset></div>) : <div className="notice" role="note">{t.readOnly}</div>}
       {blocked && <div className="notice" role="status">{da ? "Du har blokeret samtalen. De andre kan ikke sende beskeder her. " : "You blocked this conversation. The others cannot send messages here. "}<button className="ghost" onClick={() => setBlock(false)}>{da ? "Afblokér" : "Unblock"}</button></div>}
@@ -738,6 +762,7 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
       {sheet === "members" && <SheetView title={da ? "Deltagere og roller" : "Participants and roles"} close={() => setSheet(null)} lang={lang}><Members lang={lang} conv={conv.id} isParent={conv.role === "parent"} left={back} openWords={() => setSheet("words")} /></SheetView>}
       {sheet === "export" && <SheetView title={da ? "Udskrift af samtale" : "Conversation transcript"} close={() => setSheet(null)} lang={lang}><ConversationExport lang={lang} conv={conv.id} plan={plan} ownEmail={session.user.email ?? ""} openPlans={() => { setSheet(null); openPlans(); }} /></SheetView>}
       {sheet === "addMember" && <SheetView title={da ? "Tilføj person" : "Add person"} close={() => setSheet(null)} lang={lang} anchor={addPersonRef}><AddMember lang={lang} conv={conv.id} done={load} openPlans={openPlans} /></SheetView>}
+      <Toast />
     </>
   );
 }
