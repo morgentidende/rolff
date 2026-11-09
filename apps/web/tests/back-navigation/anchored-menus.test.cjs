@@ -157,7 +157,12 @@ for (const strict of [false, true])
             assert.ok(button(d, 'Besvar'));
             await click(button(d, 'Besvar'));
             assert.ok(!d.querySelector('.message-panel'));
-            assert.ok(d.querySelector('.reply-composer').textContent.includes('Kun en opdigtet testbesked.'));
+            const rc = d.querySelector('.reply-composer');
+            assert.ok(rc);
+            assert.ok(rc.textContent.includes('Kun en opdigtet testbesked.'));
+            assert.match(rc.querySelector('.reply-composer-who').textContent, /Svarer dig selv/);
+            assert.ok(d.querySelector('.composer-entry.has-reply'));
+            assert.ok(label(d, 'Annullér svar'));
             assert.equal(d.querySelector('textarea').value, 'En syntetisk kladde');
             assertPrivateHistory(w);
         }
@@ -293,4 +298,89 @@ test('message menu CSS blocks native text selection and callout', async () => {
     assert.match(src, /removeAllRanges/);
     assert.match(src, /openActions\(true\)/);
     assert.match(src, /is-armed/);
+});
+
+
+// Besvar must scroll/focus the composer every time, including a repeat on the
+// same message, a second Besvar while a reply is already active, and after cancel.
+for (const strict of [false, true])
+    test(`Besvar scrolls to composer and focuses every time (StrictMode=${strict})`, { timeout: 10000 }, async () => {
+        const fixture = await env(strict);
+        const { w, d } = fixture;
+        try {
+            geometry(w);
+            await openChatWithDraft(w, d);
+            const scrolls = [];
+            const orig = w.HTMLElement.prototype.scrollIntoView;
+            w.HTMLElement.prototype.scrollIntoView = function (...args) {
+                scrolls.push({ tag: this.tagName, className: String(this.className || ''), args });
+                return orig.apply(this, args);
+            };
+            const focusCalls = [];
+            const taProto = w.HTMLTextAreaElement.prototype;
+            const origFocus = taProto.focus;
+            taProto.focus = function (...args) {
+                focusCalls.push({ preventScroll: args[0] && args[0].preventScroll });
+                return origFocus.apply(this, args);
+            };
+
+            async function besvarOnce() {
+                const beforeScroll = scrolls.length;
+                const beforeFocus = focusCalls.length;
+                await press(w, d);
+                await click(button(d, 'Besvar'));
+                await delay(40);
+                assert.ok(d.querySelector('.reply-composer'), 'reply preview visible');
+                assert.match(d.querySelector('.reply-composer-who').textContent, /Svarer dig selv/);
+                assert.ok(d.querySelector('.composer-entry.has-reply'));
+                assert.equal(d.activeElement, d.querySelector('textarea'), 'composer focused');
+                assert.ok(scrolls.length > beforeScroll, 'scrollIntoView ran');
+                assert.ok(focusCalls.length > beforeFocus, 'focus ran');
+            }
+
+            // First Besvar.
+            await besvarOnce();
+            // Repeat on the same message while reply already active.
+            await besvarOnce();
+            // Cancel, then Besvar again.
+            await click(label(d, 'Annullér svar'));
+            await delay(20);
+            assert.ok(!d.querySelector('.reply-composer'));
+            await besvarOnce();
+            // Compact Signal-style UI: no separate big ghost X, close is inside preview.
+            assert.ok(d.querySelector('.reply-composer-close'));
+            assert.ok(![...d.querySelectorAll('.reply-composer .ghost')].length);
+            assertPrivateHistory(w);
+        } finally {
+            await fixture.close();
+        }
+    });
+
+test('reply composer CSS is attached inside the composer surface', async () => {
+    const css = require('node:fs').readFileSync(path.resolve(__dirname, '../../src/styles.css'), 'utf8');
+    assert.match(css, /\.reply-composer-who\{[^}]*color:\s*var\(--accent\)/);
+    assert.match(css, /\.reply-composer-text\{[^}]*text-overflow:\s*ellipsis/);
+    assert.match(css, /\.reply-composer-close\{[^}]*border-radius:\s*50%/);
+    assert.match(css, /\.reply-composer-close\{[^}]*min-width:\s*44px/);
+    assert.match(css, /\.msgs\{[^}]*margin:\s*0 -16px/);
+    assert.match(css, /\.msg\.mine\.tailed::before/);
+    assert.match(css, /\.msg\.theirs\.tailed::before/);
+    assert.match(css, /\.composer-entry\.has-reply/);
+    const src = require('node:fs').readFileSync(path.resolve(__dirname, '../../src/App.tsx'), 'utf8');
+    assert.match(src, /setReplyFocus/);
+    assert.match(src, /replyFocus/);
+    assert.match(src, /beginReply/);
+});
+
+test('frameless WhatsApp chat: no msgs card, tails on first of each sender group', async () => {
+    const css = require('node:fs').readFileSync(path.resolve(__dirname, '../../src/styles.css'), 'utf8');
+    assert.match(css, /\.msgs\{[^}]*border:\s*0/);
+    assert.doesNotMatch(css, /\.card\.msgs\{/);
+    assert.match(css, /\.msg\.mine\.tailed/);
+    assert.match(css, /\.msg\.theirs\.tailed/);
+    const app = require('node:fs').readFileSync(path.resolve(__dirname, '../../src/App.tsx'), 'utf8');
+    assert.match(app, /className="msgs"/);
+    assert.doesNotMatch(app, /className="card msgs"/);
+    assert.match(app, /tailed=\{/);
+    assert.match(app, /sameSender/);
 });

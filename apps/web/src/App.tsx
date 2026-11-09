@@ -5,10 +5,10 @@ import { setReceiveTimezoneUser, syncReceiveTimezone } from "./receiveTimezone";
 import { ContactAliasDialog, ContactButton } from "./ContactAlias";
 import { ComposerInput } from "./ComposerInput";
 import { effectiveCharLimit, textRetryKey } from "./composerLimits";
-import { MessageBubble, ReplyPreview, type Message } from "./MessageBubble";
+import { MessageBubble, ReplyComposer, type Message } from "./MessageBubble";
 import { rectOf, useAnchoredPlacement, visibleViewport } from "./anchoredPosition";
 import type React from "react";
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { callFn, supabase } from "./supabase";
 import { detectLang, strings, type Lang } from "./i18n";
@@ -574,7 +574,10 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
   const draftKey = `draft:${conv.id}`; const replyKey = `draft-reply:${conv.id}`;
   const [msgs, setMsgs] = useState<Msg[]>([]); const [pending, setPending] = useState(0);
   const events = useConversationEvents(conv.id, msgs.length);
-  const [reply, setReply] = useState<{ id: string; body: string | null } | null>(() => { const id = localStorage.getItem(replyKey); return id && /^[0-9a-f-]{36}$/i.test(id) ? { id, body: null } : null; }); const composerRef = useRef<HTMLTextAreaElement>(null);
+  type ReplyTarget = { id: string; body: string | null; mine: boolean; sender_id: string | null; sender_name: string | null; sender_email?: string | null };
+  const [reply, setReply] = useState<ReplyTarget | null>(() => { const id = localStorage.getItem(replyKey); return id && /^[0-9a-f-]{36}$/i.test(id) ? { id, body: null, mine: false, sender_id: null, sender_name: null } : null; });
+  const composerRef = useRef<HTMLTextAreaElement>(null); const composerRootRef = useRef<HTMLDivElement>(null);
+  const [replyFocus, setReplyFocus] = useState(0);
   const [invs, setInvs] = useState<Pending[]>([]);
   const [text, setText] = useState(localStorage.getItem(draftKey) ?? "");
   const [status, setStatus] = useState<{ kind: string; spans?: string[]; blockedText?: string; suggestion?: string; reason?: string } | null>(null);
@@ -605,13 +608,32 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
     const uid = (await supabase.auth.getSession()).data.session?.user.id;
     if (uid) await syncReceiveTimezone(uid);
     const { data, error } = await supabase.rpc("get_messages_v2", { conv: conv.id });
-    if (data) { setMsgs(data as Msg[]); setReply(r => r ? { id: r.id, body: (data as Msg[]).find(m => m.id === r.id)?.body ?? null } : null); if (uid) cacheSet(uid, conv.id, data); }
+    if (data) { setMsgs(data as Msg[]); setReply(r => { if (!r) return null; const m = (data as Msg[]).find(x => x.id === r.id); return m ? { id: m.id, body: m.body ?? null, mine: m.mine, sender_id: m.sender_id, sender_name: m.sender_name, sender_email: m.sender_email } : { ...r, body: null }; }); if (uid) cacheSet(uid, conv.id, data); }
     else if (error && uid) { const c = await cacheGet<Msg[]>(uid, conv.id); if (c) setMsgs(c); }
     const p = await supabase.rpc("my_pending_count"); setPending((p.data as number) ?? 0);
     const i = await supabase.rpc("list_pending_invitations", { conv: conv.id }); setInvs((i.data as Pending[]) ?? []);
   }, [conv.id]);
   useEffect(() => { load(); const i = setInterval(load, 8000); return () => clearInterval(i); }, [load]);
   useEffect(() => { if (q === null) endRef.current?.scrollIntoView({ block: "end" }); }, [msgs.length]);
+  // Every Besvar must bring the composer into view and focus it — even when
+  // the same message is already selected, the keyboard is open, or focus was kept.
+  useLayoutEffect(() => {
+    if (!replyFocus) return;
+    let cancelled = false;
+    const bring = () => {
+      if (cancelled) return;
+      endRef.current?.scrollIntoView({ block: "end" });
+      if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
+      composerRootRef.current?.scrollIntoView({ block: "nearest" });
+      const input = composerRef.current;
+      if (!input) return;
+      if (document.activeElement === input) input.blur();
+      input.focus({ preventScroll: false });
+      input.scrollIntoView({ block: "nearest" });
+    };
+    const id = requestAnimationFrame(() => requestAnimationFrame(bring));
+    return () => { cancelled = true; cancelAnimationFrame(id); };
+  }, [replyFocus]);
   useEffect(() => { localStorage.setItem(draftKey, text); }, [text, draftKey]);
   useEffect(() => { if (reply) localStorage.setItem(replyKey, reply.id); else localStorage.removeItem(replyKey); }, [reply?.id, replyKey]);
   const hits = q ? findHits(msgs.map((m) => m.body), q) : [];
@@ -642,6 +664,18 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
   const answer = async (id: string, action: "consent" | "decline") => { await callFn("invite-email", { action, invitation_id: id }); load(); };
   const d = convDisplay({ others, pending_invitee: conv.pending_invitee }, da); const label = d.title;
   const roleTxt = (r: string) => r === "reader" ? (da ? "kun læse" : "read only") : (da ? "læse og skrive" : "read and write");
+  const replyWho = (m: Pick<ReplyTarget, "mine" | "sender_id" | "sender_name" | "sender_email">) => {
+    if (m.mine) return da ? "dig selv" : "yourself";
+    const o = (others ?? []).find((x) => x.user_id === m.sender_id);
+    if (o) return labelOf(o);
+    return m.sender_name || m.sender_email || (da ? "Modtageren" : "The recipient");
+  };
+  const sameSender = (a: Msg, b: Msg) => a.mine === b.mine && ((a.sender_id && b.sender_id) ? a.sender_id === b.sender_id : true);
+  const beginReply = (selected: Message) => {
+    if (sending) return;
+    setReply({ id: selected.id, body: selected.body ?? null, mine: selected.mine, sender_id: selected.sender_id, sender_name: selected.sender_name, sender_email: selected.sender_email });
+    setReplyFocus((n) => n + 1);
+  };
   return (
     <>
       <header className="topbar chat">
@@ -672,9 +706,9 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
           : iv.mine ? <div className="row end"><button className="ghost" onClick={() => answer(iv.id, "decline")}>{da ? "Træk tilbage" : "Withdraw"}</button></div> : null}
       </div>)}
       {pending > 0 && <div className="notice row"><span>{t.pending(pending)}</span><span className="spacer" /><button onClick={receiveNow}>{t.receiveNow}</button></div>}
-      <div className="card msgs" aria-live="polite" ref={listRef}>
+      <div className="msgs" aria-live="polite" ref={listRef}>
         {msgs.length === 0 && <p className="meta">{t.empty}</p>}
-        {msgs.map((m, i) => <Fragment key={m.id}>{eventsBefore(events, msgs, i).map((e) => <EventNotice key={e.id} e={e} lang={lang} />)}<MessageBubble m={m} lang={lang} index={i} hit={i === curIdx} canReply={conv.role !== "reader" && !sending} onReply={selected => { if (sending) return; setReply(selected); requestAnimationFrame(() => composerRef.current?.focus()); }}>{q ? markAll(m.body, q, i === curIdx) : m.body}{m.att_mime && <AttachmentView lang={lang} m={m} />}</MessageBubble></Fragment>)}
+        {msgs.map((m, i) => <Fragment key={m.id}>{eventsBefore(events, msgs, i).map((e) => <EventNotice key={e.id} e={e} lang={lang} />)}<MessageBubble m={m} lang={lang} index={i} hit={i === curIdx} tailed={i === 0 || !sameSender(msgs[i - 1], m)} canReply={conv.role !== "reader" && !sending} onReply={beginReply}>{q ? markAll(m.body, q, i === curIdx) : m.body}{m.att_mime && <AttachmentView lang={lang} m={m} />}</MessageBubble></Fragment>)}
         {eventsBefore(events, msgs, msgs.length).map((e) => <EventNotice key={e.id} e={e} lang={lang} />)}
         <div ref={endRef} />
       </div>
@@ -684,9 +718,8 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
       {status && status.kind !== "blocked" && status.kind !== "note" && status.kind !== "clarification" && <div className={status.kind === "accepted" ? "notice" : "err"} role="status">{(t as any)[status.kind]}</div>}
       <LunaIndicator checking={sending} accepted={status?.kind === "accepted"} label={t.sending} />
       {conv.role !== "reader" ? (
-        <div className="card composer"><fieldset className="composer-fields" disabled={sending}>
-          {reply && <div className="reply-composer"><div><span className="meta">{da ? "Besvarer" : "Replying"}</span><ReplyPreview body={reply?.body} unavailable={reply.body == null} lang={lang} /></div><button type="button" className="ghost" aria-label={da ? "Annullér svar" : "Cancel reply"} onClick={() => { setReply(null); composerRef.current?.focus(); }}>✕</button></div>}
-          <ComposerInput lang={lang} text={text} onText={setText} textareaRef={composerRef} plan={plan} cap={cap} busy={sending} file={file} onFile={setFile} openPlans={openPlans} retry={!!retryKey} canSend={!!file || !!text.trim()} onSend={() => { if (file) attachmentSend.current?.(); else send(); }} />
+        <div className="card composer" ref={composerRootRef}><fieldset className="composer-fields" disabled={sending}>
+          <ComposerInput lang={lang} text={text} onText={setText} textareaRef={composerRef} plan={plan} cap={cap} busy={sending} file={file} onFile={setFile} openPlans={openPlans} retry={!!retryKey} canSend={!!file || !!text.trim()} onSend={() => { if (file) attachmentSend.current?.(); else send(); }} leading={reply ? <ReplyComposer who={replyWho(reply)} body={reply.body} unavailable={reply.body == null} lang={lang} onCancel={() => { setReply(null); composerRef.current?.focus(); }} /> : null} />
           <AttachBar lang={lang} conv={conv.id} plan={plan} openPlans={openPlans} caption={text} file={file} setFile={setFile} sendRef={attachmentSend} cap={cap} replyTo={reply?.id ?? null} onBusy={setAttachmentBusy} limitMsg={limitMsg} sent={() => { setText(""); setReply(null); localStorage.removeItem(draftKey); localStorage.removeItem(replyKey); load(); loadLim(); }} />
           {(() => { const wait = lim?.next_at ? Math.ceil((new Date(lim.next_at).getTime() - Date.now()) / 1000) : 0; return wait > 0 ? <p className="meta" role="status">{da ? `Du kan sende igen ${waitText(wait, true)}.` : `You can send again ${waitText(wait, false)}.`}</p> : null; })()}
         </fieldset></div>) : <div className="notice" role="note">{t.readOnly}</div>}
