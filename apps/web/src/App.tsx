@@ -6,6 +6,7 @@ import { ContactAliasDialog, ContactButton } from "./ContactAlias";
 import { ComposerInput } from "./ComposerInput";
 import { effectiveCharLimit, textRetryKey } from "./composerLimits";
 import { MessageBubble, ReplyPreview, type Message } from "./MessageBubble";
+import { rectOf, useAnchoredPlacement, visibleViewport } from "./anchoredPosition";
 import type React from "react";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
@@ -13,6 +14,7 @@ import { callFn, supabase } from "./supabase";
 import { detectLang, strings, type Lang } from "./i18n";
 import { passwordsMatch, pwText, toggleLabel } from "./pw";
 import { cacheClear, cacheGet, cacheSet } from "./localStore";
+import { LunaIndicator } from "./LunaRobot";
 import { applySuggestion } from "./suggestion";
 import { KEY as A2HS_KEY, platform as a2hsPlatform, shouldAsk } from "./install";
 import { makeZip, myDataFiles, findHits } from "./exportUtil";
@@ -166,13 +168,27 @@ function Menu({ lang, items }: { lang: Lang; items: MenuItem[] }) {
   );
 }
 
-function SheetView({ title, close, lang, children }: { title: string; close: () => void; lang: Lang; children: React.ReactNode }) {
+function SheetView({ title, close, lang, children, anchor }: { title: string; close: () => void; lang: Lang; children: React.ReactNode; anchor?: React.RefObject<HTMLElement | null> }) {
   const ref = useRef<HTMLDivElement>(null);
   useBackLayer(true,close);
-  useEffect(() => { ref.current?.focus(); }, []);
+  useEffect(() => { ref.current?.focus({ preventScroll: true }); }, []);
+  // Anchored variant: a dropdown card right under its top-bar icon, kept inside
+  // the visible viewport (visualViewport shrinks when the mobile keyboard opens).
+  const { pos } = useAnchoredPlacement(!!anchor, () => {
+    const r = rectOf(anchor?.current);
+    if (r && r.right > r.left) return r;
+    const v = visibleViewport(); return { top: v.top + 48, bottom: v.top + 48, left: v.left + v.width - 12, right: v.left + v.width - 12 };
+  }, ref, { align: "end", flip: false, gap: 6, margin: 12, minVisible: 120 });
+  useEffect(() => {
+    const v = window.visualViewport;
+    if (!anchor || !v) return;
+    const keep = () => { const a = document.activeElement as HTMLElement | null; if (a && a !== ref.current && ref.current?.contains(a)) requestAnimationFrame(() => a.scrollIntoView?.({ block: "nearest" })); };
+    v.addEventListener("resize", keep); return () => v.removeEventListener("resize", keep);
+  }, [anchor]);
+  const style: React.CSSProperties | undefined = !anchor ? undefined : pos ? { top: pos.top, left: pos.left, maxHeight: pos.maxHeight, maxWidth: pos.maxWidth } : { top: 0, left: 0, visibility: "hidden" };
   return (
-    <div className="overlay" onPointerDown={(e) => { if (e.target === e.currentTarget) close(); }}>
-      <div className="sheet" role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} ref={ref}>
+    <div className={anchor ? "overlay anchored-overlay" : "overlay"} onPointerDown={(e) => { if (e.target === e.currentTarget) close(); }}>
+      <div className={anchor ? "sheet anchored-card" : "sheet"} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} ref={ref} style={style}>
         <div className="sheethead"><h2>{title}</h2><button type="button" className="icon" aria-label={lang === "da" ? "Luk" : "Close"} onClick={close}>✕</button></div>
         {children}
       </div>
@@ -581,6 +597,7 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
   useEffect(() => { supabase.from("conversation_blocks").select("user_id").eq("conversation_id", conv.id).then(({ data }) => setBlocked((data ?? []).length > 0)); }, [conv.id]);
   const setBlock = async (on: boolean) => { const r = await supabase.rpc(on ? "block_conversation" : "unblock_conversation", { conv: conv.id }); if (!r.error) setBlocked(on); };
   const [sheet, setSheet, resetSheet] = usePanelState<Sheet>(null);
+  const addPersonRef = useRef<HTMLButtonElement>(null);
   const [q, setQ] = useState<string | null>(null); const [cur, setCur] = useState(0);
   useBackLayer(q!==null,()=>setQ(null));
   const endRef = useRef<HTMLDivElement>(null); const listRef = useRef<HTMLDivElement>(null);
@@ -632,7 +649,7 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
         <ColorDot lang={lang} conv={{ ...conv, color }} label={label} initial={d.initial} changed={setColor} />
         <div role="heading" aria-level={2} className="chattitle">{others.length ? others.map((o) => <button key={o.user_id} type="button" className="contact-heading" title={da ? "Privat kaldenavn" : "Private nickname"} onClick={() => rename([o])}>{labelOf(o)}</button>) : <><span className="convname">{d.title}</span>{d.status && <span className="meta convstatus"> · {d.status}</span>}</>}</div>
         <button className="icon" aria-label={da ? "Søg i samtalen" : "Search conversation"} aria-pressed={q !== null} onClick={() => { setQ(q === null ? "" : null); setCur(0); }}><Icon d={<><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></>} /></button>
-        {conv.role === "parent" && <button className="icon" aria-label={da ? "Tilføj person" : "Add person"} onClick={() => setSheet("addMember")}><Icon d={<><circle cx="9" cy="8" r="4" /><path d="M2 21c0-4 3-6 7-6s7 2 7 6" /><path d="M19 8v6M16 11h6" /></>} /></button>}
+        {conv.role === "parent" && <button ref={addPersonRef} className="icon" aria-label={da ? "Tilføj person" : "Add person"} aria-haspopup="dialog" aria-expanded={sheet === "addMember"} onClick={() => setSheet("addMember")}><Icon d={<><circle cx="9" cy="8" r="4" /><path d="M2 21c0-4 3-6 7-6s7 2 7 6" /><path d="M19 8v6M16 11h6" /></>} /></button>}
         <Menu lang={lang} items={[{ label: da ? "Deltagere og roller" : "Participants and roles", run: () => setSheet("members") },
           { label: da ? "Eksportér samtale" : "Export conversation", run: () => setSheet("export") },
           { label: da ? "Blokeringer" : "Blocking lists", run: () => setSheet("words") },
@@ -665,15 +682,7 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
       {status?.kind === "clarification" && <div className="notice" role="alert">{da ? "Beskeden er ikke sendt. Vi er usikre på, hvad du mener. Vil du skrive det lidt tydeligere?" : "Your message was not sent. We’re not sure what you mean. Could you write it a little more clearly?"}</div>}
       {status?.kind === "note" && <div className="notice" role="alert">{status.blockedText}</div>}
       {status && status.kind !== "blocked" && status.kind !== "note" && status.kind !== "clarification" && <div className={status.kind === "accepted" ? "notice" : "err"} role="status">{(t as any)[status.kind]}</div>}
-      {sending && (
-        <div className="luna-evaluating" role="status" aria-live="polite">
-          <div className="luna-moon" aria-hidden="true">
-            <div className="luna-core" />
-            <div className="luna-orbit"><span /><span /><span /></div>
-          </div>
-          <span>{t.sending}</span>
-        </div>
-      )}
+      <LunaIndicator checking={sending} accepted={status?.kind === "accepted"} label={t.sending} />
       {conv.role !== "reader" ? (
         <div className="card composer"><fieldset className="composer-fields" disabled={sending}>
           {reply && <div className="reply-composer"><div><span className="meta">{da ? "Besvarer" : "Replying"}</span><ReplyPreview body={reply?.body} unavailable={reply.body == null} lang={lang} /></div><button type="button" className="ghost" aria-label={da ? "Annullér svar" : "Cancel reply"} onClick={() => { setReply(null); composerRef.current?.focus(); }}>✕</button></div>}
@@ -686,7 +695,7 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
       {sheet === "words" && <SheetView title={da ? "Blokeringer" : "Blocking lists"} close={() => setSheet(null)} lang={lang}><BlockingLists key={`${session.user.id}:${conv.id}`} session={session} lang={lang} conv={conv.id} /></SheetView>}
       {sheet === "members" && <SheetView title={da ? "Deltagere og roller" : "Participants and roles"} close={() => setSheet(null)} lang={lang}><Members lang={lang} conv={conv.id} isParent={conv.role === "parent"} left={back} openWords={() => setSheet("words")} /></SheetView>}
       {sheet === "export" && <SheetView title={da ? "Udskrift af samtale" : "Conversation transcript"} close={() => setSheet(null)} lang={lang}><ConversationExport lang={lang} conv={conv.id} plan={plan} ownEmail={session.user.email ?? ""} openPlans={() => { setSheet(null); openPlans(); }} /></SheetView>}
-      {sheet === "addMember" && <SheetView title={da ? "Tilføj person" : "Add person"} close={() => setSheet(null)} lang={lang}><AddMember lang={lang} conv={conv.id} done={load} openPlans={openPlans} /></SheetView>}
+      {sheet === "addMember" && <SheetView title={da ? "Tilføj person" : "Add person"} close={() => setSheet(null)} lang={lang} anchor={addPersonRef}><AddMember lang={lang} conv={conv.id} done={load} openPlans={openPlans} /></SheetView>}
     </>
   );
 }

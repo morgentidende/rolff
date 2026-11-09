@@ -1,4 +1,5 @@
 @import "./blockingLists.css";
+@import "./lunaRobot.css";
 :root{--bg:#f4f6f5;--card:#fff;--text:#1d2a2a;--muted:#5b6b6a;--accent:#016C72;--accent-text:#fff;--mine:#72d7bb;--theirs:#fff;--warn:#fff4e0;--warn-b:#c98a1b;--err:#fbe9e9;--border:#d5dedc;--composer-surface:#fff;--composer-focus:#fff}
 [data-theme=dark]{--bg:#141a1a;--card:#1d2525;--text:#e6eeec;--muted:#9fb0ad;--accent:#7cc0b2;--accent-text:#0e1414;--mine:#155545;--theirs:#232c2c;--warn:#3a3020;--warn-b:#e0b060;--err:#3d2424;--border:#33403e;--composer-surface:#2b3534;--composer-focus:#303c3a}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:17px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
@@ -89,10 +90,28 @@ button.danger{background:#c0392b;color:#fff;border-color:#c0392b}button.danger:d
 .message-time{display:block;text-align:right;font-size:11px;line-height:1.3;opacity:.7;margin-top:4px;white-space:nowrap;font-variant-numeric:tabular-nums}
 .reply-quote{margin:0 0 8px;padding:6px 8px;border-left:3px solid var(--accent);background:color-mix(in srgb,var(--accent) 9%,transparent);border-radius:5px;font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere;max-height:5.5em;overflow:hidden}
 .reply-composer{display:flex;align-items:center;gap:8px;margin-bottom:8px}.reply-composer>div{flex:1;min-width:0}.reply-composer .reply-quote{margin:4px 0 0}
-.message-overlay{position:fixed;inset:0;z-index:1000;background:#0007;display:flex;align-items:flex-end;justify-content:center;padding:16px;padding-bottom:max(16px,env(safe-area-inset-bottom));box-sizing:border-box;overscroll-behavior:contain}
-.message-panel{background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:16px;padding:12px;width:min(100%,400px);max-height:85dvh;overflow:auto;box-sizing:border-box;box-shadow:0 8px 32px #0004}
-.message-panel>button{display:block;width:100%;min-height:48px;margin:4px 0;text-align:center}
-.message-panel h2{font-size:19px;margin:8px 0 16px}.message-panel dt{font-size:13px;opacity:.7}.message-panel dd{margin:2px 0 16px;overflow-wrap:anywhere}
+/* Message actions: an anchored popover directly under (or above) the pressed bubble, like SMS apps. */
+.message-overlay{position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.45);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);overscroll-behavior:contain;touch-action:none}
+[data-theme=dark] .message-overlay{background:rgba(0,0,0,.55)}
+.message-lifted{position:fixed;pointer-events:none;z-index:1}
+.message-lifted>.msg{max-width:none;width:100%;margin:0;box-shadow:0 6px 22px rgba(0,0,0,.28)}
+.message-panel{position:fixed;z-index:2;background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:16px;padding:6px;min-width:208px;width:max-content;max-width:calc(100vw - 24px);overflow-y:auto;overscroll-behavior:contain;box-sizing:border-box;box-shadow:0 10px 32px rgba(0,0,0,.32);touch-action:pan-y}
+.message-panel.message-info{width:min(340px,calc(100vw - 24px));padding:6px 16px 12px}
+.message-panel>button[role=menuitem]{display:flex;align-items:center;gap:14px;width:100%;min-height:48px;margin:0;padding:10px 16px;border:0;border-radius:10px;background:transparent;color:var(--text);text-align:left;font-size:16px}
+.message-panel>button[role=menuitem]:hover,.message-panel>button[role=menuitem]:focus-visible{background:color-mix(in srgb,var(--accent) 14%,transparent);outline:none}
+.message-panel>button[role=menuitem]:focus-visible{box-shadow:inset 0 0 0 2px var(--accent)}
+.message-action-icon{flex:none;color:var(--accent)}
+.message-panel>.message-info-close{display:block;width:100%;min-height:48px;margin:4px 0 0;text-align:center}
+.message-panel h2{font-size:19px;margin:8px 0 12px}.message-panel dt{font-size:13px;opacity:.7}.message-panel dd{margin:2px 0 14px;overflow-wrap:anywhere}
+.message-panel.placed-below{transform-origin:top center;animation:anchored-in .14s ease-out}
+.message-panel.placed-above{transform-origin:bottom center;animation:anchored-in .14s ease-out}
+@keyframes anchored-in{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
+/* Tilføj person: a dropdown card directly under the top-bar icon. */
+.overlay.anchored-overlay{display:block;background:rgba(0,0,0,.28)}
+[data-theme=dark] .overlay.anchored-overlay{background:rgba(0,0,0,.45)}
+.sheet.anchored-card{position:fixed;width:min(360px,calc(100vw - 24px));max-height:none;border:1px solid var(--border);border-radius:16px;padding:8px 16px 16px;box-shadow:0 12px 36px rgba(0,0,0,.3);overflow-y:auto;overscroll-behavior:contain;transform-origin:top right;animation:anchored-in .14s ease-out}
+.sheet.anchored-card .sheethead{top:-8px}
+@media (prefers-reduced-motion:reduce){.message-panel.placed-below,.message-panel.placed-above,.sheet.anchored-card{animation:none}}
 .message-feedback{align-self:center;margin:0}.msg:focus-visible{outline:2px solid var(--accent)}
 
 .composer-fields{border:0;padding:0;margin:0;min-inline-size:0}
@@ -123,62 +142,3 @@ button.danger{background:#c0392b;color:#fff;border-color:#c0392b}button.danger:d
 .receive-fields{border:0;padding:0;margin:0;min-width:0}.timezone-summary{justify-content:space-between;margin:8px 0}.timezone-current{flex:1;min-width:0;overflow-wrap:anywhere}.timezone-current strong{display:block;font-size:16px}.timezone-choices{border:1px solid var(--border);border-radius:10px;padding:8px 12px;margin:8px 0;min-width:0}.timezone-choices legend{font-size:14px}.timezone-choices select{font:inherit;max-width:100%}.timezone-choices .notice p{margin:0 0 8px}
 
 @media(max-width:380px){.times .wrow{grid-template-columns:minmax(68px,.9fr) minmax(0,1.2fr) 8px minmax(0,1.2fr) 40px;gap:4px}}
-
-/* Luna evaluating animation while message is checked */
-.luna-evaluating {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  margin: 4px 0 8px;
-  background: color-mix(in srgb, var(--accent) 12%, var(--card));
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
-  border-radius: 12px;
-  font-size: 14px;
-  color: var(--text);
-  animation: luna-fade-in .25s ease-out;
-}
-.luna-moon {
-  position: relative;
-  width: 36px;
-  height: 36px;
-  flex: none;
-}
-.luna-core {
-  position: absolute;
-  inset: 6px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, #fff 0%, var(--accent) 40%, color-mix(in srgb, var(--accent) 70%, #000) 100%);
-  box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 60%, transparent);
-  animation: luna-pulse 2.2s ease-in-out infinite;
-}
-.luna-orbit {
-  position: absolute;
-  inset: 0;
-  animation: luna-spin 3.6s linear infinite;
-}
-.luna-orbit span {
-  position: absolute;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 6px var(--accent);
-}
-.luna-orbit span:nth-child(1) { top: 0; left: 50%; margin-left: -2.5px; }
-.luna-orbit span:nth-child(2) { bottom: 4px; left: 4px; }
-.luna-orbit span:nth-child(3) { bottom: 4px; right: 4px; }
-@keyframes luna-spin {
-  to { transform: rotate(360deg); }
-}
-@keyframes luna-pulse {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.08); opacity: .85; }
-}
-@keyframes luna-fade-in {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: none; }
-}
-[data-theme=dark] .luna-core {
-  background: radial-gradient(circle at 35% 35%, #e0f2ef 0%, var(--accent) 45%, #0a3d38 100%);
-}
