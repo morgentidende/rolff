@@ -1,22 +1,10 @@
 // Conversation export helpers (client-side only; message text never touches a server log).
-export type Row = { sender: string; time: string; text: string };
 
-/** Neutralises spreadsheet formula injection and quotes per RFC 4180. */
+/** Neutralises spreadsheet formula injection and quotes per RFC 4180 (used by "Download mine data"). */
 export function csvCell(v: string): string {
   let s = String(v ?? "");
   if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
   return `"${s.replace(/"/g, '""')}"`;
-}
-
-/** UTF-8 CSV with BOM, CRLF line endings and a header naming who exported it and when. */
-export function toCsv(rows: Row[], exportedBy: string, exportedAt: string, lang: "da" | "en"): string {
-  const da = lang === "da";
-  const head = [
-    [csvCell(da ? `Eksporteret af ${exportedBy}` : `Exported by ${exportedBy}`), csvCell(exportedAt), csvCell("")],
-    [csvCell(da ? "Afsender" : "Sender"), csvCell(da ? "Tidspunkt" : "Time"), csvCell(da ? "Tekst" : "Text")],
-  ];
-  const body = rows.map((r) => [csvCell(r.sender), csvCell(r.time), csvCell(r.text)]);
-  return "\uFEFF" + [...head, ...body].map((r) => r.join(",")).join("\r\n") + "\r\n";
 }
 
 /** Indices of messages whose text contains the query (case-insensitive). */
@@ -25,7 +13,12 @@ export function findHits(texts: string[], q: string): number[] {
   return texts.flatMap((t, i) => (t.toLocaleLowerCase().includes(n) ? [i] : []));
 }
 
-export const exportFileName = (ext: "csv" | "pdf", d = new Date()) => `rolff-samtale-${d.toISOString().slice(0, 10)}.${ext}`;
+/** rolff-samtale-YYYY-MM-DD-HHMM.pdf in the user's time zone. */
+export function exportFileName(ext: "pdf", d = new Date(), timeZone?: string): string {
+  const p: Record<string, string> = {};
+  for (const x of new Intl.DateTimeFormat("en", { timeZone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(d)) p[x.type] = x.value;
+  return `rolff-samtale-${p.year}-${p.month}-${p.day}-${p.hour}${p.minute}.${ext}`;
+}
 
 // ---------- "Download mine data" (art. 15): files built on the device ----------
 const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();

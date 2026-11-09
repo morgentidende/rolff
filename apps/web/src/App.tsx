@@ -15,7 +15,7 @@ import { passwordsMatch, pwText, toggleLabel } from "./pw";
 import { cacheClear, cacheGet, cacheSet } from "./localStore";
 import { applySuggestion } from "./suggestion";
 import { KEY as A2HS_KEY, platform as a2hsPlatform, shouldAsk } from "./install";
-import { exportFileName, makeZip, myDataFiles, findHits, toCsv, type Row } from "./exportUtil";
+import { exportFileName, makeZip, myDataFiles, findHits } from "./exportUtil";
 
 import { labelOf, convDisplay } from "./convDisplay";
 
@@ -681,7 +681,7 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
       {sheet === "report" && <SheetView title={da ? "Rapportér" : "Report"} close={() => setSheet(null)} lang={lang}><ReportForm lang={lang} conv={conv.id} msgs={msgs} /></SheetView>}
       {sheet === "words" && <SheetView title={da ? "Blokeringer" : "Blocking lists"} close={() => setSheet(null)} lang={lang}><BlockingLists key={`${session.user.id}:${conv.id}`} session={session} lang={lang} conv={conv.id} /></SheetView>}
       {sheet === "members" && <SheetView title={da ? "Deltagere og roller" : "Participants and roles"} close={() => setSheet(null)} lang={lang}><Members lang={lang} conv={conv.id} isParent={conv.role === "parent"} left={back} openWords={() => setSheet("words")} /></SheetView>}
-      {sheet === "export" && <SheetView title={da ? "Eksportér samtale" : "Export conversation"} close={() => setSheet(null)} lang={lang}><ExportPanel lang={lang} msgs={msgs} /></SheetView>}
+      {sheet === "export" && <SheetView title={da ? "Eksportér samtale" : "Export conversation"} close={() => setSheet(null)} lang={lang}><ExportPanel lang={lang} msgs={msgs} partners={(others ?? []).map(labelOf)} /></SheetView>}
       {sheet === "addMember" && <SheetView title={da ? "Tilføj person" : "Add person"} close={() => setSheet(null)} lang={lang}><AddMember lang={lang} conv={conv.id} done={load} openPlans={openPlans} /></SheetView>}
     </>
   );
@@ -748,30 +748,25 @@ function download(name: string, blob: Blob) {
   const u = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 1000);
 }
 
-function ExportPanel({ lang, msgs }: { lang: Lang; msgs: Msg[] }) {
+function ExportPanel({ lang, msgs, partners }: { lang: Lang; msgs: Msg[]; partners: string[] }) {
   const da = lang === "da"; const [busy, setBusy] = useState(false);
-  const build = async () => {
-    const { data } = await supabase.auth.getUser(); const me = data.user?.email ?? "";
-    const rows: Row[] = msgs.map((m) => ({ sender: m.mine ? me : (m.sender_name ?? ""), time: new Date(m.created_at).toLocaleString(lang === "da" ? "da-DK" : "en-GB", { dateStyle: "short", timeStyle: "short" }), text: m.body }));
-    return { me, rows, at: new Date().toLocaleString(lang === "da" ? "da-DK" : "en-GB", { dateStyle: "long", timeStyle: "short" }) };
-  };
-  const csv = async () => { const { me, rows, at } = await build(); download(exportFileName("csv"), new Blob([toCsv(rows, me, at, lang)], { type: "text/csv;charset=utf-8" })); };
   const pdf = async () => {
     setBusy(true);
-    const { me, rows, at } = await build(); const { jsPDF } = await import("jspdf");
-    const doc = new jsPDF({ unit: "pt", format: "a4" }); const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 48; let y = M;
-    const line = (txt: string, size: number, bold = false, gap = 4) => { doc.setFont("helvetica", bold ? "bold" : "normal"); doc.setFontSize(size);
-      for (const l of doc.splitTextToSize(txt, W - 2 * M) as string[]) { if (y > H - M) { doc.addPage(); y = M; } doc.text(l, M, y); y += size * 1.3; } y += gap; };
-    line(da ? "Rolff – eksporteret samtale" : "Rolff – exported conversation", 16, true);
-    line(da ? `Eksporteret af ${me} den ${at}` : `Exported by ${me} on ${at}`, 10, false, 2);
-    line(da ? "Indeholder kun beskeder, du selv har adgang til. Testmiljø – opdigtede beskeder." : "Contains only messages you have access to. Test environment – made-up messages.", 9, false, 14);
-    for (const r of rows) { line(`${r.sender} · ${r.time}`, 9, true, 0); line(r.text, 11, false, 10); }
-    doc.save(exportFileName("pdf")); setBusy(false);
+    try {
+      const [{ data }, { jsPDF }, { buildModel, renderConversationPdf, needsEmojiFont }, { loadPdfFonts }] = await Promise.all([supabase.auth.getUser(), import("jspdf"), import("./pdfExport"), import("./pdfFonts")]);
+      const model = buildModel(msgs, { lang, me: data.user?.email ?? "", partners });
+      const doc = new jsPDF({ unit: "pt", format: "a4" });
+      doc.setProperties({ title: model.title, creator: "ROLFF" });
+      const texts = [model.partners, model.exportedBy, ...msgs.flatMap((m) => [m.body, m.sender_name, m.reply_body, m.att_name, m.att_alt])];
+      const fonts = await loadPdfFonts(doc, needsEmojiFont(texts));
+      renderConversationPdf(doc, model, fonts);
+      doc.save(exportFileName("pdf", new Date(), model.timeZone));
+    } finally { setBusy(false); }
   };
   return (
     <div>
       <p className="meta">{da ? `Eksporten indeholder de ${msgs.length} beskeder, du kan se nu: dine egne og dem, der er leveret til dig. Filen laves på din enhed.` : `The export contains the ${msgs.length} messages you can see now: your own and those delivered to you. The file is created on your device.`}</p>
-      <div className="row end"><button className="ghost" onClick={csv} disabled={!msgs.length}>CSV</button><button onClick={pdf} disabled={busy || !msgs.length}>PDF</button></div>
+      <div className="row end"><button onClick={pdf} disabled={busy || !msgs.length}>{busy ? (da ? "Laver PDF…" : "Creating PDF…") : (da ? "Hent som PDF" : "Download PDF")}</button></div>
     </div>
   );
 }
