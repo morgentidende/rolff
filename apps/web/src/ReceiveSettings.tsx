@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { strings, type Lang } from "./i18n";
 import { supabase } from "./supabase";
 import { detectTimezone, searchTimezones, timezoneLabel } from "./timezones";
-import { invalidateReceiveTimezone, readReceiveSettings, saveReceiveSettings, syncReceiveTimezone, timezoneDevice, type ReceiveSettingsState, type ReceiveWindow } from "./receiveTimezone";
+import { defaultReceiveWindows, invalidateReceiveTimezone, readReceiveSettings, saveReceiveSettings, syncReceiveTimezone, timezoneDevice, type ReceiveSettingsState, type ReceiveWindow } from "./receiveTimezone";
 const toHM=(m:number)=>`${String(Math.floor(m/60)%24).padStart(2,"0")}:${String(m%60).padStart(2,"0")}`;
 const steps=Array.from({length:96},(_,k)=>k*15);
 function TimeSelect({label,value,set,end}:{label:string;value:number;set:(v:number)=>void;end?:boolean}) {
@@ -18,7 +18,12 @@ export function ReceiveSettings({lang}:{lang:Lang}) {
   const [loading,setLoading]=useState(true), [busy,setBusy]=useState(false), [conflict,setConflict]=useState(false);
   const [error,setError]=useState(""), [message,setMessage]=useState("");
   const mounted=useRef(true), saving=useRef(false);
-  const adopt=(s:ReceiveSettingsState)=>{ setBase(s);setEnabled(s.enabled);setWindows(s.windows);setMode(s.mode);setZone(s.timezone??detectTimezone()??"");setTakeOver(false);setConflict(false);setDetected(detectTimezone()); };
+  const adopt=(s:ReceiveSettingsState)=>{
+    setBase(s);setEnabled(s.enabled);
+    // Legacy/broken enabled+empty: show the editable default so Gem can repair it.
+    setWindows(s.enabled && !s.windows.length ? defaultReceiveWindows() : s.windows);
+    setMode(s.mode);setZone(s.timezone??detectTimezone()??"");setTakeOver(false);setConflict(false);setDetected(detectTimezone());
+  };
   const load=async()=>{
     setLoading(true);setError("");setMessage("");
     try { const user=(await supabase.auth.getSession()).data.session?.user.id; if(!user) throw new Error("unauthenticated"); await syncReceiveTimezone(user); const s=await readReceiveSettings(user); if(mounted.current){setUid(user);adopt(s);} }
@@ -30,8 +35,10 @@ export function ReceiveSettings({lang}:{lang:Lang}) {
   const controllerElsewhere=base?.mode==="auto" && !base.is_controller && !takeOver;
   const requiresDevice=mode==="auto" && !controllerElsewhere;
   const autoAvailable=!!detected && !!uid && !!timezoneDevice(uid);
+  const needsWindow=enabled && !windows.length;
+  const canSave=!busy&&!conflict&&!!zone&&!(requiresDevice&&!autoAvailable)&&!needsWindow;
   const save=async()=>{
-    if(!base||saving.current||loading||conflict||!zone||(requiresDevice&&!autoAvailable))return;
+    if(!base||saving.current||loading||!canSave)return;
     saving.current=true;setBusy(true);setMessage("");setError("");
     try {
       if((await supabase.auth.getSession()).data.session?.user.id!==uid)throw new Error("unauthenticated");
@@ -43,12 +50,17 @@ export function ReceiveSettings({lang}:{lang:Lang}) {
     } finally {saving.current=false;if(mounted.current)setBusy(false);}
   };
   const update=(i:number,p:Partial<ReceiveWindow>)=>{setWindows(windows.map((w,k)=>i===k?{...w,...p}:w));changed();};
+  const toggleEnabled=(on:boolean)=>{
+    setEnabled(on);
+    if(on && !windows.length) setWindows(defaultReceiveWindows());
+    changed();
+  };
   const results=searchTimezones(query,zone,lang), choices=results.slice(0,80);
   if(loading)return <p role="status">{da?"Henter modtagetider…":"Loading receiving times…"}</p>;
   if(!base)return <><p className="err" role="alert">{error}</p><button type="button" onClick={()=>void load()}>{da?"Prøv igen":"Try again"}</button></>;
   return <div className="times">
     <fieldset className="receive-fields" disabled={busy}>
-      <label className="switch"><input type="checkbox" checked={enabled} onChange={e=>{setEnabled(e.target.checked);changed();}}/><span>{t.windowsOn}</span></label>
+      <label className="switch"><input type="checkbox" checked={enabled} onChange={e=>toggleEnabled(e.target.checked)}/><span>{t.windowsOn}</span></label>
       <div className="row timezone-summary"><div className="timezone-current"><span className="meta">{t.tz}</span><strong>{timezoneLabel(zone,lang)}</strong></div><button type="button" className="ghost" aria-expanded={expanded} aria-controls="timezone-choices" onClick={()=>setExpanded(!expanded)}>{expanded?(da?"Luk valg":"Close choices"):(da?"Skift":"Change")}</button></div>
       {expanded && <fieldset id="timezone-choices" className="timezone-choices"><legend>{da?"Vælg tidszone":"Choose timezone"}</legend>
         <label className="switch"><input type="radio" name="timezone-mode" value="auto" checked={mode==="auto"} onChange={()=>{setMode("auto");setTakeOver(false);setZone(base.mode==="auto"&&!base.is_controller?(base.timezone??""):(detectTimezone()??""));setDetected(detectTimezone());changed();}}/><span>{da?"Følg denne enheds tidszone":"Follow this device’s timezone"}</span></label>
@@ -64,8 +76,8 @@ export function ReceiveSettings({lang}:{lang:Lang}) {
         <TimeSelect label={t.from} value={w.start_minute} set={v=>update(i,{start_minute:v})}/><span className="dash" aria-hidden="true">–</span><TimeSelect label={t.to} value={w.end_minute} set={v=>update(i,{end_minute:v})} end/>
         <button type="button" className="icon rm" aria-label={`${t.remove} ${t.days[w.weekday-1]} ${toHM(w.start_minute)}–${toHM(w.end_minute)}`} onClick={()=>{setWindows(windows.filter((_,k)=>i!==k));changed();}}><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14"/></svg></button>
       </div>)}</div>
-      {enabled&&!windows.length&&<p className="notice">{da?"Uden tidsrum bliver nye beskeder ikke frigivet automatisk. Tilføj et tidsrum, eller slå modtagetider fra.":"Without a time window, new messages will not be released automatically. Add a window or turn receiving times off."}</p>}
-      <div className="row"><button type="button" className="ghost" onClick={()=>{setWindows([...windows,{weekday:1,start_minute:17*60,end_minute:20*60}]);changed();}}>+ {t.add}</button><span className="spacer"/><span className="meta" role="status">{message}</span><button type="button" disabled={busy||conflict||!zone||(requiresDevice&&!autoAvailable)} onClick={()=>void save()}>{busy?(da?"Gemmer…":"Saving…"):t.save}</button></div>
+      {needsWindow&&<p className="meta" role="status">{da?"Tilføj mindst ét tidsrum, eller slå modtagetider fra, før du gemmer.":"Add at least one time window, or turn receive times off, before saving."}</p>}
+      <div className="row"><button type="button" className="ghost" onClick={()=>{setWindows([...windows,{weekday:1,start_minute:17*60,end_minute:20*60}]);changed();}}>+ {t.add}</button><span className="spacer"/><span className="meta" role="status">{message}</span><button type="button" disabled={!canSave} onClick={()=>void save()}>{busy?(da?"Gemmer…":"Saving…"):t.save}</button></div>
     </fieldset>
     {error&&<p className="err" role="alert">{error}</p>}{conflict&&<button type="button" className="ghost" onClick={()=>void load()}>{da?"Hent gemte indstillinger":"Reload saved settings"}</button>}
   </div>;
