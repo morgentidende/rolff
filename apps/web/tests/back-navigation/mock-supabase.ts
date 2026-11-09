@@ -36,6 +36,8 @@ function rpc(name: string, args: any) {
     let data: any = [];
     if (name === 'list_my_conversations')
         data = [conv()];
+    if (name === 'list_my_conversations_v2')
+        data = [{ ...conv(), last_at: '2026-11-07T08:00:00Z', last_body: 'Kun en opdigtet testbesked.', last_mine: true, last_sender_name: null, last_att_mime: null }];
     if (name === 'get_my_public_name')
         data = 'Testperson';
     if (name === 'get_my_plan')

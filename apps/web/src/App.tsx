@@ -22,6 +22,7 @@ import { ConversationExport } from "./ConversationExport";
 import { EventNotice, eventsBefore, useConversationEvents } from "./ConversationEvents";
 
 import { labelOf, convDisplay } from "./convDisplay";
+import { listTime, previewText, type ConvPreview } from "./convList";
 
 type Other = { user_id: string; email: string; alias: string | null };
 type Conv = { id: string; role: string; members: number; others: Other[]; color: string | null; pending_invitee?: string | null };
@@ -503,24 +504,36 @@ function ColorDot({ lang, conv, label, initial, changed }: { lang: Lang; conv: C
   );
 }
 
+type ConvRow = Conv & ConvPreview;
+
 function Home({ lang, open, invite, rename, refreshKey }: { lang: Lang; open: (c: Conv) => void; invite: () => void; rename: (contacts: Other[]) => void; refreshKey: number }) {
   const t = strings[lang]; const da = lang === "da";
-  const [convs, setConvs] = useState<Conv[] | null>(null);
-  const load = useCallback(async () => { const { data } = await supabase.rpc("list_my_conversations"); setConvs((data as Conv[]) ?? []); }, []);
+  const [convs, setConvs] = useState<ConvRow[] | null>(null);
+  // v2 adds the latest visible message (server-filtered: own or released to me) and sorts by it.
+  // Falls back to v1 while the v2 migration is not deployed.
+  const load = useCallback(async () => {
+    const v2 = await supabase.rpc("list_my_conversations_v2");
+    if (!v2.error) { setConvs((v2.data as ConvRow[]) ?? []); return; }
+    const { data } = await supabase.rpc("list_my_conversations"); setConvs((data as ConvRow[]) ?? []);
+  }, []);
   useEffect(() => { load(); }, [load, refreshKey]);
+  useEffect(() => { const f = () => { if (document.visibilityState === "visible") load(); }; document.addEventListener("visibilitychange", f); return () => document.removeEventListener("visibilitychange", f); }, [load]);
+  const now = new Date();
   return (
-    <div className="card list"><h2>{t.conversations}</h2>
-      {convs?.length === 0 && <p className="meta">{da ? "Ingen samtaler endnu. " : "No conversations yet. "}<button type="button" className="linkbtn" onClick={invite}>{da ? "Inviter en person" : "Invite someone"}</button></p>}
-      {(convs ?? []).map((c) => { const d = convDisplay(c, da); return (
-        <div key={c.id} className="convrow">
-          <ColorDot lang={lang} conv={c} label={d.title} initial={d.initial} changed={(col) => setConvs((convs ?? []).map((x) => x.id === c.id ? { ...x, color: col } : x))} />
-          <ContactButton open={() => open(c)} rename={() => rename(c.others)}>
-            <span className="convname">{d.title}</span>
-            {d.status && <span className="meta convstatus">{d.status}</span>}
-          </ContactButton>
-          {!!c.others.length && <button type="button" className="ghost pencil" aria-label={da ? `Privat kaldenavn for ${d.title}` : `Private nickname for ${d.title}`} onClick={() => rename(c.others)}>✎</button>}
-        </div>); })}
-    </div>
+    <section className="convlist" aria-labelledby="convlist-title"><h2 id="convlist-title">{t.conversations}</h2>
+      {convs?.length === 0 && <div className="convempty"><p>{da ? "Ingen samtaler endnu." : "No conversations yet."}</p><button type="button" onClick={invite}>{da ? "Inviter en person" : "Invite someone"}</button></div>}
+      {!!convs?.length && <ul className="convitems">
+        {convs.map((c) => { const d = convDisplay(c, da); const prev = previewText(c, da); const time = listTime(c.last_at, lang, now); return (
+          <li key={c.id} className="convrow">
+            <ColorDot lang={lang} conv={c} label={d.title} initial={d.initial} changed={(col) => setConvs((convs ?? []).map((x) => x.id === c.id ? { ...x, color: col } : x))} />
+            <ContactButton open={() => open(c)} rename={() => rename(c.others)}>
+              <span className="convtop"><span className="convname">{d.title}</span>{time && <span className="convtime">{time}</span>}</span>
+              <span className={prev ? "convprev" : "convprev empty"}>{prev ?? d.status ?? (c.last_at === undefined ? "" : (da ? "Ingen beskeder endnu" : "No messages yet"))}</span>
+            </ContactButton>
+          </li>); })}
+      </ul>}
+      {convs?.some((c) => c.others.length) && <p className="meta convhint">{da ? "Tip: Hold fingeren på en samtale for at give personen et privat kaldenavn, som kun du ser." : "Tip: Press and hold a conversation to give the person a private nickname only you see."}</p>}
+    </section>
   );
 }
 

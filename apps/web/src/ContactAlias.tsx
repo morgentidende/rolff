@@ -38,6 +38,7 @@ export function ContactAliasDialog({ lang, contacts, save, saved, close }: {
   const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
   const dialog = useRef<HTMLDialogElement>(null); const input = useRef<HTMLInputElement>(null);
   const inflight = useRef(false); const mounted = useRef(true);
+  const backdropDown = useRef(false);
   useEffect(() => {
     mounted.current = true;
     const before = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -54,8 +55,12 @@ export function ContactAliasDialog({ lang, contacts, save, saved, close }: {
   };
   const selected = contacts.find(c => c.user_id === id);
   return <dialog ref={dialog} className="contact-alias-dialog" aria-labelledby="contact-alias-title"
+    onPointerDown={e => { backdropDown.current = e.target === e.currentTarget; }}
     onCancel={e => { e.preventDefault(); close(); }} onClick={e => {
-      if (e.target !== e.currentTarget) return;
+      // Only a press that STARTED on the backdrop dismisses: the release of the long-press that
+      // opened this dialog must not close it again.
+      const started = backdropDown.current; backdropDown.current = false;
+      if (e.target !== e.currentTarget || !started) return;
       const r = e.currentTarget.getBoundingClientRect();
       if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) dismiss();
     }}>
