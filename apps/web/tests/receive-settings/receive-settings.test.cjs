@@ -4,8 +4,9 @@ const { env, delay, button, label, click } = require('./support.cjs');
 
 test('enabling modtagetider prefills Mon-Sun 18-19 and drops the yellow empty warning', { timeout: 10000 }, async () => {
   const fixture = await env(false);
-  const { d } = fixture;
+  const { d, w } = fixture;
   try {
+    w.__resetReceiveSettingsMock?.();
     await click(label(d, 'Menu'));
     await click(button(d, 'Modtagetider'));
     await delay(40);
@@ -29,8 +30,9 @@ test('enabling modtagetider prefills Mon-Sun 18-19 and drops the yellow empty wa
 
 test('Gem stays disabled when enabled with zero windows after deleting all', { timeout: 10000 }, async () => {
   const fixture = await env(false);
-  const { d } = fixture;
+  const { d, w } = fixture;
   try {
+    w.__resetReceiveSettingsMock?.();
     await click(label(d, 'Menu'));
     await click(button(d, 'Modtagetider'));
     await delay(40);
