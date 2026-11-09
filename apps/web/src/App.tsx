@@ -7,7 +7,7 @@ import { ContactAliasDialog, ContactButton } from "./ContactAlias";
 import { ComposerInput } from "./ComposerInput";
 import { effectiveCharLimit, textRetryKey } from "./composerLimits";
 import { MessageBubble, ReplyComposer, type Message } from "./MessageBubble";
-import { Toast } from "./toast";
+import { Toast, showToast } from "./toast";
 import { rectOf, useAnchoredPlacement, visibleViewport } from "./anchoredPosition";
 import type React from "react";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -148,6 +148,8 @@ export function App() {
       {sheet === "privacy" && <SheetView title={da ? "Privatliv og sletning" : "Privacy and deletion"} close={close} lang={lang}><PrivacyPanel lang={lang} /></SheetView>}
       {sheet === "feedback" && <SheetView title="Feedback" close={close} lang={lang}><FeedbackForm lang={lang} /></SheetView>}
       {sheet === "invite" && <SheetView title={da ? "Inviter person" : "Invite person"} close={close} lang={lang}><InviteByEmail lang={lang} done={() => setHomeKey(homeKey + 1)} /></SheetView>}
+      {/* One app-wide toast ("Kopieret", "Planen er skiftet") that floats above chat and sheets. */}
+      <Toast />
     </div>
   );
 }
@@ -779,7 +781,6 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
       {sheet === "members" && <SheetView title={da ? "Deltagere og roller" : "Participants and roles"} close={() => setSheet(null)} lang={lang}><Members lang={lang} conv={conv.id} isParent={conv.role === "parent"} left={back} openWords={() => setSheet("words")} /></SheetView>}
       {sheet === "export" && <SheetView title={da ? "Udskrift af samtale" : "Conversation transcript"} close={() => setSheet(null)} lang={lang}><ConversationExport lang={lang} conv={conv.id} plan={plan} ownEmail={session.user.email ?? ""} openPlans={() => { setSheet(null); openPlans(); }} /></SheetView>}
       {sheet === "addMember" && <SheetView title={da ? "Tilføj person" : "Add person"} close={() => setSheet(null)} lang={lang} anchor={addPersonRef}><AddMember lang={lang} conv={conv.id} done={load} openPlans={openPlans} /></SheetView>}
-      <Toast />
     </>
   );
 }
@@ -911,6 +912,7 @@ function AccountPanel({ lang }: { lang: Lang }) {
 }
 
 // ---------- Plans (TEST FEATURE: no payment) ----------
+const PLAN_TOAST_MS = 3500;
 export const PLANS = [
   { id: "text", price: 49, da: ["Tekst", "Op til 160 tegn pr. besked med AI-tonetjek og samtale med den anden forælder. Du kan se vedhæftninger og deltage, når andre tilføjer dig."], en: ["Text", "Up to 160 characters per message with AI tone check. You can view attachments others send."] },
   { id: "text_attachments", price: 79, da: ["Tekst + vedhæftninger", "Op til 480 tegn pr. besked, og du kan sende screenshots, billeder og PDF'er (tjekket af AI før afsendelse) og tilføje ekstra personer til samtaler."], en: ["Text + attachments", "Up to 480 characters per message, plus sending screenshots, images and PDFs (checked by AI before sending) and adding extra people to conversations."] },
@@ -918,16 +920,17 @@ export const PLANS = [
 function Plans({ lang }: { lang: Lang }) {
   const da = lang === "da";
   const [p, setP] = useState<{ plan: string; pending_plan: string | null; period_end: string | null; test_switch: boolean } | null>(null);
-  const [msg, setMsg] = useState(""); const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(""); const [busy, setBusy] = useState(false);
   const load = () => supabase.rpc("get_my_plan").then(({ data }) => setP(data?.[0] ?? null));
   useEffect(() => { load(); }, []);
   const change = async (plan: string, now = false) => {
-    setBusy(true); setMsg("");
+    setBusy(true); setErr("");
     const r = await supabase.rpc("set_my_plan_test", { p_plan: plan, p_now: now }); setBusy(false);
-    if (r.error) { setMsg(da ? "Planen kunne ikke skiftes. Prøv igen." : "Could not change plan. Try again."); return; }
+    if (r.error) { setErr(da ? "Planen kunne ikke skiftes. Prøv igen." : "Could not change plan. Try again."); return; }
     const d = r.data?.[0]; await load();
-    setMsg(d?.pending_plan ? (da ? `Skiftet er planlagt og gælder fra ${new Date(d.period_end).toLocaleDateString("da")}.` : `The change is scheduled from ${new Date(d.period_end).toLocaleDateString("en")}.`)
-      : (da ? "Planen er skiftet." : "Plan changed."));
+    // Confirmation is a short floating pill (same as "Kopieret"), not a warning box.
+    showToast(d?.pending_plan ? (da ? `Skiftet er planlagt og gælder fra ${new Date(d.period_end).toLocaleDateString("da")}.` : `The change is scheduled from ${new Date(d.period_end).toLocaleDateString("en")}.`)
+      : (da ? "Planen er skiftet." : "Plan changed."), { tone: "success", ms: PLAN_TOAST_MS });
   };
   if (!p) return <p className="meta" role="status">{da ? "Henter…" : "Loading…"}</p>;
   const name = (id: string) => (PLANS.find((x) => x.id === id)![da ? "da" : "en"])[0];
@@ -936,19 +939,23 @@ function Plans({ lang }: { lang: Lang }) {
     <div className="plans" role="list">
       {PLANS.map((x) => { const cur = p.plan === x.id; const [title, desc] = x[da ? "da" : "en"]; return (
         <section key={x.id} role="listitem" className={`card plan${cur ? " current" : ""}`} aria-current={cur ? "true" : undefined} aria-labelledby={`plan-${x.id}`}>
+          {/* Quiet label, not a button. The other card gets an invisible spacer so the titles line up. */}
+          {cur ? <span className="plan-badge">{da ? "Din plan" : "Your plan"}</span> : <span className="plan-badge plan-badge-spacer" aria-hidden="true">{da ? "Din plan" : "Your plan"}</span>}
           <h3 id={`plan-${x.id}`}>{title}</h3>
           <p className="price"><strong>{x.price} kr.</strong> / {da ? "md." : "month"}</p>
           <p className="meta">{desc}</p>
-          {cur ? <p className="badge">{da ? "Din nuværende plan" : "Your current plan"}</p>
-            : <button disabled={busy || !p.test_switch} onClick={() => change(x.id)}>{x.id === "text_attachments" ? (da ? "Opgradér (test)" : "Upgrade (test)") : (da ? "Nedgradér (test)" : "Downgrade (test)")}</button>}
-          {p.pending_plan === x.id && <p className="meta">{da ? "Skifter hertil ved næste periode." : "Switches here next period."}</p>}
+          <div className="plan-foot">
+            {p.pending_plan === x.id && <p className="meta">{da ? "Skifter hertil ved næste periode." : "Switches here next period."}</p>}
+            {!cur && <button disabled={busy || !p.test_switch} onClick={() => change(x.id)}>{x.id === "text_attachments" ? (da ? "Opgradér (test)" : "Upgrade (test)") : (da ? "Nedgradér (test)" : "Downgrade (test)")}</button>}
+          </div>
         </section>); })}
     </div>
     {p.pending_plan && <div className="row"><button className="ghost" disabled={busy} onClick={() => change(p.plan)}>{da ? `Behold ${name(p.plan)}` : `Keep ${name(p.plan)}`}</button>
       <button className="ghost" disabled={busy} onClick={() => change(p.pending_plan!, true)}>{da ? "Skift straks (kun test)" : "Switch now (test only)"}</button></div>}
-    <p className="meta">{da ? "Regel: Opgradering gælder straks. Nedgradering gælder fra næste periode (indtil da beholder du vedhæftninger). Planen gælder dig som afsender – den anden forælder kan have en anden plan. Alle kan altid se vedhæftninger, de modtager." : "Rule: upgrades apply immediately. Downgrades apply from the next period. The plan applies to you as sender – the other parent may have another plan. Everyone can always view attachments they receive."}</p>
+    <p className="meta plan-rule">{da ? "Opgradering gælder med det samme. Nedgradering gælder fra næste periode." : "Upgrades apply right away. Downgrades apply from the next period."}</p>
+    <p className="meta plan-rule">{da ? "Planen gælder kun dig – den anden forælder kan have en anden plan, og alle kan altid se vedhæftninger, de modtager." : "The plan only applies to you – the other parent may have a different plan, and everyone can always see attachments they receive."}</p>
     {p.period_end && <p className="meta">{da ? "Periode slutter" : "Period ends"}: {new Date(p.period_end).toLocaleDateString(lang)}</p>}
-    {msg && <p className="notice" role="status">{msg}</p>}
+    {err && <p className="notice" role="alert">{err}</p>}
   </div>);
 }
 

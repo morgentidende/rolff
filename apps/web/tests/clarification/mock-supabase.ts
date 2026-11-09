@@ -12,6 +12,7 @@ export const calls: any[] = [];
 const seedMsg = { id: '40000000-0000-4000-8000-000000000001', sender_id: uid, sender_email: 'tester@example.invalid', body: 'Kun en opdigtet testbesked.', created_at: '2026-11-07T08:00:00Z', mine: true };
 let messages: any[] = [{ ...seedMsg }];
 let msgSeq = 2;
+let currentPlan = 'text_attachments';
 export function pauseAlias() { aliasPaused = true; }
 export function resolveAlias() { pendingAlias?.(); pendingAlias = null; aliasPaused = false; }
 export function resolveInitial() { pendingInitial.splice(0).forEach(r => r({ data: { session: initial } })); }
@@ -42,7 +43,8 @@ function rpc(name: string, args: any) {
     if (name === 'get_my_public_name')
         data = 'Testperson';
     if (name === 'get_my_plan')
-        data = [{ plan: 'text_attachments', price: 79 }];
+        data = [{ plan: currentPlan, price: currentPlan === 'text' ? 49 : 79, pending_plan: null, period_end: '2026-12-09T00:00:00Z', test_switch: true }];
+    if (name === 'set_my_plan_test') { currentPlan = args?.p_plan ?? currentPlan; data = [{ plan: currentPlan, pending_plan: null, period_end: '2026-12-09T00:00:00Z' }]; }
     if (name === 'get_my_send_limits')
         data = [{ next_at: null }];
     if (name === 'get_messages_v2')
