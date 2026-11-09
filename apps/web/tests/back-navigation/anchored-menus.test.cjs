@@ -145,7 +145,19 @@ for (const strict of [false, true])
             await delay(20);
             assert.equal(geo.copied(), 'Kun en opdigtet testbesked.');
             assert.ok(!d.querySelector('.message-panel'));
-            assert.equal(d.querySelector('.message-feedback').textContent, 'Beskeden er kopieret.');
+            // Copy feedback is a single floating toast, never inline in the list.
+            assert.ok(!d.querySelector('.message-feedback'));
+            let region = d.querySelector('.toast-region');
+            assert.equal(region.getAttribute('aria-live'), 'polite');
+            assert.equal(region.getAttribute('role'), 'status');
+            assert.ok(!d.querySelector('.msgs').contains(region), 'toast is outside the message list');
+            assert.equal(region.querySelectorAll('.toast-pill').length, 1);
+            assert.equal(region.querySelector('.toast-pill').textContent, 'Kopieret');
+            await press(w, d);
+            await click(button(d, 'Kopiér'));
+            await delay(20);
+            assert.equal(d.querySelectorAll('.toast-pill').length, 1, 'repeated copy keeps one pill');
+            assert.ok(d.querySelector('.toast-pill').classList.contains('is-shown'));
             await press(w, d);
             await click(button(d, 'Information'));
             p = d.querySelector('.message-panel');
@@ -370,6 +382,17 @@ test('reply composer CSS is attached inside the composer surface', async () => {
     assert.match(src, /setReplyFocus/);
     assert.match(src, /replyFocus/);
     assert.match(src, /beginReply/);
+});
+
+test('chat column pins the composer: only the list scrolls, never scrollIntoView on new messages', async () => {
+    const css = require('node:fs').readFileSync(path.resolve(__dirname, '../../src/styles.css'), 'utf8');
+    assert.match(css, /\.wrap\.chat-wrap\{[^}]*height:var\(--app-h,100dvh\)[^}]*overflow:hidden/);
+    assert.match(css, /\.chat-wrap > \.msgs\{[^}]*min-height:0[^}]*overflow-y:auto/);
+    assert.match(css, /\.toast-region\{[^}]*position:fixed/);
+    assert.match(css, /prefers-reduced-motion:reduce\)\{\.toast-pill/);
+    const src = require('node:fs').readFileSync(path.resolve(__dirname, '../../src/App.tsx'), 'utf8');
+    assert.doesNotMatch(src, /endRef\.current\?\.scrollIntoView/);
+    assert.match(src, /"wrap chat-wrap"/);
 });
 
 test('frameless WhatsApp chat: no msgs card, tails on first of each sender group', async () => {

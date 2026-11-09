@@ -6,6 +6,7 @@ import { ContactAliasDialog, ContactButton } from "./ContactAlias";
 import { ComposerInput } from "./ComposerInput";
 import { effectiveCharLimit, textRetryKey } from "./composerLimits";
 import { MessageBubble, ReplyComposer, type Message } from "./MessageBubble";
+import { Toast } from "./toast";
 import { rectOf, useAnchoredPlacement, visibleViewport } from "./anchoredPosition";
 import type React from "react";
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -117,7 +118,7 @@ export function App() {
   useBackLayer(!!conv,()=>setConv(null),"view");
   useBackLayer(!!renameContacts,()=>setRenameContacts(null));
   return (
-    <div className="wrap">
+    <div className={session && conv ? "wrap chat-wrap" : "wrap"}>
       {!(session && conv) && <header className="topbar"><img src="./favicon.svg" alt="" width={30} height={30} style={{ borderRadius: 8 }} /><strong className="brand">Rolff</strong><span className="spacer" />
         {session ? <Menu lang={lang} items={menu} /> : <>
           <select aria-label={t.lang} className="compact" value={lang} onChange={(e) => setLang(e.target.value as Lang)}><option value="da">Dansk</option><option value="en">English</option></select>
@@ -624,7 +625,28 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
     const i = await supabase.rpc("list_pending_invitations", { conv: conv.id }); setInvs((i.data as Pending[]) ?? []);
   }, [conv.id]);
   useEffect(() => { load(); const i = setInterval(load, 8000); return () => clearInterval(i); }, [load]);
-  useEffect(() => { if (q === null) endRef.current?.scrollIntoView({ block: "end" }); }, [msgs.length]);
+  // The chat is a fixed-height column: only the message list scrolls, so the
+  // composer stays pinned at the bottom. Never use scrollIntoView here — it also
+  // scrolls the page and pushed the composer off-screen after approval.
+  const atBottom = useRef(true);
+  const toBottom = useCallback(() => { const l = listRef.current; if (l) { l.scrollTop = l.scrollHeight; atBottom.current = true; } }, []);
+  useLayoutEffect(() => { if (q === null) toBottom(); }, [msgs.length, toBottom]);
+  useEffect(() => {
+    const l = listRef.current; if (!l) return;
+    const onScroll = () => { atBottom.current = l.scrollHeight - l.scrollTop - l.clientHeight < 24; };
+    // Notices, Luna, the reply bar or the keyboard can shrink the list; keep the newest message in view.
+    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => { if (atBottom.current) l.scrollTop = l.scrollHeight; });
+    l.addEventListener("scroll", onScroll, { passive: true }); ro?.observe(l);
+    return () => { l.removeEventListener("scroll", onScroll); ro?.disconnect(); };
+  }, []);
+  // Track the visible viewport (mobile keyboard) so the column fits above it.
+  useEffect(() => {
+    const v = window.visualViewport, root = document.documentElement;
+    let full = window.innerHeight, width = window.innerWidth;
+    const fit = () => { if (window.innerWidth !== width) { width = window.innerWidth; full = window.innerHeight; } full = Math.max(full, window.innerHeight); const h = Math.round(v ? v.height : window.innerHeight); root.style.setProperty("--app-h", `${h}px`); if (h < full * 0.75) root.dataset.kbd = ""; else delete root.dataset.kbd; if (window.scrollY && !v?.offsetTop) window.scrollTo(0, 0); };
+    fit(); v?.addEventListener("resize", fit); window.addEventListener("resize", fit);
+    return () => { v?.removeEventListener("resize", fit); window.removeEventListener("resize", fit); root.style.removeProperty("--app-h"); delete root.dataset.kbd; };
+  }, []);
   // Every Besvar must bring the composer into view and focus it — even when
   // the same message is already selected, the keyboard is open, or focus was kept.
   useLayoutEffect(() => {
@@ -632,8 +654,7 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
     let cancelled = false;
     const bring = () => {
       if (cancelled) return;
-      endRef.current?.scrollIntoView({ block: "end" });
-      if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight;
+      toBottom();
       composerRootRef.current?.scrollIntoView({ block: "nearest" });
       const input = composerRef.current;
       if (!input) return;
@@ -643,7 +664,7 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
     };
     const id = requestAnimationFrame(() => requestAnimationFrame(bring));
     return () => { cancelled = true; cancelAnimationFrame(id); };
-  }, [replyFocus]);
+  }, [replyFocus, toBottom]);
   useEffect(() => { localStorage.setItem(draftKey, text); }, [text, draftKey]);
   useEffect(() => { if (reply) localStorage.setItem(replyKey, reply.id); else localStorage.removeItem(replyKey); }, [reply?.id, replyKey]);
   const hits = q ? findHits(msgs.map((m) => m.body), q) : [];
@@ -738,6 +759,7 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
       {sheet === "members" && <SheetView title={da ? "Deltagere og roller" : "Participants and roles"} close={() => setSheet(null)} lang={lang}><Members lang={lang} conv={conv.id} isParent={conv.role === "parent"} left={back} openWords={() => setSheet("words")} /></SheetView>}
       {sheet === "export" && <SheetView title={da ? "Udskrift af samtale" : "Conversation transcript"} close={() => setSheet(null)} lang={lang}><ConversationExport lang={lang} conv={conv.id} plan={plan} ownEmail={session.user.email ?? ""} openPlans={() => { setSheet(null); openPlans(); }} /></SheetView>}
       {sheet === "addMember" && <SheetView title={da ? "Tilføj person" : "Add person"} close={() => setSheet(null)} lang={lang} anchor={addPersonRef}><AddMember lang={lang} conv={conv.id} done={load} openPlans={openPlans} /></SheetView>}
+      <Toast />
     </>
   );
 }
