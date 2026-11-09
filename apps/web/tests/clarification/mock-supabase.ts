@@ -53,7 +53,10 @@ function rpc(name: string, args: any) {
         data = [{ user_id: uid, label: 'Testperson', role: 'parent', me: true }, { user_id: other, label: 'Testkontakt', role: 'parent', me: false }];
     const result: any = name === 'set_contact_alias' && aliasPaused
         ? new Promise(resolve => { pendingAlias = () => resolve({ data, error: null }); })
-        : Promise.resolve({ data, error: null });
+        : name === 'list_my_conversations_v2'
+            // Simulates the v2 migration not being deployed yet: Home must fall back to v1.
+            ? Promise.resolve({ data: null, error: { code: 'PGRST202', message: 'synthetic: function not found' } })
+            : Promise.resolve({ data, error: null });
     if (name === 'set_contact_alias')
         result.then(() => { const owner = call.headers.Authorization === `Bearer ${TOKEN_A}` ? uid : session?.user.id; aliases.set(owner, args.p_alias.trim() || null); });
     result.setHeader = (key: string, value: string) => { call.headers[key] = value; return result; };
