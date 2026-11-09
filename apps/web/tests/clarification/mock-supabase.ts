@@ -9,6 +9,9 @@ const aliases = new Map<string, string | null>();
 const listeners = new Set<any>(), pendingInitial: any[] = [];
 let aliasPaused = false, pendingAlias: (() => void) | null = null;
 export const calls: any[] = [];
+const seedMsg = { id: '40000000-0000-4000-8000-000000000001', sender_id: uid, sender_email: 'tester@example.invalid', body: 'Kun en opdigtet testbesked.', created_at: '2026-11-07T08:00:00Z', mine: true };
+let messages: any[] = [{ ...seedMsg }];
+let msgSeq = 2;
 export function pauseAlias() { aliasPaused = true; }
 export function resolveAlias() { pendingAlias?.(); pendingAlias = null; aliasPaused = false; }
 export function resolveInitial() { pendingInitial.splice(0).forEach(r => r({ data: { session: initial } })); }
@@ -43,7 +46,7 @@ function rpc(name: string, args: any) {
     if (name === 'get_my_send_limits')
         data = [{ next_at: null }];
     if (name === 'get_messages_v2')
-        data = [{ id: '40000000-0000-4000-8000-000000000001', sender_id: uid, sender_email: 'tester@example.invalid', body: 'Kun en opdigtet testbesked.', created_at: '2026-11-07T08:00:00Z', mine: true }];
+        data = messages.map(m => ({ ...m }));
     if (name === 'my_pending_count')
         data = 0;
     if (name === 'list_conversation_members')
@@ -68,10 +71,23 @@ export const supabase: any = {
 let holdSend = false; const heldSends: ((status: string) => void)[] = [];
 export function holdSends() { holdSend = true; }
 export function releaseSends(status: string) { holdSend = false; heldSends.splice(0).forEach(r => r(status)); }
+function acceptSend(args: any) {
+    const id = `50000000-0000-4000-8000-${String(msgSeq++).padStart(12, '0')}`;
+    const body = typeof args?.body === 'string' ? args.body
+        : (typeof args?.caption === 'string' && args.caption.trim() ? args.caption : 'Opdigtet godkendt besked.');
+    messages = [...messages, {
+        id, sender_id: uid, sender_email: session?.user?.email ?? 'tester@example.invalid', body,
+        created_at: new Date(Date.UTC(2026, 10, 9, 12, 0, msgSeq)).toISOString(), mine: true,
+    }];
+    return { status: 200, data: { status: 'accepted', message_id: id } };
+}
 export async function callFn(name: string, args: any) {
     calls.push({ function: name, args });
-    if (holdSend && name.startsWith('send-'))
-        return { status: 200, data: { status: await new Promise<string>(r => heldSends.push(r)) } };
+    if (holdSend && name.startsWith('send-')) {
+        const status = await new Promise<string>(r => heldSends.push(r));
+        if (status === 'accepted') return acceptSend(args);
+        return { status: 200, data: { status } };
+    }
     if (name === 'invite-email' && args?.action === 'member')
         return { status: 403, data: { error: 'plan_required' } };
     return { status: 200, data: { status: name.startsWith('send-') ? 'clarification_required' : 'accepted' } };
