@@ -8,7 +8,7 @@ import { effectiveCharLimit, textRetryKey } from "./composerLimits";
 import { MessageBubble, ReplyPreview, type Message } from "./MessageBubble";
 import { rectOf, useAnchoredPlacement, visibleViewport } from "./anchoredPosition";
 import type React from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { callFn, supabase } from "./supabase";
 import { detectLang, strings, type Lang } from "./i18n";
@@ -17,7 +17,9 @@ import { cacheClear, cacheGet, cacheSet } from "./localStore";
 import { LunaIndicator } from "./LunaRobot";
 import { applySuggestion } from "./suggestion";
 import { KEY as A2HS_KEY, platform as a2hsPlatform, shouldAsk } from "./install";
-import { exportFileName, makeZip, myDataFiles, findHits, toCsv, type Row } from "./exportUtil";
+import { makeZip, myDataFiles, findHits } from "./exportUtil";
+import { ConversationExport } from "./ConversationExport";
+import { EventNotice, eventsBefore, useConversationEvents } from "./ConversationEvents";
 
 import { labelOf, convDisplay } from "./convDisplay";
 
@@ -571,6 +573,7 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
   const t = strings[lang]; const da = lang === "da";
   const draftKey = `draft:${conv.id}`; const replyKey = `draft-reply:${conv.id}`;
   const [msgs, setMsgs] = useState<Msg[]>([]); const [pending, setPending] = useState(0);
+  const events = useConversationEvents(conv.id, msgs.length);
   const [reply, setReply] = useState<{ id: string; body: string | null } | null>(() => { const id = localStorage.getItem(replyKey); return id && /^[0-9a-f-]{36}$/i.test(id) ? { id, body: null } : null; }); const composerRef = useRef<HTMLTextAreaElement>(null);
   const [invs, setInvs] = useState<Pending[]>([]);
   const [text, setText] = useState(localStorage.getItem(draftKey) ?? "");
@@ -671,7 +674,8 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
       {pending > 0 && <div className="notice row"><span>{t.pending(pending)}</span><span className="spacer" /><button onClick={receiveNow}>{t.receiveNow}</button></div>}
       <div className="card msgs" aria-live="polite" ref={listRef}>
         {msgs.length === 0 && <p className="meta">{t.empty}</p>}
-        {msgs.map((m, i) => <MessageBubble key={m.id} m={m} lang={lang} index={i} hit={i === curIdx} canReply={conv.role !== "reader" && !sending} onReply={selected => { if (sending) return; setReply(selected); requestAnimationFrame(() => composerRef.current?.focus()); }}>{q ? markAll(m.body, q, i === curIdx) : m.body}{m.att_mime && <AttachmentView lang={lang} m={m} />}</MessageBubble>)}
+        {msgs.map((m, i) => <Fragment key={m.id}>{eventsBefore(events, msgs, i).map((e) => <EventNotice key={e.id} e={e} lang={lang} />)}<MessageBubble m={m} lang={lang} index={i} hit={i === curIdx} canReply={conv.role !== "reader" && !sending} onReply={selected => { if (sending) return; setReply(selected); requestAnimationFrame(() => composerRef.current?.focus()); }}>{q ? markAll(m.body, q, i === curIdx) : m.body}{m.att_mime && <AttachmentView lang={lang} m={m} />}</MessageBubble></Fragment>)}
+        {eventsBefore(events, msgs, msgs.length).map((e) => <EventNotice key={e.id} e={e} lang={lang} />)}
         <div ref={endRef} />
       </div>
       {status?.kind === "blocked" && <div className="notice" role="alert"><p style={{ margin: 0 }}>{t.blocked}</p>{status.spans!.length > 0 && <p className="meta" style={{ marginBottom: 0 }}>{t.flagged}: {highlight(status.blockedText!, status.spans!)}</p>}{status.suggestion ? <div className="suggest"><p className="meta" style={{ margin: "8px 0 4px" }}><strong>{t.suggestionLabel}</strong></p><p style={{ margin: "0 0 8px" }}>{status.suggestion}</p><button type="button" className="ghost" onClick={() => { setText(applySuggestion(text, status.suggestion)); setStatus(null); }}>{t.useSuggestion}</button><p className="meta" style={{ margin: "6px 0 0" }}>{da ? "Forslaget kopieres til skrivefeltet. Du kan rette det og skal selv trykke Send — det tjekkes igen. Originalteksten står stadig i feltet, indtil du vælger forslaget." : "The suggestion is copied into the composer. You can edit it and must press Send yourself — it is checked again. Your original text stays until you use the suggestion."}</p></div> : <div className="suggest"><p className="meta" style={{ margin: "8px 0 4px" }}><strong>{t.guidanceLabel}</strong></p><p className="meta" style={{ margin: 0 }}>{t.blockGuidance}</p></div>}</div>}
@@ -690,7 +694,7 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
       {sheet === "report" && <SheetView title={da ? "Rapportér" : "Report"} close={() => setSheet(null)} lang={lang}><ReportForm lang={lang} conv={conv.id} msgs={msgs} /></SheetView>}
       {sheet === "words" && <SheetView title={da ? "Blokeringer" : "Blocking lists"} close={() => setSheet(null)} lang={lang}><BlockingLists key={`${session.user.id}:${conv.id}`} session={session} lang={lang} conv={conv.id} /></SheetView>}
       {sheet === "members" && <SheetView title={da ? "Deltagere og roller" : "Participants and roles"} close={() => setSheet(null)} lang={lang}><Members lang={lang} conv={conv.id} isParent={conv.role === "parent"} left={back} openWords={() => setSheet("words")} /></SheetView>}
-      {sheet === "export" && <SheetView title={da ? "Eksportér samtale" : "Export conversation"} close={() => setSheet(null)} lang={lang}><ExportPanel lang={lang} msgs={msgs} /></SheetView>}
+      {sheet === "export" && <SheetView title={da ? "Udskrift af samtale" : "Conversation transcript"} close={() => setSheet(null)} lang={lang}><ConversationExport lang={lang} conv={conv.id} plan={plan} ownEmail={session.user.email ?? ""} openPlans={() => { setSheet(null); openPlans(); }} /></SheetView>}
       {sheet === "addMember" && <SheetView title={da ? "Tilføj person" : "Add person"} close={() => setSheet(null)} lang={lang} anchor={addPersonRef}><AddMember lang={lang} conv={conv.id} done={load} openPlans={openPlans} /></SheetView>}
     </>
   );
@@ -750,38 +754,6 @@ function AddMember({ lang, conv, done, openPlans }: { lang: Lang; conv: string; 
       {msg && <p className={msg.ok ? "meta" : "err"} role={msg.ok ? "status" : "alert"}>{msg.text}</p>}
       {msg?.plan && <div className="row end"><button type="button" onClick={openPlans}>{da ? "Se planer" : "See plans"}</button></div>}
     </form>
-  );
-}
-
-function download(name: string, blob: Blob) {
-  const u = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 1000);
-}
-
-function ExportPanel({ lang, msgs }: { lang: Lang; msgs: Msg[] }) {
-  const da = lang === "da"; const [busy, setBusy] = useState(false);
-  const build = async () => {
-    const { data } = await supabase.auth.getUser(); const me = data.user?.email ?? "";
-    const rows: Row[] = msgs.map((m) => ({ sender: m.mine ? me : (m.sender_name ?? ""), time: new Date(m.created_at).toLocaleString(lang === "da" ? "da-DK" : "en-GB", { dateStyle: "short", timeStyle: "short" }), text: m.body }));
-    return { me, rows, at: new Date().toLocaleString(lang === "da" ? "da-DK" : "en-GB", { dateStyle: "long", timeStyle: "short" }) };
-  };
-  const csv = async () => { const { me, rows, at } = await build(); download(exportFileName("csv"), new Blob([toCsv(rows, me, at, lang)], { type: "text/csv;charset=utf-8" })); };
-  const pdf = async () => {
-    setBusy(true);
-    const { me, rows, at } = await build(); const { jsPDF } = await import("jspdf");
-    const doc = new jsPDF({ unit: "pt", format: "a4" }); const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 48; let y = M;
-    const line = (txt: string, size: number, bold = false, gap = 4) => { doc.setFont("helvetica", bold ? "bold" : "normal"); doc.setFontSize(size);
-      for (const l of doc.splitTextToSize(txt, W - 2 * M) as string[]) { if (y > H - M) { doc.addPage(); y = M; } doc.text(l, M, y); y += size * 1.3; } y += gap; };
-    line(da ? "Rolff – eksporteret samtale" : "Rolff – exported conversation", 16, true);
-    line(da ? `Eksporteret af ${me} den ${at}` : `Exported by ${me} on ${at}`, 10, false, 2);
-    line(da ? "Indeholder kun beskeder, du selv har adgang til. Testmiljø – opdigtede beskeder." : "Contains only messages you have access to. Test environment – made-up messages.", 9, false, 14);
-    for (const r of rows) { line(`${r.sender} · ${r.time}`, 9, true, 0); line(r.text, 11, false, 10); }
-    doc.save(exportFileName("pdf")); setBusy(false);
-  };
-  return (
-    <div>
-      <p className="meta">{da ? `Eksporten indeholder de ${msgs.length} beskeder, du kan se nu: dine egne og dem, der er leveret til dig. Filen laves på din enhed.` : `The export contains the ${msgs.length} messages you can see now: your own and those delivered to you. The file is created on your device.`}</p>
-      <div className="row end"><button className="ghost" onClick={csv} disabled={!msgs.length}>CSV</button><button onClick={pdf} disabled={busy || !msgs.length}>PDF</button></div>
-    </div>
   );
 }
 

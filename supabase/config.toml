@@ -11,3 +11,7 @@ verify_jwt = true
 verify_jwt = true
 [functions.send-attachment]
 verify_jwt = true
+[functions.export-conversation]
+verify_jwt = true
+[functions.verify-export]
+verify_jwt = false
