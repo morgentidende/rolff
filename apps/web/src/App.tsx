@@ -1,4 +1,5 @@
 import { BlockingLists } from "./BlockingLists";
+import { setReloadBlocked } from "./versionCheck";
 import { resetBackNavigation, useBackLayer, useBackNavigationRoot, usePanelState } from "./backNavigation";
 import { ReceiveSettings } from "./ReceiveSettings";
 import { setReceiveTimezoneUser, syncReceiveTimezone } from "./receiveTimezone";
@@ -610,6 +611,8 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
   const [lim, setLim] = useState<SendLimits | null>(null);
   const cap = effectiveCharLimit(plan);
   const [file, setFile] = useState<File | null>(null);
+  // Never auto-reload for a new app version mid-send or with an attachment picked (text drafts survive a reload).
+  useEffect(() => { const k = `composer:${conv.id}`; setReloadBlocked(k, sending || !!file); return () => setReloadBlocked(k, false); }, [sending, file, conv.id]);
   const retryKey = !file ? textRetryKey(localStorage.getItem(`idem:${conv.id}`), text, reply?.id ?? null) : null;
   const attachmentSend = useRef<(() => void) | null>(null);
   const loadLim = useCallback(async () => { const { data } = await supabase.rpc("get_my_send_limits", { conv: conv.id }); setLim((data as SendLimits[])?.[0] ?? null); }, [conv.id]);
