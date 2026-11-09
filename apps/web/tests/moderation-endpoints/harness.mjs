@@ -40,3 +40,15 @@ for(const kind of ['message','attachment']) {
  policyUnavailable=true;providerCalls=0;calls=[];r=await handler(new Request('https://synthetic.invalid',{method:'POST',body:JSON.stringify(input)}));assert.equal(r.status,503);assert.equal(providerCalls,0);assert.ok(!calls.some(c=>/issue|commit/.test(c.name)));policyUnavailable=false;passed++;
 }
 console.log(passed+' total actual endpoint scenarios passed, including deny-only topics, attachment parity, strict malformed failures, private errors and stale snapshot binding.');
+
+// Luna's block explanation: passed through on block (same single provider call), dropped when unsafe, absent on fallback.
+for(const kind of ['message','attachment']){
+ handler=handlers[kind];topics=[];blockedWords=[];
+ for(const [explanation,expected] of [['Beskeden kan virke anklagende og gøre den anden defensiv.','Beskeden kan virke anklagende og gøre den anden defensiv.'],['Ordet plimvax kan såre.',undefined],['<b>Det lyder som en ordre.</b>',undefined],[undefined,undefined]]){
+  calls=[];providerCalls=0;answer={decision:'block',reason_code:'controlling_demand',spans:['plimvax'],suggestion:'',...(explanation===undefined?{}:{explanation}),...(kind==='attachment'?{transcript:'Tidspunkt: plimvax nudro.'}:{})};
+  const r=await handler(new Request('https://synthetic.invalid',{method:'POST',body:JSON.stringify(input)}));const data=await r.json();
+  assert.equal(r.status,200);assert.equal(data.status,'blocked');assert.equal(data.reason_code,'controlling_demand');assert.equal(data.explanation,expected);assert.equal(providerCalls,1);
+  assert.ok(!calls.some(c=>c.name==='record_attempt'&&JSON.stringify(c.args).includes('defensiv')));passed++;
+ }
+}
+console.log(passed+' total endpoint scenarios passed, including Luna block explanations (message + attachment).');
