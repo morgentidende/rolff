@@ -13,6 +13,7 @@ import { callFn, supabase } from "./supabase";
 import { detectLang, strings, type Lang } from "./i18n";
 import { passwordsMatch, pwText, toggleLabel } from "./pw";
 import { cacheClear, cacheGet, cacheSet } from "./localStore";
+import { LunaIndicator } from "./LunaRobot";
 import { applySuggestion } from "./suggestion";
 import { KEY as A2HS_KEY, platform as a2hsPlatform, shouldAsk } from "./install";
 import { exportFileName, makeZip, myDataFiles, findHits, toCsv, type Row } from "./exportUtil";
@@ -661,15 +662,7 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
       {status?.kind === "clarification" && <div className="notice" role="alert">{da ? "Beskeden er ikke sendt. Vi er usikre på, hvad du mener. Vil du skrive det lidt tydeligere?" : "Your message was not sent. We’re not sure what you mean. Could you write it a little more clearly?"}</div>}
       {status?.kind === "note" && <div className="notice" role="alert">{status.blockedText}</div>}
       {status && status.kind !== "blocked" && status.kind !== "note" && status.kind !== "clarification" && <div className={status.kind === "accepted" ? "notice" : "err"} role="status">{(t as any)[status.kind]}</div>}
-      {sending && (
-        <div className="luna-evaluating" role="status" aria-live="polite">
-          <div className="luna-moon" aria-hidden="true">
-            <div className="luna-core" />
-            <div className="luna-orbit"><span /><span /><span /></div>
-          </div>
-          <span>{t.sending}</span>
-        </div>
-      )}
+      <LunaIndicator checking={sending} accepted={status?.kind === "accepted"} label={t.sending} />
       {conv.role !== "reader" ? (
         <div className="card composer"><fieldset className="composer-fields" disabled={sending}>
           {reply && <div className="reply-composer"><div><span className="meta">{da ? "Besvarer" : "Replying"}</span><ReplyPreview body={reply?.body} unavailable={reply.body == null} lang={lang} /></div><button type="button" className="ghost" aria-label={da ? "Annullér svar" : "Cancel reply"} onClick={() => { setReply(null); composerRef.current?.focus(); }}>✕</button></div>}
