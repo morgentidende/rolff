@@ -223,3 +223,74 @@ for (const strict of [false, true])
             await fixture.close();
         }
     });
+
+
+// Long-press must not leave "Besvar" text-selected, and the releasing finger
+// must not activate the first menu item (Android Chrome selection handles).
+function pointer(w, el, type, props = {}) {
+    const e = new w.Event(type, { bubbles: true, cancelable: true });
+    Object.assign(e, { isPrimary: true, button: 0, clientX: 200, clientY: 330, pointerId: 1, pointerType: 'touch', ...props });
+    el.dispatchEvent(e);
+}
+async function longPress(w, d, el) {
+    pointer(w, el, 'pointerdown');
+    await delay(520);
+    return d.querySelector('.message-panel');
+}
+
+for (const strict of [false, true])
+    test(`long-press opens menu without selecting Besvar or firing it (StrictMode=${strict})`, { timeout: 10000 }, async () => {
+        const fixture = await env(strict);
+        const { w, d } = fixture;
+        try {
+            geometry(w);
+            await openChatWithDraft(w, d);
+            const bubble = d.querySelector('.msg');
+            // Simulate a native selection landing on the first menu label as Android does.
+            const p = await longPress(w, d, bubble);
+            assert.ok(p, 'menu opens from long-press');
+            assert.equal(p.getAttribute('data-armed'), 'true', 'panel is armed while finger is still down');
+            assert.ok(p.classList.contains('is-armed'));
+            const besvar = button(d, 'Besvar');
+            const label = besvar.querySelector('span') || besvar;
+            const range = d.createRange();
+            range.selectNodeContents(label);
+            const sel = w.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+            assert.ok(sel.toString().includes('Besvar') || sel.rangeCount === 1);
+            // Our selectionchange guard clears it.
+            await delay(30);
+            assert.equal(sel.rangeCount, 0, 'selection cleared while menu is open');
+            assert.equal(sel.toString(), '');
+            // Trailing release must not click Besvar.
+            let replied = d.querySelector('.reply-composer');
+            assert.ok(!replied);
+            pointer(w, w, 'pointerup', { clientY: 380 });
+            besvar.click(); // synthetic click that Android might deliver on release
+            await delay(80);
+            assert.ok(!d.querySelector('.reply-composer'), 'armed click on Besvar is ignored');
+            assert.equal(p.getAttribute('data-armed'), null);
+            // After arm clears, a real intentional click still works.
+            await click(button(d, 'Besvar'));
+            assert.ok(d.querySelector('.reply-composer'));
+            assertPrivateHistory(w);
+        } finally {
+            await fixture.close();
+        }
+    });
+
+test('message menu CSS blocks native text selection and callout', async () => {
+    const css = require('node:fs').readFileSync(path.resolve(__dirname, '../../src/styles.css'), 'utf8');
+    assert.match(css, /\.message-panel\{[^}]*-webkit-user-select:\s*none/);
+    assert.match(css, /\.message-panel\{[^}]*user-select:\s*none/);
+    assert.match(css, /\.message-panel\{[^}]*-webkit-touch-callout:\s*none/);
+    assert.match(css, /\.message-panel\.is-armed\{[^}]*pointer-events:\s*none/);
+    assert.match(css, /\.msg\{[^}]*-webkit-user-select:\s*none/);
+    assert.match(css, /\.message-overlay\{[^}]*user-select:\s*none/);
+    const src = require('node:fs').readFileSync(path.resolve(__dirname, '../../src/MessageBubble.tsx'), 'utf8');
+    assert.match(src, /selectionchange/);
+    assert.match(src, /removeAllRanges/);
+    assert.match(src, /openActions\(true\)/);
+    assert.match(src, /is-armed/);
+});
