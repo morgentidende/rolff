@@ -64,8 +64,14 @@ export const supabase: any = {
         verifyOtp: async () => ({ error: null }), getUser: async () => ({ data: { user: session?.user } }),
     }, from: query, rpc,
 };
+// Optional: hold send-* calls open so tests can observe the "checking" state.
+let holdSend = false; const heldSends: ((status: string) => void)[] = [];
+export function holdSends() { holdSend = true; }
+export function releaseSends(status: string) { holdSend = false; heldSends.splice(0).forEach(r => r(status)); }
 export async function callFn(name: string, args: any) {
     calls.push({ function: name, args });
+    if (holdSend && name.startsWith('send-'))
+        return { status: 200, data: { status: await new Promise<string>(r => heldSends.push(r)) } };
     if (name === 'invite-email' && args?.action === 'member')
         return { status: 403, data: { error: 'plan_required' } };
     return { status: 200, data: { status: name.startsWith('send-') ? 'clarification_required' : 'accepted' } };
