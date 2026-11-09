@@ -630,5 +630,7 @@ const {testConversationExports}=await import('./conversation-exports.mjs');
 await testConversationExports({db,as,svc,hash,t,assert});
 const {testConversationList}=await import('./conversation-list.mjs');
 await testConversationList({db,as,svc,hash,t,assert});
+const {testReplyContext}=await import('./reply-context.mjs');
+await testReplyContext({db,as,svc,hash,t,assert});
 console.log(`\n${pass} bestået, ${fail} fejlet`);
 process.exit(fail ? 1 : 0);
