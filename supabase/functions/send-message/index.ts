@@ -5,6 +5,7 @@ import { checkTopics, validateFilterSnapshot } from "../_shared/topics.ts";
 // atomic consume + store (commit_message, idempotent). Fail closed on any error.
 import { authed, cors, json } from "../_shared/http.ts";
 import { normalizeReplyId } from "../_shared/replies.ts";
+import { replyModerationContext } from "../_shared/replyContext.ts";
 import { checkPlanLength, planLengthError } from "../_shared/planLimits.ts";
 import { checkPersonLimits } from "../_shared/limits.ts";
 import { checkRules } from "../_shared/rules.ts";
@@ -60,6 +61,10 @@ Deno.serve(async (req) => {
     return json({ error: code }, code === "rate_limited" ? 429 : 403);
   }
   const ctx = (prep.data ?? []).map((r: any) => ({ mine: r.ctx_mine, body: r.ctx_body }));
+  // Replies: Luna always sees the replied-to message as context (server-fetched, visibility re-checked).
+  const modCtx = await replyModerationContext(admin, uid, conv, reply, ctx);
+  if (modCtx === "invalid_reply") return json({ error: "invalid_reply" }, 400);
+  if (modCtx === "error") return json({ status: "technical_error" }, 503);
 
   // Conversation blocked by another member (also enforced by DB trigger). Says nothing about who/when.
   const blk = await admin.from("conversation_blocks").select("user_id").eq("conversation_id", conv).neq("user_id", uid).limit(1);
@@ -83,7 +88,7 @@ Deno.serve(async (req) => {
     return json({ status: "technical_error", detail: (e as Error).message === "free_tier_forbidden_in_production" ? "config" : "unavailable" }, 503);
   }
   let res;
-  try { res = await moderate(provider, body, ctx, timeoutFromEnv({ get: (k) => Deno.env.get(k) })); }
+  try { res = await moderate(provider, body, modCtx, timeoutFromEnv({ get: (k) => Deno.env.get(k) })); }
   catch (e) {
     await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "error", p_reason: e instanceof ModerationTechnicalError ? e.message : "unknown" });
     // No message text in logs.
@@ -96,7 +101,7 @@ Deno.serve(async (req) => {
 
   // This stage can only deny or request clarification AFTER global safety allows.
   try {
-    const decision = await checkTopics({ get: k => Deno.env.get(k) }, body, policy.topics, ctx, timeoutFromEnv({ get: k => Deno.env.get(k) }));
+    const decision = await checkTopics({ get: k => Deno.env.get(k) }, body, policy.topics, modCtx, timeoutFromEnv({ get: k => Deno.env.get(k) }));
     if (decision !== "allow") {
       await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: decision, p_reason: "private_boundary" });
       return json({ status: decision === "block" ? "private_boundary" : "clarification_required" }, 200);

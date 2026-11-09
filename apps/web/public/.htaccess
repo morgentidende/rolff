@@ -1,0 +1,11 @@
+# Rolff: always load the newest deployed version.
+# The HTML pages, manifest and version.json are small and must be revalidated on
+# every launch; without an explicit header browsers (Android Chrome / installed
+# app) may reuse an old index.html from their cache for a long time.
+# Files in assets/ have a content hash in their name, so they can be cached forever.
+<IfModule mod_headers.c>
+  <FilesMatch "\.(html|webmanifest|json)$">
+    Header set Cache-Control "no-cache, must-revalidate"
+    Header unset Expires
+  </FilesMatch>
+</IfModule>
