@@ -157,6 +157,11 @@ export function validateResult(raw: unknown, msg: string): ModerationResult {
 const HARD_BLOCK = [
   "idiot", "kælling", "luder", "fuck dig", "fuck you", "bitch", "whore", "cunt", "retard", "dø", "kill you", "slår dig ihjel",
 ];
+/** True if the text contains a hard-block word as a whole word. Used for e-mail addresses too. */
+export function hasHardBlockWord(text: string): boolean {
+  const n = " " + text.toLowerCase().normalize("NFKC").replace(/[^\p{L}\p{N}]+/gu, " ") + " ";
+  return HARD_BLOCK.some((w) => w !== "dø" && n.includes(" " + w + " "));
+}
 export function prefilter(msg: string): ModerationResult | null {
   const n = " " + msg.toLowerCase().normalize("NFKC").replace(/[^\p{L}\p{N}]+/gu, " ") + " ";
   for (const w of HARD_BLOCK) {

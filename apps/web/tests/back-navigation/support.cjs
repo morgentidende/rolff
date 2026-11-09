@@ -51,6 +51,9 @@ async function env(strict = false, pauseAuth = false) {
     });
     dom.window.eval(await appBundle());
     await delay(70);
+    // De-flake: on a slow CI runner Home may not have rendered its conversation list after 70 ms.
+    // Wait (max 2 s) for it when signed in; never fails by itself, tests still assert what they need.
+    if (!pauseAuth) for (let i = 0; i < 40 && !dom.window.document.querySelector('.convbtn'); i++) await delay(50);
     return {
         dom, w: dom.window, d: dom.window.document, errors,
         async close() {

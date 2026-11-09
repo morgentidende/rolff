@@ -1,9 +1,10 @@
+// All POSTs may carry lang:"da"|"en" (the caller's app language; default "da").
 // POST {email}                                  -> new conversation + e-mail invitation (invitee mail + copy to inviter)
 // POST {action:"member", conversation_id, email, role} -> extra participant (writer/reader); asks all other members to approve
 // POST {action:"consent"|"decline", invitation_id}
 // When the last member approves, a one-time link is minted and mailed to the participant. No message content in any mail.
 import { authed, cors, json } from "../_shared/http.ts";
-import { approvalMail, copyMail, inviteMail, memberInviteMail, sendMail } from "../_shared/email.ts";
+import { approvalMail, copyMail, inviteMail, mailLang, memberInviteMail, sendMail } from "../_shared/email.ts";
 import { appUrl, inviteLink } from "../_shared/links.ts";
 
 const errCode = (m: string) => /plan_required/.test(m) ? "plan_required" : /rate_limited/.test(m) ? "rate_limited" : /bad_email|bad_role/.test(m) ? "bad_input" : /forbidden/.test(m) ? "forbidden" : /stale/.test(m) ? "stale" : /not_found/.test(m) ? "not_found" : "invite_failed";
@@ -14,15 +15,17 @@ Deno.serve(async (req) => {
   let i: any; try { i = await req.json(); } catch { return json({ error: "bad_request" }, 400); }
   const base = appUrl();
   const action = String(i?.action ?? "conversation");
+  // The calling user's app language ("da" | "en"; anything else -> "da"). Invitation mails follow it.
+  const lang = mailLang(i?.lang);
 
   const notifyApprovers = async (inv: string, role: string) => {
     const r = await a.admin.rpc("pending_approver_emails", { inv });
-    let n = 0; for (const row of (r.data ?? []) as { email: string }[]) if (row.email && await sendMail(row.email, approvalMail({ role, appUrl: base }))) n++;
+    let n = 0; for (const row of (r.data ?? []) as { email: string }[]) if (row.email && await sendMail(row.email, approvalMail({ role, appUrl: base, lang }))) n++;
     return n;
   };
   const mailParticipant = async (d: { token: string; invitee_email: string; inviter_email: string }, role: string) => {
     const exp = new Date(Date.now() + 72 * 3600e3).toISOString();
-    return sendMail(d.invitee_email, memberInviteMail({ inviterEmail: d.inviter_email, link: inviteLink(d.token), expires: exp, role, inviteeEmail: d.invitee_email }));
+    return sendMail(d.invitee_email, memberInviteMail({ inviterEmail: d.inviter_email, link: inviteLink(d.token), expires: exp, role, inviteeEmail: d.invitee_email, lang }));
   };
 
   if (action === "member") {
@@ -58,8 +61,8 @@ Deno.serve(async (req) => {
   const d = r.data[0];
   const link = inviteLink(d.token);
   const email = String(i.email).trim().toLowerCase();
-  const sentInvitee = await sendMail(email, inviteMail({ inviterEmail: (await a.admin.rpc("public_label_of", { uid: a.uid })).data ?? d.inviter_email, link, expires: d.expires_at, inviteeEmail: email }));
-  const sentCopy = sentInvitee ? await sendMail(d.inviter_email, copyMail({ inviteeEmail: email, expires: d.expires_at })) : false;
+  const sentInvitee = await sendMail(email, inviteMail({ inviterEmail: (await a.admin.rpc("public_label_of", { uid: a.uid })).data ?? d.inviter_email, link, expires: d.expires_at, inviteeEmail: email, lang }));
+  const sentCopy = sentInvitee ? await sendMail(d.inviter_email, copyMail({ inviteeEmail: email, expires: d.expires_at, lang })) : false;
   if (!sentInvitee) await a.user.rpc("revoke_invitation", { inv: d.invitation_id });
   return json({ data: { conversation_id: d.conversation_id, sent: sentInvitee, copy_sent: sentCopy } }, sentInvitee ? 200 : 502);
 });

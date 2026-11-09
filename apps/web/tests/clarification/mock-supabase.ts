@@ -12,6 +12,14 @@ export const calls: any[] = [];
 const seedMsg = { id: '40000000-0000-4000-8000-000000000001', sender_id: uid, sender_email: 'tester@example.invalid', body: 'Kun en opdigtet testbesked.', created_at: '2026-11-07T08:00:00Z', mine: true };
 let messages: any[] = [{ ...seedMsg }];
 let msgSeq = 2;
+let currentPlan = 'text_attachments';
+const fixtureInvite = { id: 'pending-invite-fixture', role: 'reader', invitee_email: 'advokat.test@example.invalid', consents: 1, required: 2, i_consented: true, mine: true };
+let pendingInvites: any[] = [fixtureInvite];
+let memberInviteOk = false;
+/** Replace the synthetic pending-invitation list (null restores the single default fixture). */
+export function setPendingInvites(list: any[] | null) { pendingInvites = list ?? [fixtureInvite]; }
+/** Let action:'member' invite-email calls succeed (pending approval) and append a pending row. */
+export function allowMemberInvite(ok = true) { memberInviteOk = ok; }
 export function pauseAlias() { aliasPaused = true; }
 export function resolveAlias() { pendingAlias?.(); pendingAlias = null; aliasPaused = false; }
 export function resolveInitial() { pendingInitial.splice(0).forEach(r => r({ data: { session: initial } })); }
@@ -39,14 +47,17 @@ function rpc(name: string, args: any) {
     let data: any = [];
     if (name === 'list_my_conversations')
         data = [conv()];
-    if (name === 'get_my_public_name')
-        data = 'Testperson';
+    if (name === 'get_my_privacy')
+        data = [{ inactivity_delete: true, inactivity_days: 90, cloud_sync: false, retention: '1y' }];
     if (name === 'get_my_plan')
-        data = [{ plan: 'text_attachments', price: 79 }];
+        data = [{ plan: currentPlan, price: currentPlan === 'text' ? 49 : 79, pending_plan: null, period_end: '2026-12-09T00:00:00Z', test_switch: true }];
+    if (name === 'set_my_plan_test') { currentPlan = args?.p_plan ?? currentPlan; data = [{ plan: currentPlan, pending_plan: null, period_end: '2026-12-09T00:00:00Z' }]; }
     if (name === 'get_my_send_limits')
         data = [{ next_at: null }];
     if (name === 'get_messages_v2')
         data = messages.map(m => ({ ...m }));
+    if (name === 'list_pending_invitations')
+        data = pendingInvites.map(i => ({ ...i }));
     if (name === 'my_pending_count')
         data = 0;
     if (name === 'list_conversation_members')
@@ -94,6 +105,10 @@ export async function callFn(name: string, args: any) {
         const status = await new Promise<string>(r => heldSends.push(r));
         if (status === 'accepted') return acceptSend(args);
         return { status: 200, data: { status } };
+    }
+    if (name === 'invite-email' && args?.action === 'member' && memberInviteOk) {
+        pendingInvites = [...pendingInvites, { id: `pending-${pendingInvites.length + 1}`, role: args.role, invitee_email: args.email, consents: 1, required: 2, i_consented: true, mine: true }];
+        return { status: 200, data: { data: { status: 'pending_approval' } } };
     }
     if (name === 'invite-email' && args?.action === 'member')
         return { status: 403, data: { error: 'plan_required' } };
