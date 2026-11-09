@@ -14,9 +14,13 @@ import { messageTime } from "./messageTime";
 export function ReplyPreview({ body, unavailable = false, lang }: { body?: string | null; unavailable?: boolean; lang: string }) {
   return <blockquote className="reply-quote">{unavailable ? (lang === "da" ? "Den oprindelige besked er ikke tilgængelig." : "The original message is unavailable.") : [...(body ?? "")].slice(0, 200).join("") + ([...(body ?? "")].length > 200 ? "…" : "")}</blockquote>;
 }
+const clearSelection = () => { try { window.getSelection()?.removeAllRanges(); } catch { /* ignore */ } };
 export function MessageBubble({ m, lang, children, onReply, canReply = true, hit = false, index }: { m: Message; lang: string; children?: React.ReactNode; onReply: (m: Message) => void; canReply?: boolean; hit?: boolean; index?: number }) {
   const da = lang === "da";
   const [panel, setPanel] = useState<"actions" | "info" | null>(null);
+  // After a long-press open, the finger is still down where the menu appears.
+  // Ignore the trailing release/click and keep the panel non-interactive until then.
+  const [armed, setArmed] = useState(false);
   useBackLayer(panel!==null,()=>setPanel(panel==="info"?"actions":null));
   const [feedback, setFeedback] = useState("");
   const bubble = useRef<HTMLDivElement>(null), dialog = useRef<HTMLDivElement>(null), lifted = useRef<HTMLDivElement>(null);
@@ -39,10 +43,49 @@ export function MessageBubble({ m, lang, children, onReply, canReply = true, hit
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const start = useRef<{ x: number; y: number } | null>(null);
   const cancel = () => { if (timer.current) clearTimeout(timer.current); timer.current = null; start.current = null; };
-  const close = () => { setPanel(null); bubble.current?.focus({ preventScroll: true }); };
+  const close = () => { setArmed(false); setPanel(null); bubble.current?.focus({ preventScroll: true }); };
+  const openActions = (fromHold: boolean) => {
+    cancel();
+    clearSelection();
+    if (fromHold) setArmed(true);
+    else setArmed(false);
+    setPanel("actions");
+  };
   useEffect(() => { const stop = () => cancel(); window.addEventListener("scroll", stop, true); return () => { cancel(); window.removeEventListener("scroll", stop, true); }; }, []);
+  // Clear any native selection the long-press left behind, and keep clearing
+  // while the menu is open so Android cannot re-select "Besvar" under the finger.
   useEffect(() => {
     if (!panel) return;
+    clearSelection();
+    const id = requestAnimationFrame(clearSelection);
+    const onSel = () => clearSelection();
+    document.addEventListener("selectionchange", onSel);
+    return () => { cancelAnimationFrame(id); document.removeEventListener("selectionchange", onSel); };
+  }, [panel]);
+  // Hold-open arming: swallow the releasing pointer and delay focus so the
+  // first menu item is not clicked or text-selected under the still-down finger.
+  useEffect(() => {
+    if (!armed) return;
+    clearSelection();
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      clearSelection();
+      setArmed(false);
+    };
+    const onUp = () => { clearSelection(); window.setTimeout(finish, 40); };
+    window.addEventListener("pointerup", onUp, true);
+    window.addEventListener("pointercancel", onUp, true);
+    const fallback = window.setTimeout(finish, 700);
+    return () => {
+      window.removeEventListener("pointerup", onUp, true);
+      window.removeEventListener("pointercancel", onUp, true);
+      window.clearTimeout(fallback);
+    };
+  }, [armed]);
+  useEffect(() => {
+    if (!panel || armed) return;
     dialog.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus({ preventScroll: true });
     const keys = (e: KeyboardEvent) => {
       if (panel === "actions" && ["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)) {
@@ -62,33 +105,38 @@ export function MessageBubble({ m, lang, children, onReply, canReply = true, hit
       }
     };
     document.addEventListener("keydown", keys); return () => document.removeEventListener("keydown", keys);
-  }, [panel]);
+  }, [panel, armed]);
   const copy = async () => {
     try { await navigator.clipboard.writeText(m.body); setFeedback(da ? "Beskeden er kopieret." : "Message copied."); }
     catch { setFeedback(da ? "Beskeden kunne ikke kopieres. Prøv igen." : "Could not copy. Try again."); }
     close();
   };
+  const guarded = (fn: () => void) => (e: React.MouseEvent) => {
+    if (armed) { e.preventDefault(); e.stopPropagation(); return; }
+    fn();
+  };
   return <>
     <div ref={bubble} tabIndex={0} data-i={index} className={`msg ${m.mine ? "mine" : "theirs"}${hit ? " hit" : ""}`} aria-label={da ? "Besked. Hold inde for handlinger, eller tryk Enter." : "Message. Hold for actions, or press Enter."} aria-haspopup="menu" aria-expanded={!!panel}
-      onPointerDown={e => { cancel(); if (e.button !== 0 || (e.target as HTMLElement).closest("button,a,input,textarea")) return; start.current = { x: e.clientX, y: e.clientY }; timer.current = setTimeout(() => { cancel(); window.getSelection()?.removeAllRanges(); setPanel("actions"); }, 500); }}
+      onPointerDown={e => { cancel(); if (e.button !== 0 || (e.target as HTMLElement).closest("button,a,input,textarea")) return; start.current = { x: e.clientX, y: e.clientY }; timer.current = setTimeout(() => openActions(true), 500); }}
       onPointerMove={e => { if (start.current && Math.hypot(e.clientX - start.current.x, e.clientY - start.current.y) > 10) cancel(); }} onPointerUp={cancel} onPointerCancel={cancel} onPointerLeave={cancel}
-      onContextMenu={e => { if ((e.target as HTMLElement).closest("button,a")) return; e.preventDefault(); cancel(); setPanel("actions"); }}
-      onKeyDown={e => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " " || e.key === "ContextMenu" || (e.shiftKey && e.key === "F10"))) { e.preventDefault(); setPanel("actions"); } }}>
+      onContextMenu={e => { if ((e.target as HTMLElement).closest("button,a")) return; e.preventDefault(); openActions(false); }}
+      onKeyDown={e => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " " || e.key === "ContextMenu" || (e.shiftKey && e.key === "F10"))) { e.preventDefault(); openActions(false); } }}>
       {(m.reply_to_id || m.has_reply) && <ReplyPreview body={m.reply_body} unavailable={m.reply_body == null} lang={lang} />}
       <div className="message-content">{children ?? m.body}</div>
       <time className="message-time" dateTime={m.created_at}>{messageTime(m.created_at, lang)}</time>
     </div>
     {feedback && <p className="meta message-feedback" role="status">{feedback}</p>}
-    {panel && createPortal(<div className="message-overlay" onPointerDown={e => { if (e.target === e.currentTarget) close(); }}>
+    {panel && createPortal(<div className="message-overlay" onPointerDown={e => { if (armed) { e.preventDefault(); return; } if (e.target === e.currentTarget) close(); }} onContextMenu={e => e.preventDefault()}>
       <div className="message-lifted" ref={lifted} aria-hidden="true" />
-      <div className={`message-panel${panel === "info" ? " message-info" : ""}${pos ? " placed-" + pos.placement : ""}`} ref={dialog} data-placement={pos?.placement}
+      <div className={`message-panel${panel === "info" ? " message-info" : ""}${pos ? " placed-" + pos.placement : ""}${armed ? " is-armed" : ""}`} ref={dialog} data-placement={pos?.placement} data-armed={armed ? "true" : undefined}
         role={panel === "info" ? "dialog" : "menu"} aria-modal={panel === "info" ? true : undefined} aria-orientation={panel === "actions" ? "vertical" : undefined}
         aria-label={panel === "info" ? (da ? "Information" : "Information") : (da ? "Beskedhandlinger" : "Message actions")}
+        onContextMenu={e => e.preventDefault()}
         style={pos ? { top: pos.top, left: pos.left, maxHeight: pos.maxHeight, maxWidth: pos.maxWidth } : { top: 0, left: 0, visibility: "hidden" }}>
         {panel === "actions" ? <>
-          <button type="button" role="menuitem" disabled={!canReply} onClick={() => { close(); onReply(m); }}><ActionIcon d={icons.reply} /><span>{da ? "Besvar" : "Reply"}</span></button>
-          <button type="button" role="menuitem" onClick={copy}><ActionIcon d={icons.copy} /><span>{da ? "Kopiér" : "Copy"}</span></button>
-          <button type="button" role="menuitem" onClick={() => setPanel("info")}><ActionIcon d={icons.info} /><span>Information</span></button>
+          <button type="button" role="menuitem" disabled={!canReply} onClick={guarded(() => { close(); onReply(m); })}><ActionIcon d={icons.reply} /><span>{da ? "Besvar" : "Reply"}</span></button>
+          <button type="button" role="menuitem" onClick={guarded(copy)}><ActionIcon d={icons.copy} /><span>{da ? "Kopiér" : "Copy"}</span></button>
+          <button type="button" role="menuitem" onClick={guarded(() => setPanel("info"))}><ActionIcon d={icons.info} /><span>Information</span></button>
         </> : <>
           <h2>Information</h2>
           <dl><dt>{da ? "Afsenders e-mail" : "Sender email"}</dt><dd>{m.sender_email || (da ? "Ikke tilgængelig" : "Unavailable")}</dd>
