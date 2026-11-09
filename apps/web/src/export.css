@@ -1,0 +1,7 @@
+.conv-event{align-self:center;text-align:center;margin:6px auto;padding:4px 12px;border-radius:999px;background:color-mix(in srgb,var(--accent) 10%,var(--card));border:1px solid var(--border);font-size:13px;max-width:92%}
+.export-fieldset{border:1px solid var(--border);border-radius:12px;padding:8px 12px 10px;margin:10px 0}
+.export-fieldset legend{padding:0 6px;font-weight:600}
+.export-dates{gap:12px;flex-wrap:wrap}.export-dates label{display:flex;flex-direction:column;gap:4px}
+.export-confirm .export-recipient{display:inline-block;margin-top:4px;padding:6px 10px;border-radius:8px;background:color-mix(in srgb,var(--accent) 12%,var(--card));font-weight:700;word-break:break-all}
+.export-upgrade{margin:4px 0}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}

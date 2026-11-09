@@ -13,12 +13,6 @@ export function findHits(texts: string[], q: string): number[] {
   return texts.flatMap((t, i) => (t.toLocaleLowerCase().includes(n) ? [i] : []));
 }
 
-/** rolff-samtale-YYYY-MM-DD-HHMM.pdf in the user's time zone. */
-export function exportFileName(ext: "pdf", d = new Date(), timeZone?: string): string {
-  const p: Record<string, string> = {};
-  for (const x of new Intl.DateTimeFormat("en", { timeZone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(d)) p[x.type] = x.value;
-  return `rolff-samtale-${p.year}-${p.month}-${p.day}-${p.hour}${p.minute}.${ext}`;
-}
 
 // ---------- "Download mine data" (art. 15): files built on the device ----------
 const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();

@@ -84,11 +84,12 @@ export function feedbackMail(p: { category: string; body: string; senderName: st
   return { subject, html, text };
 }
 
-export async function sendMail(to: string, m: { subject: string; html: string; text: string; reply_to?: string }): Promise<boolean> {
+export type MailAttachment = { filename: string; content_type: "application/pdf"; content_b64: string };
+export async function sendMail(to: string, m: { subject: string; html: string; text: string; reply_to?: string; attachments?: MailAttachment[] }): Promise<boolean> {
   const url = Deno.env.get("MAILER_URL"), secret = Deno.env.get("MAILER_SECRET");
   if (!url || !secret) return false;
   try {
-    const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json", "x-rolff-secret": secret }, body: JSON.stringify({ to, ...m }), signal: AbortSignal.timeout(10000) });
+    const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json", "x-rolff-secret": secret }, body: JSON.stringify({ to, ...m }), signal: AbortSignal.timeout(m.attachments?.length ? 30000 : 10000) });
     return r.ok;
   } catch { return false; }
 }
@@ -141,5 +142,32 @@ export function emailChangeMail(p: { link: string; current: boolean; newEmail: s
   const html = shell(subject, `<p style="margin:0 0 14px">Hej,</p><p style="margin:0 0 22px">${what}</p>${btn(p.link, "Bekræft")}
 <p style="margin:22px 0 0;font-size:13px;color:#7a807e">Har du ikke bedt om det, så ignorer mailen.</p>`);
   const text = `Hej,\n\n${what}\n${p.link}\n\nHar du ikke bedt om det, så ignorer mailen.`;
+  return { subject, html, text };
+}
+
+/** Court export: PDF attached. No message content in the mail body. */
+export function exportMail(p: { exporterEmail: string; toSelf: boolean; verifyUrl: string; code: string; exportId: string; scope: string; count: number; pages: number }) {
+  const subject = p.toSelf ? "Din udskrift af samtalen fra Rolff" : `${p.exporterEmail} har sendt dig en udskrift af en samtale fra Rolff`;
+  const intro = p.toSelf ? "Her er den udskrift af samtalen, du bad om. Den ligger som PDF i denne mail."
+    : `<strong>${esc(p.exporterEmail)}</strong> har bedt Rolff sende dig en udskrift af en samtale. Den ligger som PDF i denne mail.`;
+  const html = shell(subject, `<p style="margin:0 0 14px">Hej,</p><p style="margin:0 0 14px">${intro}</p>
+<p style="margin:0 0 14px;font-size:14px">${esc(p.scope)} · ${p.count} beskeder · ${p.pages} sider<br>Eksport-ID: <code>${esc(p.exportId)}</code></p>
+<p style="margin:0 0 8px"><strong>Sådan kontrollerer du, at udskriften er ægte og uændret</strong></p>
+<ol style="margin:0 0 16px;padding-left:20px;font-size:14px"><li>PDF'en er digitalt signeret af Rolff. I en PDF-læser kan du se signaturen (testcertifikat – se nedenfor).</li>
+<li>Åbn siden <a href="${esc(p.verifyUrl)}" style="color:#016C72">Tjek udskrift</a> og vælg PDF-filen. Filen sendes ikke – kun dens fingeraftryk (SHA-256) beregnes på din enhed og sammenlignes med Rolffs register.</li>
+<li>Du kan også indtaste koden <strong>${esc(p.code)}</strong>, som står nederst på hver side.</li></ol>
+${button(p.verifyUrl, "Tjek udskrift")}
+<p style="margin:18px 0 0;font-size:13px;color:#7a807e">Ændres blot ét tegn i filen, stemmer kontrollen ikke. Udskriften indeholder kun beskeder, som afsenderen af udskriften selv har adgang til. I testversionen er signaturen lavet med et selvudstedt testcertifikat, som PDF-læsere viser som "ukendt udsteder". Rolff kan ikke vurdere, hvordan en domstol eller myndighed vil bruge udskriften.</p>`);
+  const text = `${TESTWARN}Hej,\n\n${p.toSelf ? "Her er den udskrift af samtalen, du bad om (PDF vedhæftet)." : `${p.exporterEmail} har bedt Rolff sende dig en udskrift af en samtale (PDF vedhæftet).`}\n\n${p.scope} · ${p.count} beskeder · ${p.pages} sider\nEksport-ID: ${p.exportId}\n\nKontrollér ægthed: åbn ${p.verifyUrl} og vælg PDF-filen (filen sendes ikke – kun fingeraftrykket beregnes på din enhed), eller indtast koden ${p.code}. PDF'en er også digitalt signeret af Rolff (testcertifikat i testversionen).\n\nÆndres blot ét tegn i filen, stemmer kontrollen ikke. Rolff kan ikke vurdere, hvordan en domstol eller myndighed vil bruge udskriften.`;
+  return { subject, html, text };
+}
+/** To the account e-mail when an export was sent to another address. */
+export function exportNoticeMail(p: { recipient: string; exportId: string; scope: string; count: number }) {
+  const subject = "Rolff: Du har sendt en udskrift af en samtale";
+  const html = shell(subject, `<p style="margin:0 0 14px">Hej,</p>
+<p style="margin:0 0 14px">Fra din Rolff-konto er der netop sendt en udskrift af en samtale til <strong>${esc(p.recipient)}</strong>.</p>
+<p style="margin:0 0 14px;font-size:14px">${esc(p.scope)} · ${p.count} beskeder<br>Eksport-ID: <code>${esc(p.exportId)}</code></p>
+<p style="margin:0;font-size:14px">Var det ikke dig? Log ind og skift din adgangskode med det samme (⋮ → Konto).</p>`);
+  const text = `${TESTWARN}Hej,\n\nFra din Rolff-konto er der netop sendt en udskrift af en samtale til ${p.recipient}.\n${p.scope} · ${p.count} beskeder\nEksport-ID: ${p.exportId}\n\nVar det ikke dig? Log ind og skift din adgangskode med det samme (⋮ → Konto).`;
   return { subject, html, text };
 }

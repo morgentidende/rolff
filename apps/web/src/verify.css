@@ -1,0 +1,7 @@
+.verify{max-width:640px;margin:0 auto;padding:20px 16px 40px}
+.verify-head{display:flex;gap:14px;align-items:center;margin-bottom:8px}.verify-head h1{margin:0;font-size:26px}
+.verify-brand{color:var(--accent);font-weight:800;font-size:13px;letter-spacing:.5px}
+.verify-form{display:flex;flex-direction:column;gap:8px}.verify-form label{font-weight:600;margin-top:6px}
+.verify-sha code{word-break:break-all;font-size:12px}
+.verify-result{border-radius:14px;padding:14px 18px;margin:16px 0;border:2px solid}.verify-result h2{margin:0 0 6px;font-size:22px}.verify-result p{margin:4px 0}
+.verify-result.ok{background:#e6f6ef;border-color:#1f8a5b;color:#0f3d29}.verify-result.bad{background:#fbe9e9;border-color:#b91c1c;color:#5a1010}.verify-result.info{background:#eef4ff;border-color:#1d4ed8;color:#13265e}

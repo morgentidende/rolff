@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        script: [timezone-functional.mjs, timezone-concurrency.mjs, blocking-concurrency.mjs]
+        script: [timezone-functional.mjs, timezone-concurrency.mjs, blocking-concurrency.mjs, conversation-exports-postgres.mjs]
     services:
       postgres:
         image: postgres:17

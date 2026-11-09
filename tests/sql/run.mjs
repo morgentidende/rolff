@@ -626,5 +626,7 @@ const {testClarificationPolicy}=await import('./clarification-policy.mjs');
 await testClarificationPolicy({db,as,svc,hash,t,assert});
 const {testBlockingTopics}=await import('./blocking-topics.mjs');
 await testBlockingTopics({db,as,svc,hash,t,assert});
+const {testConversationExports}=await import('./conversation-exports.mjs');
+await testConversationExports({db,as,svc,hash,t,assert});
 console.log(`\n${pass} bestået, ${fail} fejlet`);
 process.exit(fail ? 1 : 0);

@@ -7,7 +7,7 @@ import { ComposerInput } from "./ComposerInput";
 import { effectiveCharLimit, textRetryKey } from "./composerLimits";
 import { MessageBubble, ReplyPreview, type Message } from "./MessageBubble";
 import type React from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { callFn, supabase } from "./supabase";
 import { detectLang, strings, type Lang } from "./i18n";
@@ -15,7 +15,9 @@ import { passwordsMatch, pwText, toggleLabel } from "./pw";
 import { cacheClear, cacheGet, cacheSet } from "./localStore";
 import { applySuggestion } from "./suggestion";
 import { KEY as A2HS_KEY, platform as a2hsPlatform, shouldAsk } from "./install";
-import { exportFileName, makeZip, myDataFiles, findHits } from "./exportUtil";
+import { makeZip, myDataFiles, findHits } from "./exportUtil";
+import { ConversationExport } from "./ConversationExport";
+import { EventNotice, eventsBefore, useConversationEvents } from "./ConversationEvents";
 
 import { labelOf, convDisplay } from "./convDisplay";
 
@@ -555,6 +557,7 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
   const t = strings[lang]; const da = lang === "da";
   const draftKey = `draft:${conv.id}`; const replyKey = `draft-reply:${conv.id}`;
   const [msgs, setMsgs] = useState<Msg[]>([]); const [pending, setPending] = useState(0);
+  const events = useConversationEvents(conv.id, msgs.length);
   const [reply, setReply] = useState<{ id: string; body: string | null } | null>(() => { const id = localStorage.getItem(replyKey); return id && /^[0-9a-f-]{36}$/i.test(id) ? { id, body: null } : null; }); const composerRef = useRef<HTMLTextAreaElement>(null);
   const [invs, setInvs] = useState<Pending[]>([]);
   const [text, setText] = useState(localStorage.getItem(draftKey) ?? "");
@@ -654,7 +657,8 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
       {pending > 0 && <div className="notice row"><span>{t.pending(pending)}</span><span className="spacer" /><button onClick={receiveNow}>{t.receiveNow}</button></div>}
       <div className="card msgs" aria-live="polite" ref={listRef}>
         {msgs.length === 0 && <p className="meta">{t.empty}</p>}
-        {msgs.map((m, i) => <MessageBubble key={m.id} m={m} lang={lang} index={i} hit={i === curIdx} canReply={conv.role !== "reader" && !sending} onReply={selected => { if (sending) return; setReply(selected); requestAnimationFrame(() => composerRef.current?.focus()); }}>{q ? markAll(m.body, q, i === curIdx) : m.body}{m.att_mime && <AttachmentView lang={lang} m={m} />}</MessageBubble>)}
+        {msgs.map((m, i) => <Fragment key={m.id}>{eventsBefore(events, msgs, i).map((e) => <EventNotice key={e.id} e={e} lang={lang} />)}<MessageBubble m={m} lang={lang} index={i} hit={i === curIdx} canReply={conv.role !== "reader" && !sending} onReply={selected => { if (sending) return; setReply(selected); requestAnimationFrame(() => composerRef.current?.focus()); }}>{q ? markAll(m.body, q, i === curIdx) : m.body}{m.att_mime && <AttachmentView lang={lang} m={m} />}</MessageBubble></Fragment>)}
+        {eventsBefore(events, msgs, msgs.length).map((e) => <EventNotice key={e.id} e={e} lang={lang} />)}
         <div ref={endRef} />
       </div>
       {status?.kind === "blocked" && <div className="notice" role="alert"><p style={{ margin: 0 }}>{t.blocked}</p>{status.spans!.length > 0 && <p className="meta" style={{ marginBottom: 0 }}>{t.flagged}: {highlight(status.blockedText!, status.spans!)}</p>}{status.suggestion ? <div className="suggest"><p className="meta" style={{ margin: "8px 0 4px" }}><strong>{t.suggestionLabel}</strong></p><p style={{ margin: "0 0 8px" }}>{status.suggestion}</p><button type="button" className="ghost" onClick={() => { setText(applySuggestion(text, status.suggestion)); setStatus(null); }}>{t.useSuggestion}</button><p className="meta" style={{ margin: "6px 0 0" }}>{da ? "Forslaget kopieres til skrivefeltet. Du kan rette det og skal selv trykke Send — det tjekkes igen. Originalteksten står stadig i feltet, indtil du vælger forslaget." : "The suggestion is copied into the composer. You can edit it and must press Send yourself — it is checked again. Your original text stays until you use the suggestion."}</p></div> : <div className="suggest"><p className="meta" style={{ margin: "8px 0 4px" }}><strong>{t.guidanceLabel}</strong></p><p className="meta" style={{ margin: 0 }}>{t.blockGuidance}</p></div>}</div>}
@@ -681,7 +685,7 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
       {sheet === "report" && <SheetView title={da ? "Rapportér" : "Report"} close={() => setSheet(null)} lang={lang}><ReportForm lang={lang} conv={conv.id} msgs={msgs} /></SheetView>}
       {sheet === "words" && <SheetView title={da ? "Blokeringer" : "Blocking lists"} close={() => setSheet(null)} lang={lang}><BlockingLists key={`${session.user.id}:${conv.id}`} session={session} lang={lang} conv={conv.id} /></SheetView>}
       {sheet === "members" && <SheetView title={da ? "Deltagere og roller" : "Participants and roles"} close={() => setSheet(null)} lang={lang}><Members lang={lang} conv={conv.id} isParent={conv.role === "parent"} left={back} openWords={() => setSheet("words")} /></SheetView>}
-      {sheet === "export" && <SheetView title={da ? "Eksportér samtale" : "Export conversation"} close={() => setSheet(null)} lang={lang}><ExportPanel lang={lang} msgs={msgs} partners={(others ?? []).map(labelOf)} /></SheetView>}
+      {sheet === "export" && <SheetView title={da ? "Udskrift af samtale" : "Conversation transcript"} close={() => setSheet(null)} lang={lang}><ConversationExport lang={lang} conv={conv.id} plan={plan} ownEmail={session.user.email ?? ""} openPlans={() => { setSheet(null); openPlans(); }} /></SheetView>}
       {sheet === "addMember" && <SheetView title={da ? "Tilføj person" : "Add person"} close={() => setSheet(null)} lang={lang}><AddMember lang={lang} conv={conv.id} done={load} openPlans={openPlans} /></SheetView>}
     </>
   );
@@ -741,33 +745,6 @@ function AddMember({ lang, conv, done, openPlans }: { lang: Lang; conv: string; 
       {msg && <p className={msg.ok ? "meta" : "err"} role={msg.ok ? "status" : "alert"}>{msg.text}</p>}
       {msg?.plan && <div className="row end"><button type="button" onClick={openPlans}>{da ? "Se planer" : "See plans"}</button></div>}
     </form>
-  );
-}
-
-function download(name: string, blob: Blob) {
-  const u = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 1000);
-}
-
-function ExportPanel({ lang, msgs, partners }: { lang: Lang; msgs: Msg[]; partners: string[] }) {
-  const da = lang === "da"; const [busy, setBusy] = useState(false);
-  const pdf = async () => {
-    setBusy(true);
-    try {
-      const [{ data }, { jsPDF }, { buildModel, renderConversationPdf, needsEmojiFont }, { loadPdfFonts }] = await Promise.all([supabase.auth.getUser(), import("jspdf"), import("./pdfExport"), import("./pdfFonts")]);
-      const model = buildModel(msgs, { lang, me: data.user?.email ?? "", partners });
-      const doc = new jsPDF({ unit: "pt", format: "a4" });
-      doc.setProperties({ title: model.title, creator: "ROLFF" });
-      const texts = [model.partners, model.exportedBy, ...msgs.flatMap((m) => [m.body, m.sender_name, m.reply_body, m.att_name, m.att_alt])];
-      const fonts = await loadPdfFonts(doc, needsEmojiFont(texts));
-      renderConversationPdf(doc, model, fonts);
-      doc.save(exportFileName("pdf", new Date(), model.timeZone));
-    } finally { setBusy(false); }
-  };
-  return (
-    <div>
-      <p className="meta">{da ? `Eksporten indeholder de ${msgs.length} beskeder, du kan se nu: dine egne og dem, der er leveret til dig. Filen laves på din enhed.` : `The export contains the ${msgs.length} messages you can see now: your own and those delivered to you. The file is created on your device.`}</p>
-      <div className="row end"><button onClick={pdf} disabled={busy || !msgs.length}>{busy ? (da ? "Laver PDF…" : "Creating PDF…") : (da ? "Hent som PDF" : "Download PDF")}</button></div>
-    </div>
   );
 }
 

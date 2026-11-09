@@ -10,11 +10,10 @@
     "test:back": "node --test tests/back-navigation/*.test.cjs",
     "test:clarification": "node --test tests/clarification/*.test.cjs && node tests/moderation-endpoints/run.cjs",
     "test:blocking": "node --test tests/blocking-lists/*.test.cjs",
-    "test:pdf-export": "node --test tests/pdf-export/*.test.cjs"
+    "test:court-export": "node --test tests/court-export/*.test.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2",
-    "jspdf": "^2.5.2",
     "react": "^19",
     "react-dom": "^19"
   },
