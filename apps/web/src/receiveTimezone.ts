@@ -2,6 +2,12 @@ import { createClient } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 import { detectTimezone } from "./timezones";
 export type ReceiveWindow = { weekday:number; start_minute:number; end_minute:number };
+export const DEFAULT_RECEIVE_START_MINUTE = 18 * 60;
+export const DEFAULT_RECEIVE_END_MINUTE = 19 * 60;
+/** Mon–Sun 18:00–19:00 in the user's chosen timezone. Used when enabling with no windows. */
+export function defaultReceiveWindows(): ReceiveWindow[] {
+  return Array.from({ length: 7 }, (_, i) => ({ weekday: i + 1, start_minute: DEFAULT_RECEIVE_START_MINUTE, end_minute: DEFAULT_RECEIVE_END_MINUTE }));
+}
 export type ReceiveSettingsState = { configured:boolean; timezone:string|null; mode:"auto"|"fixed"; revision:number; enabled:boolean; windows:ReceiveWindow[]; is_controller:boolean; synced_at:string|null };
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export function timezoneDevice(uid:string): string|null {
