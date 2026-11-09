@@ -96,7 +96,7 @@ Deno.serve(async (req) => {
     return json({ status: "technical_error" }, 503);
   }
   if (res.decision !== "allow") await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: res.decision, p_reason: res.reason_code });
-  if (res.decision === "block") return json({ status: "blocked", reason_code: res.reason_code, spans: res.spans, suggestion: res.suggestion }, 200);
+  if (res.decision === "block") return json({ status: "blocked", reason_code: res.reason_code, spans: res.spans, suggestion: res.suggestion, ...(res.explanation ? { explanation: res.explanation } : {}) }, 200);
   if (res.decision === "clarify") return json({ status: "clarification_required" }, 200);
 
   // This stage can only deny or request clarification AFTER global safety allows.

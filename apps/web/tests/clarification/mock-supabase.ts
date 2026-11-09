@@ -84,8 +84,12 @@ function acceptSend(args: any) {
     }];
     return { status: 200, data: { status: 'accepted', message_id: id } };
 }
+// Optional: next send-* call returns this exact response body (e.g. a blocked result with an explanation).
+let nextSend: any = null;
+export function setNextSend(data: any) { nextSend = data; }
 export async function callFn(name: string, args: any) {
     calls.push({ function: name, args });
+    if (nextSend && name.startsWith('send-')) { const data = nextSend; nextSend = null; return { status: 200, data }; }
     if (holdSend && name.startsWith('send-')) {
         const status = await new Promise<string>(r => heldSends.push(r));
         if (status === 'accepted') return acceptSend(args);
