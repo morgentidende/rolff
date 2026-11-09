@@ -1,4 +1,5 @@
 import { useBackLayer } from "./backNavigation";
+import type React from "react";
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { messageCharCount } from "./composerLimits";
 
@@ -9,10 +10,11 @@ type Props = {
   textareaRef: RefObject<HTMLTextAreaElement | null>; plan: string | null; cap: number;
   busy: boolean; file: File | null; onFile: (file: File | null) => void;
   onSend: () => void; openPlans: () => void; canSend: boolean; retry?: boolean;
+  leading?: React.ReactNode;
 };
 const Glyph = ({ children }: { children: React.ReactNode }) => <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{children}</svg>;
 
-export function ComposerInput({ lang, text, onText, textareaRef, plan, cap, busy, file, onFile, onSend, openPlans, canSend, retry = false }: Props) {
+export function ComposerInput({ lang, text, onText, textareaRef, plan, cap, busy, file, onFile, onSend, openPlans, canSend, retry = false, leading }: Props) {
   const da = lang === "da"; const count = messageCharCount(text);
   const picker = useRef<HTMLInputElement>(null); const camera = useRef<HTMLInputElement>(null);
   const dialog = useRef<HTMLDialogElement>(null); const [upgrade, setUpgrade] = useState(false); const [note, setNote] = useState("");
@@ -47,10 +49,13 @@ export function ComposerInput({ lang, text, onText, textareaRef, plan, cap, busy
   }, [da]);
   return <>
     <div className="composer-input-row">
-      <div className="composer-entry">
+      <div className={`composer-entry${leading ? " has-reply" : ""}`}>
+      {leading}
+      <div className="composer-entry-row">
       <button type="button" className="composer-icon" disabled={busy || plan === null} aria-label={da ? "Vedhæft fil" : "Attach file"} title={da ? "Vedhæft fil" : "Attach file"} onClick={() => choose("file")}><Glyph><path d="m21 11-8.2 8.2a5.3 5.3 0 0 1-7.5-7.5l9-9a3.5 3.5 0 0 1 5 5l-9 9a1.8 1.8 0 0 1-2.5-2.5l8.3-8.3" /></Glyph></button>
       <textarea className="message-input" ref={textareaRef} rows={1} value={text} disabled={busy} aria-label={da ? "Skriv en besked" : "Write a message"} aria-describedby="composer-count" aria-invalid={(count > cap && !retry) || undefined} placeholder={da ? "Skriv en besked" : "Write a message"} onChange={e => onText(e.target.value)} />
       <button type="button" className="composer-icon" disabled={busy || plan === null} aria-label={da ? "Tag billede" : "Take photo"} title={da ? "Tag billede" : "Take photo"} onClick={() => choose("camera")}><Glyph><path d="M4 6h4l2-3h4l2 3h4a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z" /><circle cx="12" cy="13" r="4" /></Glyph></button>
+      </div>
       </div>
       <button type="button" className="composer-send" aria-label={busy ? (da ? "Sender" : "Sending") : file ? (da ? "Send vedhæftning" : "Send attachment") : (da ? "Send besked" : "Send message")} title={da ? "Send" : "Send"} disabled={busy || !canSend || (count > cap && !retry) || plan === null} onClick={onSend}><Glyph><path d="m22 2-7 20-4-9-9-4Z" /><path d="m22 2-11 11" /></Glyph></button>
     </div>
