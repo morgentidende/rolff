@@ -1,6 +1,6 @@
 // Attachment checks + AI moderation of files. Pure module (no Supabase deps), runs in Deno & tests.
 // Never log file content, transcripts or captions.
-import { ContextMsg, ModerationTechnicalError, REASON_CODES, SYSTEM_PROMPT, CTX_MAX, CTX_CHARS, sanitizeSuggestion, DECISIONS, RESPONSE_SCHEMA, validateDecisionContract, type Decision } from "./moderation.ts";
+import { ContextMsg, ModerationTechnicalError, REASON_CODES, SYSTEM_PROMPT, contextFields, sanitizeSuggestion, DECISIONS, RESPONSE_SCHEMA, validateDecisionContract, type Decision } from "./moderation.ts";
 
 export const MAX_BYTES = 4 * 1024 * 1024, MAX_PAGES = 5;
 export type AttMime = "image/png" | "image/jpeg" | "image/webp" | "image/gif" | "application/pdf";
@@ -60,7 +60,7 @@ Respond ONLY with JSON: {"decision","reason_code" (one of ${FILE_REASON_CODES.jo
 
 export function buildFilePayload(caption: string, name: string, ctx: ContextMsg[]): string {
   return JSON.stringify({
-    context: ctx.slice(-CTX_MAX).map((c) => ({ from: c.mine ? "sender" : "other", text: [...c.body].slice(0, CTX_CHARS).join("") })),
+    ...contextFields(ctx),
     new_message: { caption, file_name: name, file: "attached below" },
   });
 }

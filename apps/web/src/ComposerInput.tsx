@@ -4,6 +4,8 @@ import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "re
 import { messageCharCount } from "./composerLimits";
 
 export const FILE_ACCEPT = "image/png,image/jpeg,image/webp,image/gif,application/pdf";
+// The character counter only shows (as a small floating pill, no extra row) from 80 % of the limit.
+export const COUNT_SHOW_AT = 0.8;
 export const MAX_ATTACHMENT_BYTES = 4 * 1024 * 1024;
 type Props = {
   lang: "da" | "en"; text: string; onText: (text: string) => void;
@@ -64,7 +66,7 @@ export function ComposerInput({ lang, text, onText, textareaRef, plan, cap, busy
     </div>
     <input type="file" ref={picker} accept={FILE_ACCEPT} hidden disabled={busy} onChange={e => selected(e.currentTarget)} />
     <input type="file" ref={camera} accept="image/*" capture="environment" hidden disabled={busy} onChange={e => selected(e.currentTarget)} />
-    <div id="composer-count" className={`composer-count meta${count > cap ? " over-limit" : ""}`} role="status">{count}/{cap}{count > cap ? (retry ? (da ? " – prøv den tidligere afsendelse igen" : " – retry the previous send") : (da ? " – forkort beskeden for at sende" : " – shorten your message to send")) : ""}</div>
+    <div id="composer-count" className={`composer-count meta${count > cap ? " over-limit" : ""}${count >= Math.ceil(cap * COUNT_SHOW_AT) ? "" : " is-quiet"}`} role="status">{count}/{cap}{count > cap ? (retry ? (da ? " – prøv den tidligere afsendelse igen" : " – retry the previous send") : (da ? " – forkort beskeden for at sende" : " – shorten your message to send")) : ""}</div>
     {note && <p className="meta" role="status">{note}</p>}
     <dialog className="composer-upgrade" ref={dialog} aria-labelledby="upgrade-title" onCancel={e => { e.preventDefault(); setUpgrade(false); }} onClick={e => { if (e.target === e.currentTarget) setUpgrade(false); }}>
       <h3 id="upgrade-title">{da ? "Vil du dele billeder og filer?" : "Would you like to share photos and files?"}</h3>
