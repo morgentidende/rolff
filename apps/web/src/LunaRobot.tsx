@@ -2,10 +2,10 @@ import { useEffect, useId, useRef, useState } from "react";
 
 // Luna: the little floating robot shown while Rolff checks a message.
 // Pure inline SVG + CSS (see lunaRobot.css). Purely visual: it never affects sending.
-export function LunaRobot({ mood = "checking" }: { mood?: "checking" | "happy" }) {
+export function LunaRobot({ mood = "checking", size = 60 }: { mood?: "checking" | "happy"; size?: number }) {
   const id = "lr" + useId().replace(/[^a-zA-Z0-9_-]/g, "");
   return (
-    <svg className={`luna-robot luna-robot--${mood}`} viewBox="0 0 64 64" width="60" height="60" aria-hidden="true" focusable="false">
+    <svg className={`luna-robot luna-robot--${mood}`} viewBox="0 0 64 64" width={size} height={size} aria-hidden="true" focusable="false">
       <defs>
         <linearGradient id={`${id}b`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#ffffff" />
@@ -61,10 +61,12 @@ export function LunaRobot({ mood = "checking" }: { mood?: "checking" | "happy" }
 
 const HAPPY_MS = 1100;
 
-// Status box above the composer. While `checking` it shows the robot and the
-// "Tjekker…" label as a polite live region. When a check ends with an accepted
-// message it briefly shows the happy robot (visual only, aria-hidden, no delay).
-export function LunaIndicator({ checking, accepted, label }: { checking: boolean; accepted: boolean; label: string }) {
+// Lives inside the composer surface. While `checking` it shows the robot next to
+// the pending message text and a polite live "Tjekker…" label. When a check ends
+// with an accepted message it briefly shows the happy robot (visual only).
+export function LunaIndicator({ checking, accepted, label, pendingText }: {
+  checking: boolean; accepted: boolean; label: string; pendingText?: string;
+}) {
   const [happy, setHappy] = useState(false);
   const was = useRef(checking);
   useEffect(() => {
@@ -76,7 +78,24 @@ export function LunaIndicator({ checking, accepted, label }: { checking: boolean
     const t = setTimeout(() => setHappy(false), HAPPY_MS);
     return () => clearTimeout(t);
   }, [checking, accepted]);
-  if (checking) return <div className="luna-evaluating" role="status" aria-live="polite"><LunaRobot /><span>{label}</span></div>;
-  if (happy) return <div className="luna-evaluating luna-done" aria-hidden="true"><LunaRobot mood="happy" /></div>;
+  if (checking) {
+    const body = (pendingText ?? "").replace(/\s+/g, " ").trim();
+    return (
+      <div className="luna-evaluating luna-in-composer" role="status" aria-live="polite">
+        <LunaRobot size={44} />
+        <div className="luna-check-copy">
+          <span className="luna-check-label">{label}</span>
+          {body ? <p className="luna-check-text">{body}</p> : null}
+        </div>
+      </div>
+    );
+  }
+  if (happy) {
+    return (
+      <div className="luna-evaluating luna-in-composer luna-done" aria-hidden="true">
+        <LunaRobot mood="happy" size={44} />
+      </div>
+    );
+  }
   return null;
 }

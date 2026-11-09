@@ -33,7 +33,7 @@ export function ReplyComposer({ who, body, unavailable = false, lang, onCancel }
   );
 }
 const clearSelection = () => { try { window.getSelection()?.removeAllRanges(); } catch { /* ignore */ } };
-export function MessageBubble({ m, lang, children, onReply, canReply = true, hit = false, index, tailed = false }: { m: Message; lang: string; children?: React.ReactNode; onReply: (m: Message) => void; canReply?: boolean; hit?: boolean; index?: number; tailed?: boolean }) {
+export function MessageBubble({ m, lang, children, onReply, canReply = true, hit = false, index, tailed = false, flash = false }: { m: Message; lang: string; children?: React.ReactNode; onReply: (m: Message) => void; canReply?: boolean; hit?: boolean; index?: number; tailed?: boolean; flash?: boolean }) {
   const da = lang === "da";
   const [panel, setPanel] = useState<"actions" | "info" | null>(null);
   // After a long-press open, the finger is still down where the menu appears.
@@ -134,7 +134,7 @@ export function MessageBubble({ m, lang, children, onReply, canReply = true, hit
     fn();
   };
   return <>
-    <div ref={bubble} tabIndex={0} data-i={index} className={`msg ${m.mine ? "mine" : "theirs"}${tailed ? " tailed" : ""}${hit ? " hit" : ""}`} aria-label={da ? "Besked. Hold inde for handlinger, eller tryk Enter." : "Message. Hold for actions, or press Enter."} aria-haspopup="menu" aria-expanded={!!panel}
+    <div ref={bubble} tabIndex={0} data-i={index} className={`msg ${m.mine ? "mine" : "theirs"}${tailed ? " tailed" : ""}${hit ? " hit" : ""}${flash ? " just-accepted" : ""}`} aria-label={da ? "Besked. Hold inde for handlinger, eller tryk Enter." : "Message. Hold for actions, or press Enter."} aria-haspopup="menu" aria-expanded={!!panel}
       onPointerDown={e => { cancel(); if (e.button !== 0 || (e.target as HTMLElement).closest("button,a,input,textarea")) return; start.current = { x: e.clientX, y: e.clientY }; timer.current = setTimeout(() => openActions(true), 500); }}
       onPointerMove={e => { if (start.current && Math.hypot(e.clientX - start.current.x, e.clientY - start.current.y) > 10) cancel(); }} onPointerUp={cancel} onPointerCancel={cancel} onPointerLeave={cancel}
       onContextMenu={e => { if ((e.target as HTMLElement).closest("button,a")) return; e.preventDefault(); openActions(false); }}

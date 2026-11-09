@@ -582,6 +582,16 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
   const [text, setText] = useState(localStorage.getItem(draftKey) ?? "");
   const [status, setStatus] = useState<{ kind: string; spans?: string[]; blockedText?: string; suggestion?: string; reason?: string } | null>(null);
   const [busy, setBusy] = useState(false); const [attachmentBusy, setAttachmentBusy] = useState(false); const sending = busy || attachmentBusy;
+  // Soft one-shot glow on the just-approved own bubble (not history / initial load).
+  const [flashId, setFlashId] = useState<string | null>(null);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const armFlash = useCallback((id: string | null | undefined) => {
+    if (!id || typeof id !== "string") return;
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    setFlashId(id);
+    flashTimer.current = setTimeout(() => { setFlashId(null); flashTimer.current = null; }, 850);
+  }, []);
+  useEffect(() => () => { if (flashTimer.current) clearTimeout(flashTimer.current); }, []);
   const [lim, setLim] = useState<SendLimits | null>(null);
   const cap = effectiveCharLimit(plan);
   const [file, setFile] = useState<File | null>(null);
@@ -647,7 +657,7 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
     localStorage.setItem(keyStore, JSON.stringify(saved));
     let r; try { r = await callFn("send-message", { conversation_id: conv.id, body: text, reply_to_id: reply?.id ?? null, idempotency_key: saved.key }); } catch { r = { status: 0, data: null }; }
     setBusy(false);
-    if (r.status === 200 && r.data?.status === "accepted") { setText(""); setReply(null); localStorage.removeItem(draftKey); localStorage.removeItem(replyKey); localStorage.removeItem(keyStore); setStatus({ kind: "accepted" }); load(); }
+    if (r.status === 200 && r.data?.status === "accepted") { setText(""); setReply(null); localStorage.removeItem(draftKey); localStorage.removeItem(replyKey); localStorage.removeItem(keyStore); setStatus({ kind: "accepted" }); armFlash(r.data?.message_id); load(); }
     else if (r.status === 200 && r.data?.status === "clarification_required") setStatus({ kind: "clarification" });
     else if (r.status === 200 && r.data?.status === "blocked") setStatus({ kind: "blocked", spans: r.data.spans ?? [], blockedText: text, suggestion: typeof r.data.suggestion === "string" ? r.data.suggestion : "", reason: r.data.reason_code });
     else if (r.status === 200 && r.data?.status === "private_boundary") setStatus({ kind: "note", blockedText: da ? "Beskeden kan ikke sendes på grund af en privat modtagerindstilling. Ret beskeden og prøv igen." : "Not sent due to a private recipient setting. Edit your message and retry." });
@@ -708,7 +718,7 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
       {pending > 0 && <div className="notice row"><span>{t.pending(pending)}</span><span className="spacer" /><button onClick={receiveNow}>{t.receiveNow}</button></div>}
       <div className="msgs" aria-live="polite" ref={listRef}>
         {msgs.length === 0 && <p className="meta">{t.empty}</p>}
-        {msgs.map((m, i) => <Fragment key={m.id}>{eventsBefore(events, msgs, i).map((e) => <EventNotice key={e.id} e={e} lang={lang} />)}<MessageBubble m={m} lang={lang} index={i} hit={i === curIdx} tailed={i === 0 || !sameSender(msgs[i - 1], m)} canReply={conv.role !== "reader" && !sending} onReply={beginReply}>{q ? markAll(m.body, q, i === curIdx) : m.body}{m.att_mime && <AttachmentView lang={lang} m={m} />}</MessageBubble></Fragment>)}
+        {msgs.map((m, i) => <Fragment key={m.id}>{eventsBefore(events, msgs, i).map((e) => <EventNotice key={e.id} e={e} lang={lang} />)}<MessageBubble m={m} lang={lang} index={i} hit={i === curIdx} tailed={i === 0 || !sameSender(msgs[i - 1], m)} flash={m.mine && m.id === flashId} canReply={conv.role !== "reader" && !sending} onReply={beginReply}>{q ? markAll(m.body, q, i === curIdx) : m.body}{m.att_mime && <AttachmentView lang={lang} m={m} />}</MessageBubble></Fragment>)}
         {eventsBefore(events, msgs, msgs.length).map((e) => <EventNotice key={e.id} e={e} lang={lang} />)}
         <div ref={endRef} />
       </div>
@@ -716,11 +726,10 @@ function Chat({ session, lang, conv, back, menu, openPlans, planKey, rename }: {
       {status?.kind === "clarification" && <div className="notice" role="alert">{da ? "Beskeden er ikke sendt. Vi er usikre på, hvad du mener. Vil du skrive det lidt tydeligere?" : "Your message was not sent. We’re not sure what you mean. Could you write it a little more clearly?"}</div>}
       {status?.kind === "note" && <div className="notice" role="alert">{status.blockedText}</div>}
       {status && status.kind !== "blocked" && status.kind !== "note" && status.kind !== "clarification" && <div className={status.kind === "accepted" ? "notice" : "err"} role="status">{(t as any)[status.kind]}</div>}
-      <LunaIndicator checking={sending} accepted={status?.kind === "accepted"} label={t.sending} />
       {conv.role !== "reader" ? (
         <div className="card composer" ref={composerRootRef}><fieldset className="composer-fields" disabled={sending}>
-          <ComposerInput lang={lang} text={text} onText={setText} textareaRef={composerRef} plan={plan} cap={cap} busy={sending} file={file} onFile={setFile} openPlans={openPlans} retry={!!retryKey} canSend={!!file || !!text.trim()} onSend={() => { if (file) attachmentSend.current?.(); else send(); }} leading={reply ? <ReplyComposer who={replyWho(reply)} body={reply.body} unavailable={reply.body == null} lang={lang} onCancel={() => { setReply(null); composerRef.current?.focus(); }} /> : null} />
-          <AttachBar lang={lang} conv={conv.id} plan={plan} openPlans={openPlans} caption={text} file={file} setFile={setFile} sendRef={attachmentSend} cap={cap} replyTo={reply?.id ?? null} onBusy={setAttachmentBusy} limitMsg={limitMsg} sent={() => { setText(""); setReply(null); localStorage.removeItem(draftKey); localStorage.removeItem(replyKey); load(); loadLim(); }} />
+          <ComposerInput lang={lang} text={text} onText={setText} textareaRef={composerRef} plan={plan} cap={cap} busy={sending} file={file} onFile={setFile} openPlans={openPlans} retry={!!retryKey} canSend={!!file || !!text.trim()} onSend={() => { if (file) attachmentSend.current?.(); else send(); }} leading={reply ? <ReplyComposer who={replyWho(reply)} body={reply.body} unavailable={reply.body == null} lang={lang} onCancel={() => { setReply(null); composerRef.current?.focus(); }} /> : null} statusSlot={<LunaIndicator checking={sending} accepted={status?.kind === "accepted"} label={t.sending} pendingText={sending ? (file ? (text.trim() || file.name) : text) : undefined} />} />
+          <AttachBar lang={lang} conv={conv.id} plan={plan} openPlans={openPlans} caption={text} file={file} setFile={setFile} sendRef={attachmentSend} cap={cap} replyTo={reply?.id ?? null} onBusy={setAttachmentBusy} limitMsg={limitMsg} sent={(messageId) => { setText(""); setReply(null); localStorage.removeItem(draftKey); localStorage.removeItem(replyKey); setStatus({ kind: "accepted" }); armFlash(messageId); load(); loadLim(); }} />
           {(() => { const wait = lim?.next_at ? Math.ceil((new Date(lim.next_at).getTime() - Date.now()) / 1000) : 0; return wait > 0 ? <p className="meta" role="status">{da ? `Du kan sende igen ${waitText(wait, true)}.` : `You can send again ${waitText(wait, false)}.`}</p> : null; })()}
         </fieldset></div>) : <div className="notice" role="note">{t.readOnly}</div>}
       {blocked && <div className="notice" role="status">{da ? "Du har blokeret samtalen. De andre kan ikke sende beskeder her. " : "You blocked this conversation. The others cannot send messages here. "}<button className="ghost" onClick={() => setBlock(false)}>{da ? "Afblokér" : "Unblock"}</button></div>}
@@ -902,7 +911,7 @@ function Plans({ lang }: { lang: Lang }) {
 }
 
 // ---------- Attachments ----------
-function AttachBar({ lang, conv, plan, openPlans, caption, file, setFile, sendRef, cap, replyTo, onBusy, sent, limitMsg }: { lang: Lang; conv: string; plan: string | null; openPlans: () => void; caption: string; file: File | null; setFile: (file: File | null) => void; sendRef: React.MutableRefObject<(() => void) | null>; cap: number; replyTo: string | null; onBusy: (value: boolean) => void; sent: () => void; limitMsg: (d: any) => string | null }) {
+function AttachBar({ lang, conv, plan, openPlans, caption, file, setFile, sendRef, cap, replyTo, onBusy, sent, limitMsg }: { lang: Lang; conv: string; plan: string | null; openPlans: () => void; caption: string; file: File | null; setFile: (file: File | null) => void; sendRef: React.MutableRefObject<(() => void) | null>; cap: number; replyTo: string | null; onBusy: (value: boolean) => void; sent: (messageId?: string) => void; limitMsg: (d: any) => string | null }) {
   const da = lang === "da";
   const [alt, setAlt] = useState(""); const [busy, setBusy] = useState(false);
   const [out, setOut] = useState<{ ok: boolean; text: string } | null>(null);
@@ -920,7 +929,7 @@ function AttachBar({ lang, conv, plan, openPlans, caption, file, setFile, sendRe
     let bin = ""; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
     let r; try { r = await callFn("send-attachment", { conversation_id: conv, idempotency_key: crypto.randomUUID(), file_b64: btoa(bin), file_name: file.name, reply_to_id: replyTo, caption: caption.trim(), alt: alt.trim() }); } catch { r = { status: 0, data: null as any }; }
     setBusy(false); onBusy(false); const d = r.data ?? {};
-    if (r.status === 200 && d.status === "accepted") { setFile(null); setAlt(""); setOut({ ok: true, text: da ? "Vedhæftningen er sendt." : "Attachment sent." }); sent(); }
+    if (r.status === 200 && d.status === "accepted") { setFile(null); setAlt(""); setOut({ ok: true, text: da ? "Vedhæftningen er sendt." : "Attachment sent." }); sent(typeof d.message_id === "string" ? d.message_id : undefined); }
     else if (limitMsg(d)) setOut({ ok: false, text: limitMsg(d)! });
     else if (d.status === "clarification_required") setOut({ ok: false, text: da ? "Filen er ikke sendt. Vi er usikre på, hvad du mener. Vil du gøre teksten i filen eller din billedtekst lidt tydeligere?" : "Your file was not sent. We’re not sure what you mean. Could you make the text in the file or your caption a little clearer?" });
     else if (d.status === "blocked") setOut({ ok: false, text: (da ? "Filen blev ikke sendt: " : "Not sent: ") + (reasons[d.reason_code] ?? reasons.other_harmful) + "." + ((d.spans ?? []).length ? (da ? " Markeret: “" : " Flagged: “") + d.spans.join("”, “") + "”" : "") + (typeof d.suggestion === "string" && d.suggestion ? (da ? " Forslag: " : " Suggestion: ") + d.suggestion : "") });
