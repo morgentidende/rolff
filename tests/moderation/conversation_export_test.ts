@@ -5,15 +5,18 @@ const eq = (a: unknown, b: unknown) => { if (JSON.stringify(a) !== JSON.stringif
 const ok = (c: unknown, m = "assertion failed") => { if (!c) throw new Error(m); };
 const UID = "aaaaaaaa-0000-4000-8000-000000000001", CONV = "cccccccc-0000-4000-8000-000000000001", EID = "eeeeeeee-0000-4000-8000-000000000001";
 const ROW = { id: "dddddddd-0000-4000-8000-000000000001", sender_label: "Mor (alias)", sender_email: "mor@x.test", sender_deleted: false, mine: false, body: "Fra databasen", created_at: "2026-11-06T08:00:00Z" };
-function fake(o: { plan?: string; beginErr?: string; mailOk?: boolean; sign?: boolean; kind?: "self" | "other" } = {}) {
+function fake(o: { plan?: string; beginErr?: string; mailOk?: boolean; sign?: boolean; kind?: "self" | "other"; lang?: "da" | "en"; locales?: Record<string, string> } = {}) {
   const calls: { name: string; args: any }[] = []; const mails: { to: string; m: any }[] = []; let rendered: any = null; let hashed: Uint8Array | null = null;
   const deps: ExportDeps = {
     appUrl: "https://rolff.example/",
+    lang: o.lang,
     rpc: async (name, args) => {
       calls.push({ name, args });
       if (name === "_effective_plan") return { data: o.plan ?? "text_attachments", error: null };
       if (name === "begin_conversation_export") return o.beginErr ? { data: null, error: { message: o.beginErr } } : { data: [{ export_id: EID, verify_code: "0123456789ABCDEF0123", created_at: "2026-11-09T10:00:00Z", recipient: o.kind === "other" ? "advokat@x.test" : "a@x.test", exporter_email: "a@x.test", partners: ["Mor (alias)"], partial: false }], error: null };
       if (name === "get_export_messages") return { data: [ROW], error: null };
+      if (name === "locale_for_email") return { data: o.locales?.[String(args.p_email)] ?? null, error: null };
+      if (name === "locale_of") return { data: o.locales?.[String(args.p_uid)] ?? null, error: null };
       return { data: null, error: null };
     },
     render: (m) => { rendered = m; return { bytes: new TextEncoder().encode("%PDF-unsigned"), pages: 2 }; },
@@ -60,6 +63,20 @@ Deno.test("Anden modtager: udskrift til modtager + besked til kontoens e-mail", 
   const f = fake({ kind: "other" }); const r = await runConversationExport(UID, req({ recipient: "other", email: "advokat@x.test" }), f.deps);
   eq(r.status, 200); eq(f.calls.find((c) => c.name === "begin_conversation_export")!.args.p_email, "advokat@x.test");
   eq(f.mails.map((m) => m.to), ["advokat@x.test", "a@x.test"]); ok(!f.mails[1].m.attachments); ok(f.mails[1].m.text.includes("advokat@x.test"));
+});
+Deno.test("Udskrift til adresse uden konto følger anmoderens sprog; kendt dansk modtager forbliver dansk", async () => {
+  const en = fake({ kind: "other", lang: "en" });
+  const r = await runConversationExport(UID, req({ recipient: "other", email: "advokat@x.test" }), en.deps);
+  eq(r.status, 200);
+  eq(en.mails[0].m.subject, "a@x.test has sent you a transcript of a conversation from Rolff");
+  eq(en.mails[0].m.attachments[0].filename, "rolff-transcript-2026-11-09-0123.pdf");
+  ok(en.mails[1].m.subject.includes("You have sent a transcript"), en.mails[1].m.subject);
+  const daRecip = fake({ kind: "other", lang: "en", locales: { "advokat@x.test": "da" } });
+  const r2 = await runConversationExport(UID, req({ recipient: "other", email: "advokat@x.test" }), daRecip.deps);
+  eq(r2.status, 200);
+  ok(daRecip.mails[0].m.subject.includes("har sendt dig en udskrift"), daRecip.mails[0].m.subject);
+  eq(daRecip.mails[0].m.attachments[0].filename, "rolff-udskrift-2026-11-09-0123.pdf");
+  ok(daRecip.mails[1].m.subject.includes("You have sent a transcript"), daRecip.mails[1].m.subject);
 });
 Deno.test("Mailfejl: eksporten markeres fejlet (kan ikke verificeres) og 502", async () => {
   const f = fake({ mailOk: false }); const r = await runConversationExport(UID, req(), f.deps);

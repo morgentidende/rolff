@@ -2,7 +2,7 @@
 // flow is unit-testable without network. The PDF is built ONLY from get_export_messages rows
 // (server-side visibility rules); the request body never carries message content.
 import { buildModel, groupCode, scopeInLang, validTimeZone, type ExportMessage } from "./pdf/layout.ts";
-import { exportMail, exportNoticeMail, preferLang, storedLang, type MailAttachment, type MailLang } from "./email.ts";
+import { exportMail, exportNoticeMail, preferLang, storedLang, storedLangIfSet, type MailAttachment, type MailLang } from "./email.ts";
 
 type Rpc = (name: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: { message: string } | null }>;
 export type ExportDeps = {
@@ -66,7 +66,8 @@ export async function runConversationExport(uid: string, input: ExportRequest, d
   if (fin.error) return fail(500, "export_failed");
   const code = groupCode(b.verify_code);
   const exporterLang = preferLang(deps.lang, await storedLang(deps.rpc, { uid }));
-  const recipLang = kind === "self" ? exporterLang : preferLang(await storedLang(deps.rpc, { email: b.recipient }));
+  // A recipient with no Rolff account has no stored language: use the requester's language, not Danish by default.
+  const recipLang = kind === "self" ? exporterLang : ((await storedLangIfSet(deps.rpc, { email: b.recipient })) ?? exporterLang);
   const recipScope = scopeInLang(model, recipLang);
   const mail = exportMail({ exporterEmail: b.exporter_email, toSelf: kind === "self", verifyUrl, code, exportId: b.export_id, scope: recipScope, count: model.count, pages, lang: recipLang });
   const day = new Date(b.created_at).toISOString().slice(0, 10);

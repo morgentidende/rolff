@@ -11,3 +11,15 @@
 .verify-langs{margin-left:auto;display:flex;gap:4px;flex:0 0 auto}
 .verify-langs button{background:transparent;border:1px solid var(--border,#d5d2cb);color:var(--text,#2b2f2e);border-radius:999px;padding:5px 11px;font:600 13px/1.2 inherit;cursor:pointer}
 .verify-langs button.is-on{background:#016C72;border-color:#016C72;color:#fff}
+
+.verify-file-legend{display:block;font-weight:600;margin-top:6px}
+.verify-file{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.verify-file-btn{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-height:44px;padding:8px 16px;border-radius:10px;
+  border:1px solid var(--accent);background:transparent;color:var(--accent);
+  font-size:16px;font-weight:600;cursor:pointer
+}
+.verify-file-btn:hover{background:color-mix(in srgb, var(--accent) 10%, transparent)}
+.verify-file-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.verify-file-name{color:var(--muted,#6b6f6e);font-size:15px;word-break:break-all}

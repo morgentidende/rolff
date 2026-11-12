@@ -13,6 +13,8 @@ const T = {
     notSent: "Filen bliver ikke sendt.",
     intro2: " Din enhed beregner kun filens fingeraftryk (SHA-256), som sammenlignes med Rolffs register. Siden viser aldrig beskedernes indhold.",
     file: "1. Vælg PDF-filen fra e-mailen",
+    pick: "Vælg PDF-fil",
+    noFile: "Ingen fil valgt",
     fingerprint: (name: string) => `Fingeraftryk af ${name}: `,
     code: "2. Kode fra bunden af siderne (valgfri, hvis du har valgt filen)",
     checking: "Tjekker…",
@@ -29,6 +31,8 @@ const T = {
     notSent: "The file is not sent.",
     intro2: " Your device only calculates the file's fingerprint (SHA-256), which is compared with Rolff's register. The page never shows the messages.",
     file: "1. Choose the PDF file from the e-mail",
+    pick: "Choose PDF file",
+    noFile: "No file chosen",
     fingerprint: (name: string) => `Fingerprint of ${name}: `,
     code: "2. Code from the bottom of the pages (optional if you have chosen the file)",
     checking: "Checking…",
@@ -64,8 +68,19 @@ export function VerifyPage({ initialCode = "", initialLang, run }: { initialCode
     </header>
     <p>{t.intro}<strong>{t.notSent}</strong>{t.intro2}</p>
     <form className="card verify-form" onSubmit={check}>
-      <label htmlFor="pdf">{t.file}</label>
-      <input id="pdf" type="file" accept="application/pdf,.pdf" onChange={(e) => pick(e.currentTarget.files?.[0])} />
+      <span id="pdf-legend" className="verify-file-legend">{t.file}</span>
+      <div className="verify-file">
+        <input
+          id="pdf"
+          className="sr-only"
+          type="file"
+          accept="application/pdf,.pdf"
+          aria-labelledby="pdf-legend"
+          onChange={(e) => pick(e.currentTarget.files?.[0])}
+        />
+        <label htmlFor="pdf" className="verify-file-btn">{t.pick}</label>
+        <span className="verify-file-name" aria-live="polite">{fileName || t.noFile}</span>
+      </div>
       {sha && <p className="meta verify-sha">{t.fingerprint(fileName)}<code>{sha}</code></p>}
       <label htmlFor="code">{t.code}</label>
       <input id="code" inputMode="text" autoComplete="off" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX" value={code} onChange={(e) => setCode(e.target.value)} />

@@ -14,11 +14,19 @@ export async function storedLang(
   rpc: (name: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown }>,
   args: { uid?: string; email?: string },
 ): Promise<MailLang> {
+  return (await storedLangIfSet(rpc, args)) ?? "da";
+}
+/** Stored da/en if one is recorded; null when there is no account or the lookup fails. */
+export async function storedLangIfSet(
+  rpc: (name: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown }>,
+  args: { uid?: string; email?: string },
+): Promise<MailLang | null> {
   try {
-    if (args.uid) return mailLang((await rpc("locale_of", { p_uid: args.uid })).data);
-    if (args.email) return mailLang((await rpc("locale_for_email", { p_email: args.email })).data);
-  } catch { /* default da */ }
-  return "da";
+    const data = args.uid ? (await rpc("locale_of", { p_uid: args.uid })).data
+      : args.email ? (await rpc("locale_for_email", { p_email: args.email })).data
+      : null;
+    return data === "en" || data === "da" ? data : null;
+  } catch { return null; }
 }
 const fmt = (d: string, lang: MailLang = "da") => new Date(d).toLocaleString(lang === "en" ? "en-GB" : "da-DK", { timeZone: "Europe/Copenhagen", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
 

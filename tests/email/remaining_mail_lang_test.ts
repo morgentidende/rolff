@@ -3,7 +3,7 @@
 import { assert, assertEquals } from "jsr:@std/assert@1";
 Deno.env.set("APP_URL", "https://example.test/");
 import {
-  emailChangeMail, exportMail, exportNoticeMail, inactivityMail, mailLang, preferLang, recoveryMail, storedLang,
+  emailChangeMail, exportMail, exportNoticeMail, inactivityMail, mailLang, preferLang, recoveryMail, storedLang, storedLangIfSet,
 } from "../../supabase/functions/_shared/email.ts";
 
 Deno.test("preferLang: first explicit da|en wins, else da", () => {
@@ -26,6 +26,11 @@ Deno.test("storedLang: uses locale_of / locale_for_email and falls back to da", 
   assertEquals(await storedLang(rpc, { email: "nobody@x.test" }), "da");
   assertEquals(await storedLang(rpc, { uid: "boom" }), "da");
   assertEquals(await storedLang(rpc, {}), "da");
+  assertEquals(await storedLangIfSet(rpc, { uid: "u-en" }), "en");
+  assertEquals(await storedLangIfSet(rpc, { email: "a@x.test" }), "en");
+  assertEquals(await storedLangIfSet(rpc, { email: "nobody@x.test" }), null);
+  assertEquals(await storedLangIfSet(rpc, { uid: "boom" }), null);
+  assertEquals(await storedLangIfSet(rpc, {}), null);
 });
 
 const link = "https://example.test/?auth=recovery&th=ab";
