@@ -1,10 +1,13 @@
 name: ci
 on: [push, pull_request]
+permissions:
+  contents: read
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with: { persist-credentials: false }
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
       - uses: denoland/setup-deno@v2
@@ -18,3 +21,4 @@ jobs:
       - run: deno test --config supabase/functions/deno.json --allow-env=APP_URL,MAILER_URL,MAILER_SECRET,SUPABASE_URL,SUPABASE_SERVICE_ROLE_KEY,SUPABASE_ANON_KEY,SUPABASE_SECRET_KEYS,SUPABASE_PUBLISHABLE_KEYS,APP_ENV,TEST_MAIL_ALLOW,DEMO_OPEN_MAIL,MODERATION_PROVIDER,MODERATION_TIER,MODERATION_TIMEOUT_MS,GEMINI_API_KEY,GEMINI_MODEL,MODERATION_MODEL,OPENAI_API_KEY,OPENAI_BASE_URL,OPENAI_MODEL tests/email/address_check_test.ts
       - run: cd apps/web && npm ci && npm run test:back && npm run test:receive && npm run test:clarification && npm run test:blocking && npm run test:court-export && npm run build
         env: { VITE_SUPABASE_URL: "https://example.supabase.co", VITE_SUPABASE_PUBLISHABLE_KEY: "ci" }
+      - run: npm run test:notifications

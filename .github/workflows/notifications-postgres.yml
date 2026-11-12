@@ -1,0 +1,58 @@
+# Synthetic PR validation only. No production secrets, endpoints or push transports.
+# Every matrix job uses a fresh disposable PostgreSQL17 database and synthetic fixtures.
+name: notifications-postgres
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/notifications-postgres.yml'
+      - 'supabase/migrations/**'
+      - 'tests/sql/**'
+permissions:
+  contents: read
+jobs:
+  notifications-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      CI: 'true'
+      TIMEZONE_SQL_TEST: synthetic-only
+      TIMEZONE_SQL_BACKEND: postgres
+      TIMEZONE_TEST_DATABASE_URL: postgresql://rolff_timezone_test:synthetic-ci-only@127.0.0.1:5432/rolff_test_notifications
+    strategy:
+      fail-fast: false
+      matrix:
+        script: [notifications.mjs, notifications-concurrency.mjs, notifications-v3.mjs]
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: rolff_timezone_test
+          POSTGRES_PASSWORD: synthetic-ci-only
+          POSTGRES_DB: rolff_test_notifications
+        ports:
+          - 127.0.0.1:5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rolff_timezone_test -d rolff_test_notifications"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm ci
+        working-directory: tests/sql
+      - name: Verify guarded disposable PostgreSQL17 backend
+        run: |
+          node --input-type=module - <<'JS'
+          import {connectPG} from './tests/sql/timezone-test-db.mjs';
+          const db=await connectPG();
+          try {
+            const {rows}=await db.query("select current_setting('server_version') version,current_setting('server_version_num')::int number");
+            if(rows[0].number<170000 || rows[0].number>=180000)throw Error('PostgreSQL17 required');
+            console.log(JSON.stringify({backend:'PostgreSQL',...rows[0],scope:'disposable synthetic loopback CI'}));
+          } finally {await db.end();}
+          JS
+      - run: node tests/sql/${{ matrix.script }}
