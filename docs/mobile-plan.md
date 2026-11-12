@@ -16,7 +16,7 @@ Dato: 2026-11-02. Status: UDKAST til beslutning (Nicolai).
 | Lokal kryptering | Ikke bygget (plan: IndexedDB + WebCrypto, ikke-eksporterbar nøgle) | Native: Android Keystore | Native: iOS Keychain/Secure Enclave. Bemærk: Safari kan rydde webdata (ITP) → web-kopi er ikke en pålidelig "bevis-kopi" på iOS |
 | Push-notifikationer | Ingen (kun mail). Web-push kræver service worker | Web-push i Chrome mulig; native: FCM | Web-push kun for web-app føjet til hjemmeskærm (iOS 16.4+); native: APNs |
 | Offline / modtagetider | Online-only. Modtagetider håndhæves på serveren (virker uden app) | Kræver lokal DB (SQLite) for offline læsning | Samme |
-| Eksport / "Download mine data" | Samtale-eksport CSV/PDF findes; art. 15-udtræk ikke bygget | Fil-download skal via share-sheet (native) | Samme; Safari-download virker, men share-sheet er bedre |
+| Eksport / "Download mine data" | Signeret udskrift af samtale laves på serveren og sendes pr. e-mail (79-plan, se docs/court-export.md); "Download mine data" (ZIP) findes | Fil-download skal via share-sheet (native) | Samme; Safari-download virker, men share-sheet er bedre |
 | Login / invitationslinks | E-mail + adgangskode; invitationslink `/#invite=…` | Kræver **App Links** (`/.well-known/assetlinks.json` på domænet) | Kræver **Universal Links** (`/.well-known/apple-app-site-association`) |
 | Kontosletning i appen | Bygget (⋮ → Privatliv og sletning) | Krav i Google Play (i app + web-link) – opfyldt i princippet | Krav i Apple 5.1.1(v) – opfyldt i princippet |
 
@@ -41,7 +41,7 @@ Dato: 2026-11-02. Status: UDKAST til beslutning (Nicolai).
 
 ## 5. Flutter – kompatibilitet
 - **Genbruges uændret:** Supabase (Postgres, RLS, RPC'er, migrationer, SQL-tests), Edge Functions (send-message/moderation, delete-account, inactivity-sweep, feedback, invitationer), pg_cron-job, PHP-mailrelay. Klienten taler kun via HTTPS/RPC, så backend er klient-agnostisk.
-- **Skal genskrives i Dart:** al UI og klientlogik – login/invitation, chat, modtagetider-UI, blokering/blokerede ord, privatliv/sletning, eksport (CSV/PDF) og "Download mine data", FAQ/politik-visning, samt det, der endnu ikke findes: lokal krypteret lagring, retention lokalt, sky-synk.
+- **Skal genskrives i Dart:** al UI og klientlogik – login/invitation, chat, modtagetider-UI, blokering/blokerede ord, privatliv/sletning, anmodning om udskrift (PDF laves på serveren) og "Download mine data", FAQ/politik-visning, samt det, der endnu ikke findes: lokal krypteret lagring, retention lokalt, sky-synk.
 - **Små backend-tilpasninger:** push-tokens-tabel + push-afsendelse (FCM/APNs) i en Edge Function; invitationslinks som `https://<domæne>/invite/<token>` (App Links / Universal Links) i stedet for `#invite=`; well-known-filer på domænet.
 
 ## 6. Pakker (pub.dev, tjekket 2026-11-02)

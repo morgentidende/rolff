@@ -282,15 +282,15 @@ await t('Skriver kan skrive efter enstemmig godkendelse', async () => {
 await t('Læser kan ikke invitere', async () => rejects(as(L, `select * from create_member_invitation($1,'z@test.invalid','reader')`, [ec]), /forbidden/));
 // Feedback
 await t('Feedback: kan indsende egen, ingen kan læse', async () => {
-  await as(A, `select submit_feedback('idea','Mere kontrast')`);
+  await as(A, `select submit_feedback('suggestion','Mere kontrast')`);
   await rejects(as(A, `select * from feedback`), /permission|denied/);
   await rejects(as(C, `select * from feedback`), /permission|denied/);
   assert.equal((await svc(`select count(*)::int n from feedback where user_id=$1`, [A]))[0].n, 1);
 });
 await t('Feedback: direkte indsættelse afvises', async () => rejects(as(A, `insert into feedback(user_id, body) values ($1,'x')`, [B]), /permission|denied|policy/));
-await t('Feedback: ugyldig kategori afvises', async () => rejects(as(A, `select submit_feedback('spam','x')`), /check|violat/));
-await t('Feedback: for lang tekst afvises', async () => rejects(as(A, `select submit_feedback('other',repeat('x',2001))`), /check|violat/));
-await t('Feedback: max 5 pr. døgn', async () => { for (let k = 0; k < 4; k++) await as(A, `select submit_feedback('other','ok')`); await rejects(as(A, `select submit_feedback('other','sjette')`), /rate_limited/); });
+await t('Feedback: ugyldig kategori afvises', async () => rejects(as(A, `select submit_feedback('spam','x')`), /bad_input|check|violat/));
+await t('Feedback: for lang tekst afvises', async () => rejects(as(A, `select submit_feedback('suggestion',repeat('x',2001))`), /bad_input|check|violat/));
+await t('Feedback: max 5 pr. døgn', async () => { for (let k = 0; k < 4; k++) await as(A, `select submit_feedback('suggestion','ok')`); await rejects(as(A, `select submit_feedback('complaint','sjette')`), /rate_limited/); });
 await t('Feedback: anonym kan ikke indsende', async () => rejects(db.transaction(async (tx) => { await tx.exec(`set local role anon`); return tx.query(`select submit_feedback('other','x')`); }), /permission|denied/));
 
 // GDPR: deletion (art. 17) and inactivity
@@ -307,7 +307,7 @@ await t('Sletning: opsætning (P og Q i samtale, P alene i en anden)', async () 
   await svc(`insert into receive_windows(user_id, weekday, start_min, end_min) select $1, (extract(isodow from now())::int % 7) + 1, 0, 1`, [Q]).catch(() => {});
   await as(P, `select set_conversation_color($1,'rose')`, [pc]);
   await as(P, `select set_contact_alias($1,'Q-alias')`, [Q]);
-  await as(P, `select submit_feedback('idea','slet mig')`);
+  await as(P, `select submit_feedback('suggestion','slet mig')`);
   await as(P, `select touch_seen()`);
 });
 await t('Klient kan ikke kalde purge_user_content / inactivity_sweep', async () => {
@@ -368,22 +368,25 @@ await t('Blokering: A (blokerende) kan stadig skrive', async () => { await sendA
 await t('Blokering: B kan ikke se eller fjerne blokeringen', async () => { assert.equal((await as(B, `select * from conversation_blocks`)).length, 0); await as(B, `select unblock_conversation($1)`, [conv]); await rejects(sendAs(B, 'Hej igen', 'key-blk00003'), /cannot_deliver/); });
 await t('Blokering: ingen udløbskolonne', async () => assert.deepEqual((await db.query(`select column_name from information_schema.columns where table_name='conversation_blocks' order by 1`)).rows.map(r => r.column_name), ['conversation_id', 'created_at', 'user_id']));
 await t('Blokering: ophører kun når A afblokerer', async () => { await as(A, `select unblock_conversation($1)`, [conv]); await sendAs(B, 'Hej igen', 'key-blk00004'); });
-await t('Feedback: nye kategorier', async () => { await svc(`delete from feedback`); await as(B, `select submit_feedback('complaint','x')`); await as(B, `select submit_feedback('filter','y')`); });
+await t('Feedback: kun Forslag/Klage kan indsendes; gamle filter-rækker forbliver gyldige', async () => { await svc(`delete from feedback`); await as(B, `select submit_feedback('complaint','x')`); await as(B, `select submit_feedback('suggestion','z')`); await rejects(as(B, `select submit_feedback('filter','y')`), /bad_input/); await rejects(as(B, `select submit_feedback('other','y')`), /bad_input/); await db.query(`insert into feedback(user_id,category,body) values ($1,'filter','gammel')`, [B]); assert.equal((await db.query(`select count(*)::int n from feedback where category='filter'`)).rows[0].n, 1); });
 
-await t('Visningsnavn: standard er e-mail; kaldenavn skjuler e-mail i alle API-svar og slår igennem straks', async () => {
+await t('Visningsnavn: andre ser altid e-mail (eller eget private kaldenavn); selvvalgt navn er fjernet', async () => {
   await db.query(`update auth.users set email='a-login@test.invalid' where id=$1`, [A]);
   await svc(`delete from contact_aliases where owner_id=$1`, [B]);
   const lbl = async () => (await as(B, `select others from list_my_conversations() where id=$1`, [conv]))[0].others.find(o => o.user_id === A).email;
   assert.equal(await lbl(), 'a-login@test.invalid');
-  await as(A, `select set_my_public_name('Mor')`);
-  assert.equal(await lbl(), 'Mor');
-  const all = JSON.stringify([await as(B, `select * from list_my_conversations()`), await as(B, `select * from get_messages($1)`, [conv])]);
-  assert.ok(!all.includes('a-login@test.invalid'));
-  assert.ok((await as(B, `select * from get_messages($1)`, [conv])).filter(m => m.sender_id === A).every(m => m.sender_name === 'Mor'));
-  await rejects(as(B, `select * from profiles where user_id=$1`, [A]).then(r => { if (r.length) throw new Error('leak'); }).then(() => { throw new Error('ok-empty'); }), /ok-empty/);
+  await rejects(as(A, `select set_my_public_name('Mor')`), /does not exist/);
+  await rejects(as(A, `select get_my_public_name()`), /does not exist/);
+  await rejects(as(A, `update profiles set public_name='Mor' where user_id=$1`, [A]), /profiles_public_name_removed|check constraint/);
+  assert.equal(await lbl(), 'a-login@test.invalid');
+  assert.ok((await as(B, `select * from get_messages($1)`, [conv])).filter(m => m.sender_id === A).every(m => m.sender_name === 'a-login@test.invalid'));
+  assert.equal((await svc(`select public_label_of($1) l`, [A]))[0].l, 'a-login@test.invalid');
   await rejects(as(B, `select public_label_of($1)`, [A]), /permission|denied/);
-  await rejects(as(A, `select set_my_public_name('a@b')`), /bad_name/);
-  await as(A, `select set_my_public_name(null)`); assert.equal(await lbl(), 'a-login@test.invalid');
+  // The viewer's own private nickname still wins, and only for that viewer.
+  await as(B, `select set_contact_alias($1,'Privat navn')`, [A]);
+  assert.equal((await as(B, `select others from list_my_conversations() where id=$1`, [conv]))[0].others.find(o => o.user_id === A).alias, 'Privat navn');
+  assert.ok((await as(B, `select * from get_messages($1)`, [conv])).filter(m => m.sender_id === A).every(m => m.sender_name === 'Privat navn'));
+  await svc(`delete from contact_aliases where owner_id=$1`, [B]);
 });
 await t('Rapport: B rapporterer med valgte beskeder; kun metadata gemmes', async () => {
   const ms = await as(B, `select id from get_messages($1)`, [conv]);
@@ -626,5 +629,17 @@ const {testClarificationPolicy}=await import('./clarification-policy.mjs');
 await testClarificationPolicy({db,as,svc,hash,t,assert});
 const {testBlockingTopics}=await import('./blocking-topics.mjs');
 await testBlockingTopics({db,as,svc,hash,t,assert});
+const {testConversationExports}=await import('./conversation-exports.mjs');
+await testConversationExports({db,as,svc,hash,t,assert});
+const {testConversationList}=await import('./conversation-list.mjs');
+await testConversationList({db,as,svc,hash,t,assert});
+const {testReplyContext}=await import('./reply-context.mjs');
+const {testRemovePublicName}=await import('./remove-public-name.mjs');
+await testReplyContext({db,as,svc,hash,t,assert});
+await testRemovePublicName({t,assert});
+const {testEmailChangeNotice}=await import('./email-change-notice.mjs');
+await testEmailChangeNotice({db,as,svc,hash,t,assert});
+const {testAppLocale}=await import('./app-locale.mjs');
+await testAppLocale({db,as,svc,hash,t,assert,rejects});
 console.log(`\n${pass} bestået, ${fail} fejlet`);
 process.exit(fail ? 1 : 0);

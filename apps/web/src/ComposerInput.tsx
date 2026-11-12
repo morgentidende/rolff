@@ -1,18 +1,24 @@
 import { useBackLayer } from "./backNavigation";
+import type React from "react";
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { messageCharCount } from "./composerLimits";
 
 export const FILE_ACCEPT = "image/png,image/jpeg,image/webp,image/gif,application/pdf";
+// The character counter only shows (as a small floating pill, no extra row) from 80 % of the limit.
+export const COUNT_SHOW_AT = 0.8;
 export const MAX_ATTACHMENT_BYTES = 4 * 1024 * 1024;
 type Props = {
   lang: "da" | "en"; text: string; onText: (text: string) => void;
   textareaRef: RefObject<HTMLTextAreaElement | null>; plan: string | null; cap: number;
   busy: boolean; file: File | null; onFile: (file: File | null) => void;
   onSend: () => void; openPlans: () => void; canSend: boolean; retry?: boolean;
+  leading?: React.ReactNode;
+  /** Luna checking/happy row rendered inside the composer surface. */
+  statusSlot?: React.ReactNode;
 };
 const Glyph = ({ children }: { children: React.ReactNode }) => <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{children}</svg>;
 
-export function ComposerInput({ lang, text, onText, textareaRef, plan, cap, busy, file, onFile, onSend, openPlans, canSend, retry = false }: Props) {
+export function ComposerInput({ lang, text, onText, textareaRef, plan, cap, busy, file, onFile, onSend, openPlans, canSend, retry = false, leading, statusSlot }: Props) {
   const da = lang === "da"; const count = messageCharCount(text);
   const picker = useRef<HTMLInputElement>(null); const camera = useRef<HTMLInputElement>(null);
   const dialog = useRef<HTMLDialogElement>(null); const [upgrade, setUpgrade] = useState(false); const [note, setNote] = useState("");
@@ -47,16 +53,20 @@ export function ComposerInput({ lang, text, onText, textareaRef, plan, cap, busy
   }, [da]);
   return <>
     <div className="composer-input-row">
-      <div className="composer-entry">
+      <div className={`composer-entry${leading && !busy ? " has-reply" : ""}${statusSlot ? " has-luna" : ""}${busy ? " is-checking" : ""}`}>
+      {statusSlot}
+      {!busy && leading}
+      <div className="composer-entry-row" hidden={busy || undefined} aria-hidden={busy || undefined}>
       <button type="button" className="composer-icon" disabled={busy || plan === null} aria-label={da ? "Vedhæft fil" : "Attach file"} title={da ? "Vedhæft fil" : "Attach file"} onClick={() => choose("file")}><Glyph><path d="m21 11-8.2 8.2a5.3 5.3 0 0 1-7.5-7.5l9-9a3.5 3.5 0 0 1 5 5l-9 9a1.8 1.8 0 0 1-2.5-2.5l8.3-8.3" /></Glyph></button>
       <textarea className="message-input" ref={textareaRef} rows={1} value={text} disabled={busy} aria-label={da ? "Skriv en besked" : "Write a message"} aria-describedby="composer-count" aria-invalid={(count > cap && !retry) || undefined} placeholder={da ? "Skriv en besked" : "Write a message"} onChange={e => onText(e.target.value)} />
       <button type="button" className="composer-icon" disabled={busy || plan === null} aria-label={da ? "Tag billede" : "Take photo"} title={da ? "Tag billede" : "Take photo"} onClick={() => choose("camera")}><Glyph><path d="M4 6h4l2-3h4l2 3h4a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z" /><circle cx="12" cy="13" r="4" /></Glyph></button>
+      </div>
       </div>
       <button type="button" className="composer-send" aria-label={busy ? (da ? "Sender" : "Sending") : file ? (da ? "Send vedhæftning" : "Send attachment") : (da ? "Send besked" : "Send message")} title={da ? "Send" : "Send"} disabled={busy || !canSend || (count > cap && !retry) || plan === null} onClick={onSend}><Glyph><path d="m22 2-7 20-4-9-9-4Z" /><path d="m22 2-11 11" /></Glyph></button>
     </div>
     <input type="file" ref={picker} accept={FILE_ACCEPT} hidden disabled={busy} onChange={e => selected(e.currentTarget)} />
     <input type="file" ref={camera} accept="image/*" capture="environment" hidden disabled={busy} onChange={e => selected(e.currentTarget)} />
-    <div id="composer-count" className={`composer-count meta${count > cap ? " over-limit" : ""}`} role="status">{count}/{cap}{count > cap ? (retry ? (da ? " – prøv den tidligere afsendelse igen" : " – retry the previous send") : (da ? " – forkort beskeden for at sende" : " – shorten your message to send")) : ""}</div>
+    <div id="composer-count" className={`composer-count meta${count > cap ? " over-limit" : ""}${count >= Math.ceil(cap * COUNT_SHOW_AT) ? "" : " is-quiet"}`} role="status">{count}/{cap}{count > cap ? (retry ? (da ? " – prøv den tidligere afsendelse igen" : " – retry the previous send") : (da ? " – forkort beskeden for at sende" : " – shorten your message to send")) : ""}</div>
     {note && <p className="meta" role="status">{note}</p>}
     <dialog className="composer-upgrade" ref={dialog} aria-labelledby="upgrade-title" onCancel={e => { e.preventDefault(); setUpgrade(false); }} onClick={e => { if (e.target === e.currentTarget) setUpgrade(false); }}>
       <h3 id="upgrade-title">{da ? "Vil du dele billeder og filer?" : "Would you like to share photos and files?"}</h3>

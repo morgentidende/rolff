@@ -7,11 +7,12 @@ import { checkTopics, validateFilterSnapshot } from "../_shared/topics.ts";
 // Nothing is stored or delivered before moderation passes. Fail closed. No content in logs.
 import { authed, cors, json } from "../_shared/http.ts";
 import { normalizeReplyId } from "../_shared/replies.ts";
+import { replyModerationContext } from "../_shared/replyContext.ts";
 import { planLengthError } from "../_shared/planLimits.ts";
 import { checkPersonLimits } from "../_shared/limits.ts";
 import { checkRules, findBlockedWord } from "../_shared/rules.ts";
-import { charCount, ModerationTechnicalError, prefilter, timeoutFromEnv } from "../_shared/moderation.ts";
-import { checkFile, cleanName, MAX_BYTES, openaiFileModerate, validateFileResult } from "../_shared/attachments.ts";
+import { charCount, ModerationTechnicalError, prefilter, resolveSenderLang, timeoutFromEnv } from "../_shared/moderation.ts";
+import { checkFile, cleanName, filePromptForLang, MAX_BYTES, openaiFileModerate, validateFileResult } from "../_shared/attachments.ts";
 
 const hex = (b: ArrayBuffer) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, "0")).join("");
 const sha = async (d: Uint8Array | string) => hex(await crypto.subtle.digest("SHA-256", (typeof d === "string" ? new TextEncoder().encode(d) : d) as BufferSource));
@@ -71,6 +72,10 @@ Deno.serve(async (req) => {
   if (!fc.ok) return json({ error: fc.error }, fc.error === "too_large" ? 413 : 415);
 
   const ctx = (prep.data ?? []).map((r: any) => ({ mine: r.ctx_mine, body: r.ctx_body }));
+  // Replies: Luna always sees the replied-to message as context (server-fetched, visibility re-checked).
+  const modCtx = await replyModerationContext(admin, uid, conv, reply, ctx);
+  if (modCtx === "invalid_reply") return json({ error: "invalid_reply" }, 400);
+  if (modCtx === "error") return json({ status: "technical_error" }, 503);
   const blk = await admin.from("conversation_blocks").select("user_id").eq("conversation_id", conv).neq("user_id", uid).limit(1);
   if (blk.error) return json({ status: "technical_error" }, 503);
   if ((blk.data ?? []).length) return json({ status: "cannot_deliver" }, 200);
@@ -88,6 +93,7 @@ Deno.serve(async (req) => {
   }
 
   // Files need a provider that accepts images/PDF: OpenAI only. Anything else fails closed.
+  const lang = await resolveSenderLang(input?.lang, async () => (await admin.rpc("locale_of", { p_uid: uid })).data);
   const apiKey = Deno.env.get("OPENAI_API_KEY"); const base = Deno.env.get("OPENAI_BASE_URL") ?? "https://eu.api.openai.com/v1";
   const model = Deno.env.get("OPENAI_MODEL") ?? "gpt-6-luna";
   if (Deno.env.get("MODERATION_PROVIDER") !== "openai" || !apiKey || !/^https:\/\/([a-z0-9-]+\.)*openai\.com\/v1\/?$/.test(base)) {
@@ -97,7 +103,7 @@ Deno.serve(async (req) => {
   const t0 = Date.now(); const ac = new AbortController(); const timer = setTimeout(() => ac.abort(), Math.max(timeoutFromEnv({ get: (k) => Deno.env.get(k) }), 30000));
   let res, usage;
   try {
-    const out = await openaiFileModerate({ apiKey, model, baseUrl: base }, { mime: fc.mime, bytes, name }, caption, ctx, ac.signal);
+    const out = await openaiFileModerate({ apiKey, model, baseUrl: base, prompt: filePromptForLang(lang) }, { mime: fc.mime, bytes, name }, caption, modCtx, ac.signal);
     usage = out.usage; res = validateFileResult(out.raw, caption);
   } catch (e) {
     const kind = e instanceof ModerationTechnicalError ? e.message : ac.signal.aborted ? "timeout" : "provider_error";
@@ -111,7 +117,7 @@ Deno.serve(async (req) => {
 
   if (res.decision === "block") {
     await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "block", p_reason: res.reason_code });
-    return json({ status: "blocked", reason_code: res.reason_code, spans: res.spans, suggestion: res.suggestion, meta }, 200);
+    return json({ status: "blocked", reason_code: res.reason_code, spans: res.spans, suggestion: res.suggestion, ...(res.explanation ? { explanation: res.explanation } : {}), meta }, 200);
   }
   // Same blocked words and hard prefilter as normal messages, on the text found in the file.
   const w = findBlockedWord(res.transcript + "\n" + name, words);
@@ -126,7 +132,7 @@ Deno.serve(async (req) => {
   const hash = await sha(body + "\n" + await sha(bytes));
   // This stage can only deny or request clarification AFTER global safety allows.
   try {
-    const decision = await checkTopics({ get: k => Deno.env.get(k) }, [caption, res.transcript, name, alt].join("\n"), policy.topics, ctx, timeoutFromEnv({ get: k => Deno.env.get(k) }));
+    const decision = await checkTopics({ get: k => Deno.env.get(k) }, [caption, res.transcript, name, alt].join("\n"), policy.topics, modCtx, timeoutFromEnv({ get: k => Deno.env.get(k) }));
     if (decision !== "allow") {
       await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: decision, p_reason: "private_boundary" });
       return json({ status: decision === "block" ? "private_boundary" : "clarification_required" }, 200);

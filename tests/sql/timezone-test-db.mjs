@@ -37,12 +37,18 @@ const targets=mig.filter(f=>f.endsWith('_receive_timezone_preferences.sql'));
 if(targets.length!==1)throw Error('Expected exactly one timezone migration');
 const cut=mig.indexOf(targets[0]);
 for(const f of mig.slice(0,cut)) await db.exec(fs.readFileSync(new URL(f,dir),'utf8'));
-const [OLD,U,V]=(await db.query(`insert into auth.users(raw_user_meta_data) values ('{"display_name":"Fabricated legacy"}'),('{"display_name":"Fabricated auto"}'),('{"display_name":"Fabricated other"}') returning id`)).rows.map(x=>x.id);
+const [OLD,U,V,BROKEN]=(await db.query(`insert into auth.users(raw_user_meta_data) values ('{"display_name":"Fabricated legacy"}'),('{"display_name":"Fabricated auto"}'),('{"display_name":"Fabricated other"}'),('{"display_name":"Fabricated broken empty"}') returning id`)).rows.map(x=>x.id);
 await db.query(`insert into receive_settings(user_id,timezone,enabled) values($1,'America/New_York',true)`,[OLD]);
 await db.query(`insert into receive_windows(user_id,weekday,start_minute,end_minute) values($1,2,600,900)`,[OLD]);
-for(const f of mig.slice(cut)) await db.exec(fs.readFileSync(new URL(f,dir),'utf8'));
+const repair=mig.find(f=>f.endsWith('_receive_windows_required.sql'));
+if(!repair)throw Error('Expected receive_windows_required migration');
+for(const f of mig.slice(cut)){
+  if(f===repair){
+    // Seed the pre-repair broken state immediately before the repair migration runs.
+    await db.query(`insert into receive_settings(user_id,timezone,enabled,timezone_mode,timezone_revision) values($1,'Europe/Copenhagen',true,'fixed',1)`,[BROKEN]);
+  }
+  await db.exec(fs.readFileSync(new URL(f,dir),'utf8'));
+}
 
-
-
-return {db,OLD,U,V};
+return {db,OLD,U,V,BROKEN};
 }

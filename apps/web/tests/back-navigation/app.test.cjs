@@ -36,13 +36,13 @@ for (const strict of [false, true])
             await delay(30);
             assert.equal(d.querySelector('textarea').value, 'En syntetisk kladde');
             await click(label(d, 'Menu'));
-            await click(button(d, 'FAQ'));
+            await click(button(d, 'Rapportér'));
             await back(w);
             assert.ok(d.querySelector('.topbar.chat'));
             assert.ok(!d.querySelector('.sheet'));
             assert.equal(d.querySelector('textarea').value, 'En syntetisk kladde');
             assertPrivateHistory(w);
-            result.push('Chat FAQ Back preserves draft');
+            result.push('Chat sheet Back preserves draft');
             const msg = d.querySelector('.msg');
             msg.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
             await delay(20);
@@ -74,6 +74,7 @@ for (const strict of [false, true])
             assertPrivateHistory(w);
             result.push('Upgrade→Plans→Back does not resurrect offer');
             await click(label(d, 'Tilføj person'));
+            { const me = d.getElementById('me'); Object.getOwnPropertyDescriptor(w.HTMLInputElement.prototype, 'value').set.call(me, 'ny@example.invalid'); me.dispatchEvent(new w.Event('input', { bubbles: true })); await delay(20); }
             d.querySelector('.sheet form').dispatchEvent(new w.Event('submit', { bubbles: true, cancelable: true }));
             await delay(30);
             await click(button(d, 'Se planer'));
@@ -96,7 +97,7 @@ for (const strict of [false, true])
             assert.equal(w.history.state.__rolffBack.kind, 'base');
             assertPrivateHistory(w);
             result.push('Members→Chat→Home Back');
-            await click(d.querySelector('.pencil'));
+            await longPressAlias(w, d);
             assert.ok(d.querySelector('dialog[open]'));
             await back(w);
             assert.ok(!d.querySelector('dialog[open]'));
@@ -110,7 +111,7 @@ for (const strict of [false, true])
             assert.equal(w.history.state.__rolffBack.kind, 'base');
             assertPrivateHistory(w);
             result.push('Explicit X prunes last guard');
-            await click(d.querySelector('.pencil'));
+            await longPressAlias(w, d);
             d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
             await delay(30);
             assert.ok(!d.querySelector('dialog[open]'));
@@ -118,6 +119,8 @@ for (const strict of [false, true])
             assertPrivateHistory(w);
             result.push('Escape dismisses alias and guard once');
             await click(d.querySelector('.convbtn'));
+            // Log ud lives on the front-page menu only; the chat stays in the forward history.
+            await back(w);
             await click(label(d, 'Menu'));
             await click(button(d, 'Log ud'));
             await delay(30);
@@ -144,10 +147,11 @@ for (const strict of [false, true])
             const { w, d } = fixture;
             try {
                 if (alias) {
-                    await click(d.querySelector('.pencil'));
+                    await longPressAlias(w, d);
                     await back(w);
                 }
                 await click(d.querySelector('.convbtn'));
+                await back(w);
                 await click(label(d, 'Menu'));
                 await click(button(d, 'Log ud'));
                 await delay(50);
@@ -165,8 +169,13 @@ for (const strict of [false, true])
             }
         });
     }
+// The visible pencil is gone from the list; the private nickname opens via long-press/context menu.
+async function longPressAlias(w, d) {
+    d.querySelector('.convbtn').dispatchEvent(new w.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    await delay(25);
+}
 function homeKey(d) {
-    const node = d.querySelector('.card.list');
+    const node = d.querySelector('.convlist');
     if (!node)
         return null;
     // Test-only introspection of the mounted component key, not application data.
@@ -207,7 +216,7 @@ for (const strict of [false, true])
         const { w, d } = fixture;
         try {
             w.QA.pauseAlias();
-            await click(d.querySelector('.pencil'));
+            await longPressAlias(w, d);
             const input = d.querySelector('#contact-alias-input');
             Object.getOwnPropertyDescriptor(w.HTMLInputElement.prototype, 'value').set.call(input, 'Syntetisk navn');
             input.dispatchEvent(new w.Event('input', { bubbles: true }));
