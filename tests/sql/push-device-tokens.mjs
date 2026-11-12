@@ -1,4 +1,4 @@
-// Migration 20261112210000_push_device_tokens: native (FCM/APNs) tokens with a platform field.
+// Migration 20261112220000_push_device_tokens: native (FCM/APNs) tokens with a platform field.
 export async function testPushDeviceTokens({ db, as, svc, t, assert, rejects }) {
   const [U, V] = (await db.query(`insert into auth.users(email) values ('pdt-a@example.invalid'),('pdt-b@example.invalid') returning id`)).rows.map(r => r.id);
   const tok = (c) => 'fcmTOKEN_' + c.repeat(40);
@@ -40,6 +40,6 @@ export async function testPushDeviceTokens({ db, as, svc, t, assert, rejects }) 
     await db.query(`delete from auth.users where id=$1`, [V]);
     assert.equal((await svc(`select count(*)::int n from push_device_tokens where user_id=$1`, [V]))[0].n, 0);
     const fs = await import('node:fs');
-    await db.exec(fs.readFileSync('../../supabase/migrations/20261112210000_push_device_tokens.sql', 'utf8'));
+    await db.exec(fs.readFileSync('../../supabase/migrations/20261112220000_push_device_tokens.sql', 'utf8'));
   });
 }
