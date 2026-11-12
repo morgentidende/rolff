@@ -11,6 +11,7 @@ const KEY="__rolffBack";
 class BackNavigation {
   private doc=crypto.randomUUID(); private layers:Layer[]=[]; private attached=false; private pruning:string|null=null; private boundary=false; private retired=new Set<string>(); private revision=0;
   epoch=()=>this.revision;
+  layerCount=()=>this.layers.length;
   private marker():Marker|null {const m=history.state?.[KEY];return m?.v===1&&(m.kind==="base"||m.kind==="guard")?m:null;}
   private state(kind:"base"|"guard") {const old=history.state;return {...(old&&typeof old==="object"?old:{}),[KEY]:{v:1,doc:this.doc,kind}};}
   attach=()=>{
@@ -80,6 +81,8 @@ let navigation:BackNavigation|null=null;
 const nav=()=>navigation??(navigation=new BackNavigation());
 export function useBackNavigationRoot():void {useEffect(()=>{nav().attach();},[]);}
 export function resetBackNavigation():void {navigation?.reset();}
+/** True when a sheet/dialog/conversation is open (used by the native back button). */
+export function hasBackLayers():boolean {return navigation?.layerCount()?true:false;}
 export function useBackLayer(active:boolean,dismiss:()=>void,kind:"view"|"overlay"="overlay"):void {
   const id=useId(), latest=useRef(dismiss);latest.current=dismiss;
   useLayoutEffect(()=>{

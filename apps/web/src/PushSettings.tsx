@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { pushBuildEnabled, pushController, supportedPush } from "./push";
 import type { PushState } from "./pushController";
 import type { Lang } from "./i18n";
+import { deniedHelp } from "./native/permissions";
+import { deviceOf, runtime } from "./native/platform";
 const errors:Record<string,[string,string]>={
  unsupported:["Browseren understøtter ikke web-notifikationer her. På iPhone/iPad kræves iOS/iPadOS 16.4+ og Rolff føjet til hjemmeskærmen.","Web notifications are not supported here. On iPhone/iPad use iOS/iPadOS 16.4+ and add Rolff to the Home Screen."],
  denied:["Notifikationer er blokeret i browserens eller telefonens indstillinger. Vi spørger ikke igen automatisk.","Notifications are blocked in browser or phone settings. We will not ask again automatically."],
@@ -21,12 +23,15 @@ export function PushSettings({uid,lang,onboarding=false}:{uid:string;lang:Lang;o
  if(!pushBuildEnabled || (state && !state.available))return <p role="status">{errors.unavailable[da?0:1]}</p>;
  if(!state)return <p role="status">{error||(da?"Henter status…":"Loading status…")}</p>;
  return <section className={onboarding?"card":""} aria-label={da?"Notifikationer":"Notifications"}>
-   <h3>{onboarding?(da?"Vil du have besked om nye beskeder?":"Would you like new-message notifications?"):(da?"Notifikationer":"Notifications")}</h3>
+   {/* In the settings sheet the sheet title already says "Notifikationer"; only the onboarding card needs its own heading. */}
+   {onboarding && <h3>{da?"Vil du have besked om nye beskeder?":"Would you like new-message notifications?"}</h3>}
    <p>{da?"Valgfrit og slået fra, indtil du selv slår det til. Kun en neutral besked: “ROLFF — Du har nye beskeder klar.” Ingen afsender eller beskedtekst på låseskærmen. Du kan ændre dit valg her senere.":"Optional and off until you turn it on. Only a generic notice: “ROLFF — You have new messages ready.” No sender or message text on the lock screen. You can change your choice here later."}</p>
    <p className="meta">{da?"Vi starter kun en afsendelse efter frigivelse og kontrol af dine aktuelle modtagetider, hvis de er slået til. En afsendelse, der allerede er sat i gang, kan stadig nå frem, selv om du ændrer tider eller slår fra. Browser, netværk og telefon kan forsinke eller undlade visning; præcis visningstid kan ikke garanteres.":"A dispatch starts only after release and a check of your current receive times, if enabled. A dispatch already started may still arrive after you change times or disable notifications. Browser, network and phone may delay or omit display; exact display time cannot be guaranteed."}</p>
    {!supportedPush() && <p role="status">{errors.unsupported[da?0:1]}</p>}
    {!onboarding && <p role="status">{active?(da?"Aktiv på denne enhed (bekræftet på serveren).":"Active on this device (confirmed on server)."):(da?"Ikke bekræftet aktiv på denne enhed.":"Not confirmed active on this device.")}</p>}
    {error && <p role="alert">{error}</p>}
+   {!onboarding && typeof Notification!=="undefined" && Notification.permission==="denied" && (()=>{const h=deniedHelp("notifications",deviceOf(navigator.userAgent,runtime()),runtime(),lang==="da"?"da":"en");
+     return <div className="notice" role="status"><strong>{h.title}</strong><ol className="permission-steps">{h.steps.map((x,i)=><li key={i}>{x}</li>)}</ol></div>;})()}
    <div className="row end">
      {onboarding && <button className="ghost" disabled={busy} onClick={()=>{setDismissed(true);void perform(()=>pushController.decline());}}>{da?"Ikke nu":"Not now"}</button>}
      <button disabled={busy||!supportedPush()} onClick={()=>void perform(()=>pushController.enable(state))}>{onboarding?(da?"Ja":"Yes"):(da?"Slå til / forny på denne enhed":"Enable / renew on this device")}</button>

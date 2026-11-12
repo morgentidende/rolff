@@ -2,6 +2,9 @@ import { useBackLayer } from "./backNavigation";
 import type React from "react";
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { messageCharCount } from "./composerLimits";
+import { PermissionDialog, type PermissionDialogMode } from "./native/PermissionDialog";
+import { markExplained, nextStep, queryPermission, wasExplained, type PermissionKind, type PermissionState } from "./native/permissions";
+import { runtime } from "./native/platform";
 
 export const FILE_ACCEPT = "image/png,image/jpeg,image/webp,image/gif,application/pdf";
 // The character counter only shows (as a small floating pill, no extra row) from 80 % of the limit.
@@ -32,9 +35,24 @@ export function ComposerInput({ lang, text, onText, textareaRef, plan, cap, busy
     return () => { observer?.disconnect(); window.removeEventListener("resize", grow); };
   }, [text, textareaRef]);
   useEffect(() => { if (upgrade && !dialog.current?.open) dialog.current?.showModal(); else if (!upgrade && dialog.current?.open) dialog.current.close(); }, [upgrade]);
+  // Permission state is read ahead of time (never prompts), so a tap can open the
+  // picker synchronously – the picker must open inside the user's own tap.
+  const [perm, setPerm] = useState<Record<"camera" | "files", PermissionState>>({ camera: "prompt", files: "prompt" });
+  const [ask, setAsk] = useState<{ kind: PermissionKind; mode: PermissionDialogMode } | null>(null);
+  useEffect(() => {
+    if (plan !== "text_attachments") return; let live = true;
+    const read = () => void Promise.all([queryPermission("camera"), queryPermission("files")]).then(([camera, files]) => { if (live) setPerm({ camera, files }); }).catch(() => {});
+    read(); window.addEventListener("focus", read); document.addEventListener("visibilitychange", read);
+    return () => { live = false; window.removeEventListener("focus", read); document.removeEventListener("visibilitychange", read); };
+  }, [plan]);
   const choose = (kind: "file" | "camera") => {
     if (busy) return; setNote("");
     if (plan !== "text_attachments") { setUpgrade(true); return; }
+    const k: "camera" | "files" = kind === "camera" ? "camera" : "files";
+    const step = nextStep(k, perm[k], wasExplained(k), runtime());
+    if (step === "open") openInput(kind); else setAsk({ kind: k, mode: step });
+  };
+  const openInput = (kind: "file" | "camera") => {
     const input = kind === "camera" ? camera.current : picker.current;
     if (!input) return; input.value = "";
     try { input.click(); } catch { setNote(da ? "Kunne ikke åbne vælgeren. Prøv igen, eller vælg et billede via papirclipsen." : "Could not open the picker. Try again or choose a photo with the paperclip."); }
@@ -68,6 +86,9 @@ export function ComposerInput({ lang, text, onText, textareaRef, plan, cap, busy
     <input type="file" ref={camera} accept="image/*" capture="environment" hidden disabled={busy} onChange={e => selected(e.currentTarget)} />
     <div id="composer-count" className={`composer-count meta${count > cap ? " over-limit" : ""}${count >= Math.ceil(cap * COUNT_SHOW_AT) ? "" : " is-quiet"}`} role="status">{count}/{cap}{count > cap ? (retry ? (da ? " – prøv den tidligere afsendelse igen" : " – retry the previous send") : (da ? " – forkort beskeden for at sende" : " – shorten your message to send")) : ""}</div>
     {note && <p className="meta" role="status">{note}</p>}
+    {ask && <PermissionDialog kind={ask.kind} mode={ask.mode} lang={lang} onClose={() => setAsk(null)}
+      onAllow={() => { markExplained(ask.kind); openInput(ask.kind === "camera" ? "camera" : "file"); }}
+      alternative={ask.kind === "camera" ? { label: da ? "Vælg billede i stedet" : "Choose a photo instead", run: () => choose("file") } : undefined} />}
     <dialog className="composer-upgrade" ref={dialog} aria-labelledby="upgrade-title" onCancel={e => { e.preventDefault(); setUpgrade(false); }} onClick={e => { if (e.target === e.currentTarget) setUpgrade(false); }}>
       <h3 id="upgrade-title">{da ? "Vil du dele billeder og filer?" : "Would you like to share photos and files?"}</h3>
       <p>{da ? "Med planen til 79 kr./md. kan du bruge kameraet, sende vedhæftninger og skrive op til 480 tegn pr. besked." : "With the 79 DKK/month plan you can use the camera, send attachments and write up to 480 characters per message."}</p>
