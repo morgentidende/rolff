@@ -10,6 +10,8 @@ import { MessageBubble, ReplyComposer, type Message } from "./MessageBubble";
 import { Toast, showToast } from "./toast";
 import { ConfirmHost, confirmDialog } from "./confirmDialog";
 import { PolicyView } from "./PolicyView";
+import { onDeepLink } from "./native/deepLinks";
+import { isNative } from "./native/platform";
 import { rectOf, useAnchoredPlacement, visibleViewport } from "./anchoredPosition";
 import type React from "react";
 import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
@@ -87,17 +89,27 @@ export function App() {
         : (da ? "Invitationen kunne ikke bruges. Den kan være udløbet, brugt eller sendt til en anden e-mail. Er der kommet en ny deltager i samtalen, skal den også godkende – så får du en ny mail med et nyt link." : "The invitation could not be used. It may be expired, used, or meant for another email. If someone new joined the conversation, they must approve too – you will then get a new email with a new link."));
     });
   }, [session, inviteToken]);
-  useEffect(() => {
-    const q = new URLSearchParams(location.search), type = q.get("auth"), th = q.get("th");
-    if (!type || !th) return;
-    history.replaceState(history.state, "", location.pathname);
+  const authLink = (type: string, th: string) => {
     if (type !== "recovery" && type !== "email_change") return;
     supabase.auth.verifyOtp({ token_hash: th, type }).then(({ error }) => {
       if (error) { setInviteMsg(da ? "Linket er ugyldigt eller udløbet. Bed om et nyt." : "The link is invalid or expired. Request a new one."); return; }
       if (type === "recovery") setSheet("newpw");
       else setInviteMsg(da ? "Bekræftet. Din e-mail er skiftet." : "Confirmed. Your email has been changed.");
     });
+  };
+  const authLinkRef = useRef(authLink); authLinkRef.current = authLink;
+  useEffect(() => {
+    const q = new URLSearchParams(location.search), type = q.get("auth"), th = q.get("th");
+    if (!type || !th) return;
+    history.replaceState(history.state, "", location.pathname);
+    authLink(type, th);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Links that arrive while Rolff is already open: a new #invite= in this tab, or
+  // (in a wrapped app) a Universal/App Link or rolff:// link.
+  useEffect(() => onDeepLink((l) => {
+    if (l.kind === "invite") { sessionStorage.setItem("invite", l.token); setPeek(undefined); setInviteMsg(""); setInviteToken(l.token); }
+    else authLinkRef.current(l.type, l.th);
+  }), []);
   useEffect(() => { if (session) supabase.rpc("touch_seen").then(() => {}); }, [session]);
   useEffect(() => {
     const uid=session?.user.id; if(!uid)return;
@@ -1109,15 +1121,21 @@ function AttachBar({ lang, conv, plan, openPlans, caption, file, setFile, sendRe
 }
 function AttachmentView({ lang, m }: { lang: Lang; m: Msg }) {
   const da = lang === "da"; const [url, setUrl] = useState<string | null>(null); const [err, setErr] = useState(false);
+  useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
   const isPdf = m.att_mime === "application/pdf"; const alt = m.att_alt || (da ? `Vedhæftet billede: ${m.att_name}` : `Attached image: ${m.att_name}`);
   const open = async () => {
     const { data, error } = await supabase.rpc("get_attachment", { p_message: m.id });
     if (error || !data?.[0]) { setErr(true); return; }
     const bin = atob(data[0].data_b64); const b = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
-    const u = URL.createObjectURL(new Blob([b], { type: data[0].mime })); if (isPdf) window.open(u, "_blank", "noopener"); else setUrl(u);
+    // No window.open: popups are blocked after an await and inside a wrapped app.
+    // The PDF gets explicit "Open" / "Save" links that the user taps themselves.
+    const u = URL.createObjectURL(new Blob([b], { type: data[0].mime })); setUrl(u);
   };
   return (<div className="att">
-    {url ? <img src={url} alt={alt} style={{ maxWidth: "100%", borderRadius: 8 }} />
+    {url && isPdf ? <p className="row att-pdf" style={{ margin: "4px 0" }}>
+        <a className="button ghost" href={url} target="_blank" rel="noopener noreferrer">{da ? `Åbn PDF: ${m.att_name}` : `Open PDF: ${m.att_name}`}</a>
+        <a className="button ghost" href={url} download={m.att_name || "rolff.pdf"}>{da ? "Gem PDF" : "Save PDF"}</a></p>
+      : url ? <img src={url} alt={alt} style={{ maxWidth: "100%", borderRadius: 8 }} />
       : <button className="ghost" onClick={open}>{isPdf ? (da ? `Åbn PDF: ${m.att_name} (${m.att_pages} s.)` : `Open PDF: ${m.att_name} (${m.att_pages} p.)`) : (da ? `Vis billede: ${m.att_name}` : `Show image: ${m.att_name}`)}</button>}
     {err && <p className="meta" role="alert">{da ? "Vedhæftningen kunne ikke hentes." : "Could not load the attachment."}</p>}
   </div>);
@@ -1173,7 +1191,7 @@ function InstallPrompt({ lang }: { lang: Lang }) {
   const da = lang === "da"; const [, re] = useState(0); const [hide, setHide] = useState(false);
   useEffect(() => { const f = () => re((x) => x + 1); a2hsListeners.add(f); return () => { a2hsListeners.delete(f); }; }, []);
   const standalone = window.matchMedia?.("(display-mode: standalone)").matches || (navigator as any).standalone === true;
-  const kind = a2hsPlatform(navigator.userAgent, standalone, !!deferredPrompt);
+  const kind = isNative() ? "none" : a2hsPlatform(navigator.userAgent, standalone, !!deferredPrompt);
   if (hide || kind === "none" || !shouldAsk(localStorage.getItem(A2HS_KEY), Date.now())) return null;
   const later = () => { localStorage.setItem(A2HS_KEY, `later:${Date.now()}`); setHide(true); };
   const never = () => { localStorage.setItem(A2HS_KEY, "never"); setHide(true); };
