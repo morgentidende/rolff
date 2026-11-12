@@ -14,7 +14,7 @@ test('Home → Privatlivspolitik opens in-app (Danish) → Back returns to Home,
     const v = d.querySelector('.docview'); assert.ok(v, 'in-app policy screen'); assert.equal(opened.length, 0, 'no new window/tab');
     assert.equal(v.getAttribute('aria-label'), 'Privatlivspolitik'); assert.ok(v.querySelector('[aria-label="Tilbage"]'));
     const t = v.querySelector('.policy').textContent;
-    assert.match(t, /Sidst opdateret: 9\. november 2026/); assert.match(t, /UDKAST – skal gennemgås af jurist\/DPO/);
+    assert.match(t, /Sidst opdateret: 12\. november 2026/); assert.match(t, /UDKAST – skal gennemgås af jurist\/DPO/);
     assert.ok(!/English below|Privacy policy \(English\)|← Rolff/.test(t)); assert.ok(!v.querySelector('.policy script, .policy style, .policy img, .policy [style], .policy [onclick]'));
     assert.equal(w.history.state.__rolffBack.kind, 'guard'); assertPrivateHistory(w);
     await back(w);

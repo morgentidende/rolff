@@ -1,3 +1,5 @@
+import { PushSettings } from "./PushSettings";
+import { setPushOwner } from "./push";
 import { BlockingLists } from "./BlockingLists";
 import { setReloadBlocked } from "./versionCheck";
 import { resetBackNavigation, useBackLayer, useBackNavigationRoot, usePanelState } from "./backNavigation";
@@ -45,7 +47,7 @@ function readInviteToken(): string | null {
   return sessionStorage.getItem("invite");
 }
 
-type Sheet = "members" | "privacy" | "words" | null | "lang" | "theme" | "times" | "faq" | "feedback" | "invite" | "export" | "addMember" | "report" | "account" | "newpw" | "plans";
+type Sheet = "notifications" | "members" | "privacy" | "words" | null | "lang" | "theme" | "times" | "faq" | "feedback" | "invite" | "export" | "addMember" | "report" | "account" | "newpw" | "plans";
 export type MenuItem = { label: string; run: () => void; danger?: boolean; divider?: boolean };
 
 export function App() {
@@ -70,7 +72,7 @@ export function App() {
   }, [theme]);
   useEffect(() => {
     let uid:string|null=null, active=true, observed=0;
-    const apply=(s:Session|null)=>{if(!active)return;const next=s?.user.id??null;setReceiveTimezoneUser(next);if(uid!==next){resetBackNavigation();setConv(null);resetSheet();setRenameContacts(null);uid=next;}setSession(s);};
+    const apply=(s:Session|null)=>{if(!active)return;const next=s?.user.id??null;setReceiveTimezoneUser(next);setPushOwner(s?{id:s.user.id,token:s.access_token}:null);if(uid!==next){resetBackNavigation();setConv(null);resetSheet();setRenameContacts(null);uid=next;}setSession(s);};
     const { data } = supabase.auth.onAuthStateChange((event, s) => {if(event==="INITIAL_SESSION"&&observed)return;observed++;apply(s);});
     const start=observed;
     supabase.auth.getSession().then(({ data }) => {if(observed===start)apply(data.session);});
@@ -122,6 +124,7 @@ export function App() {
     { label: t.lang, run: () => setSheet("lang") },
     { label: t.theme, run: () => setSheet("theme") },
     { label: t.windows, run: () => setSheet("times") },
+    { label: da ? "Notifikationer" : "Notifications", run: () => setSheet("notifications") },
     { label: "FAQ", run: () => setSheet("faq") },
     { label: da ? "Abonnement" : "Plan", run: () => setSheet("plans") },
     { label: da ? "Konto (e-mail og adgangskode)" : "Account (email and password)", run: () => setSheet("account") },
@@ -130,7 +133,7 @@ export function App() {
     { label: da ? "Privatlivspolitik" : "Privacy policy", run: () => setPolicyOpen(true) },
     { label: "Feedback", run: () => setSheet("feedback") },
     { label: da ? "Inviter person" : "Invite person", run: () => setSheet("invite") },
-    { label: t.logout, run: () => { resetBackNavigation(); setConv(null); resetSheet(); cacheClear().finally(() => supabase.auth.signOut()); }, danger: true },
+    { label: t.logout, run: () => { setPushOwner(null); resetBackNavigation(); setConv(null); resetSheet(); cacheClear().finally(() => supabase.auth.signOut()); }, danger: true },
   ];
   const close = () => setSheet(null);
   // All sheets from the ⋮ menu open as a card under the ⋮ button at the top, like "Tilføj person".
@@ -149,11 +152,13 @@ export function App() {
       <div className="notice" role="note">{t.testNotice}</div>
       {inviteMsg && <div className="notice" role="status">{inviteMsg}</div>}
       {session && !conv && <InstallPrompt lang={lang} />}
+      {session && !conv && !sheet && <PushSettings key={`push-offer:${session.user.id}`} uid={session.user.id} lang={lang} onboarding />}
       {!session ? <Auth lang={lang} peek={inviteToken ? peek : undefined} />
         : conv ? <Chat session={session} key={session.user.id} lang={lang} conv={conv} rename={setRenameContacts} back={() => setConv(null)} openPlans={() => setSheet("plans")} planKey={sheet} menuButtonRef={menuButtonRef} />
         : <Home key={`home:${session.user.id}`} refreshKey={homeKey} lang={lang} open={setConv} rename={setRenameContacts} invite={() => setSheet("invite")} />}
       {sheet === "lang" && <SheetView title={t.lang} close={close} lang={lang} anchor={menuButtonRef}><Choice name="lang" value={lang} set={(v) => setLang(v as Lang)} opts={[["da", "Dansk"], ["en", "English"]]} /></SheetView>}
       {sheet === "theme" && <SheetView title={t.theme} close={close} lang={lang} anchor={menuButtonRef}><Choice name="theme" value={theme} set={setTheme} opts={[["dark", t.dark], ["light", t.light], ["system", t.system]]} /></SheetView>}
+      {sheet === "notifications" && session && <SheetView title={da ? "Notifikationer" : "Notifications"} close={close} lang={lang} anchor={menuButtonRef}><PushSettings key={`push-settings:${session.user.id}`} uid={session.user.id} lang={lang} /></SheetView>}
       {sheet === "times" && <SheetView title={t.windows} close={close} lang={lang} anchor={menuButtonRef}><ReceiveSettings key={session?.user.id??"anonymous"} lang={lang} /></SheetView>}
       {sheet === "plans" && <SheetView title={da ? "Abonnement" : "Plan"} close={close} lang={lang} anchor={menuButtonRef}><Plans lang={lang} /></SheetView>}
       {sheet === "faq" && <SheetView title="FAQ" close={close} lang={lang} anchor={menuButtonRef}><Faq lang={lang} /></SheetView>}
@@ -230,6 +235,7 @@ function Faq({ lang }: { lang: Lang }) {
   const qa: [string, string][] = da ? [
     ["Kan den anden se, om jeg har læst en besked eller er online?", "Nej. Rolff har ingen læsekvitteringer, ingen online-status og ingen “skriver…”-indikator."],
     ["Hvad gør AI-tonetjekket?", "Før en besked sendes, vurderer en AI-tjeneste tonen. Bliver den afvist, leveres den ikke. Har beskeden et konkret legitimt praktisk ønske, kan du få et valgfrit omformuleringsforslag; ellers kun vejledning (ikke sendbar). Beskeden og korte uddrag (højst 300 tegn) af op til 5 tidligere beskeder sendes til tjenesten. I testen: kun opdigtede beskeder."],
+    ["Kan jeg få notifikationer?", "Notifikationer er slået fra, indtil du selv slår dem til. Du kan vælge Ja eller Ikke nu på oversigten og ændre valget under ⋮ → Notifikationer. Der vises kun en neutral besked, ingen afsender eller beskedtekst. På iPhone/iPad kræves iOS/iPadOS 16.4+ og hjemmeskærm-installation. Aktuelle modtagetider kontrolleres, når afsendelsen sættes i gang. En afsendelse, der allerede er sat i gang, kan stadig nå frem efter ændring af tider eller fravalg. Telefon og netværk kan forsinke eller undlade visning. Ingen garanti for præcist tidspunkt."],
     ["Hvad er modtagetider?", "Du kan vælge, hvornår på ugen nye beskeder når frem til dig. Beskeder, der kommer uden for dine tider, venter, til næste modtagetid – eller til du selv trykker “Modtag beskeder nu”."],
     ["Hvordan kommer man ind i en samtale?", "Kun via invitation på e-mail. Ekstra deltagere (fx advokat eller sagsbehandler) får først adgang, når alle i samtalen har godkendt, og de ser ingen beskeder fra før, de kom med."],
     ["Hvem kan se og skrive i samtalen?", "Under ⋮ → “Deltagere og roller” ser du alle deltagere og deres rolle: Part, Læse og skrive eller Kun læse. Parterne kan fjerne ekstra deltagere eller gøre en skrivende deltager til kun læse. Skriveadgang kræver en ny invitation, som alle parter godkender. Alle kan forlade samtalen."],
@@ -247,6 +253,7 @@ function Faq({ lang }: { lang: Lang }) {
   ] : [
     ["Can the other person see if I read a message or am online?", "No. Rolff has no read receipts, no online status and no typing indicator."],
     ["What does the AI tone check do?", "Before a message is sent, an AI service assesses the tone. If rejected, it is not delivered. With a concrete legitimate practical wish you may get an optional rewrite; otherwise guidance only (not sendable). The message and short excerpts (max 300 characters) of up to 5 earlier messages are sent to the service. In the test: synthetic messages only."],
+    ["Can I get notifications?", "Notifications are off unless you turn them on. You can choose Yes or Not now on the overview and change this under ⋮ → Notifications. Only a generic notice is displayed, no sender or message text. iPhone/iPad requires iOS/iPadOS 16.4+ and a Home Screen installation. Current receive times are checked when dispatch is started. A dispatch already started may still arrive after changing times or opting out. Phone and network may delay or omit display. Exact timing is not guaranteed."],
     ["What are receive times?", "You choose when during the week new messages reach you. Messages arriving outside your times wait until the next receive time – or until you tap “Receive messages now”."],
     ["How do people join a conversation?", "Only by e-mail invitation. Extra participants (e.g. a lawyer or caseworker) only get access when everyone in the conversation has approved, and they see no messages from before they joined."],
     ["Who can read and write in the conversation?", "Under ⋮ → “Participants and roles” you see everyone and their role: Party, Read and write or Read only. Parties can remove extra participants or make a writer read only. Write access needs a new invitation approved by all parties. Anyone can leave."],
@@ -309,7 +316,7 @@ function PrivacyPanel({ lang }: { lang: Lang }) {
     if (r.status !== 200) { setState(r.status === 403 ? "wrong" : "err"); return; }
     try { localStorage.clear(); sessionStorage.clear(); if ("caches" in window) for (const k of await caches.keys()) await caches.delete(k);
       const dbs = (indexedDB as any).databases ? await (indexedDB as any).databases() : []; for (const d of dbs) if (d.name) indexedDB.deleteDatabase(d.name); } catch { /* best effort */ }
-    await cacheClear(); await supabase.auth.signOut({ scope: "local" }); location.replace(location.pathname + "?deleted=1");
+    setPushOwner(null); await cacheClear(); await supabase.auth.signOut({ scope: "local" }); location.replace(location.pathname + "?deleted=1");
   };
   return (
     <div className="privacy">

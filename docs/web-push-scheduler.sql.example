@@ -1,0 +1,22 @@
+-- REVIEW/APPROVAL TEMPLATE ONLY. NOT part of an automatic migration. DO NOT RUN yet.
+-- Target ONLY project dubwlbqazbllnwpsqrjv, after release approval and canary verification.
+-- Required installed Supabase extensions: pg_cron, pg_net, vault.
+-- Provision Vault secret 'rolff_push_cron_secret' separately with the same >=32-character
+-- cryptographically random value as Edge PUSH_CRON_SECRET. No secret literals in SQL/git.
+-- WEB_PUSH_ENABLED + DB push_runtime remain off until explicitly enabled for rollout.
+select cron.schedule(
+ 'rolff-web-push-minute', '* * * * *',
+ $scheduler$
+ select net.http_post(
+   url := 'https://dubwlbqazbllnwpsqrjv.supabase.co/functions/v1/notification-dispatch',
+   headers := jsonb_build_object('Content-Type','application/json','x-cron-secret',
+     (select decrypted_secret from vault.decrypted_secrets where name='rolff_push_cron_secret')),
+   body := '{}'::jsonb,
+   timeout_milliseconds := 60000
+ );
+ $scheduler$
+);
+-- Emergency rollback after approval: disable the three gates, then
+-- select cron.unschedule('rolff-web-push-minute');
+-- pg_net briefly holds the decrypted cron token in its queue. Protect DB login access;
+-- this token only authorizes the bounded push worker, not the Supabase service role.
