@@ -90,6 +90,29 @@ export function buildModel(rows: ExportMessage[], meta: ExportMeta): ExportModel
   };
 }
 
+/** Short scope line for e-mails, in the recipient's app language. The PDF itself stays Danish. */
+export function scopeInLang(model: ExportModel, lang: ExportLang): string {
+  const tz = validTimeZone(model.meta.timeZone);
+  const loc = lang === "en" ? "en-GB" : "da-DK";
+  const ld = (iso: string) => {
+    const p = parts(new Date(iso), tz, { day: "numeric", month: "long", year: "numeric" }, loc);
+    return lang === "en" ? `${p.day} ${p.month} ${p.year}` : `${p.day}. ${p.month} ${p.year}`;
+  };
+  if (model.partial) {
+    const a = model.meta.periodFrom ? ld(model.meta.periodFrom) : "start";
+    const b = model.meta.periodTo ? ld(model.meta.periodTo) : (lang === "en" ? "now" : "nu");
+    return lang === "en" ? `Excerpt: ${a} – ${b}` : `Udsnit: ${a} – ${b}`;
+  }
+  const first = model.days[0]?.items[0]?.m.created_at;
+  const lastDay = model.days[model.days.length - 1];
+  const last = lastDay?.items[lastDay.items.length - 1]?.m.created_at;
+  if (first && last) {
+    const r = ld(first) === ld(last) ? ld(first) : `${ld(first)} – ${ld(last)}`;
+    return lang === "en" ? `The whole conversation (${r})` : `Hele samtalen (${r})`;
+  }
+  return lang === "en" ? "The whole conversation" : "Hele samtalen";
+}
+
 export interface PdfDoc {
   internal: { pageSize: { getWidth(): number; getHeight(): number } };
   setFont(name: string, style?: string): unknown; setFontSize(size: number): unknown; getTextWidth(text: string): number;

@@ -3,7 +3,7 @@
 // SHA-256 and e-mails it (default: the account e-mail). Nothing is returned for download.
 // Logs never contain content or recipients.
 import { authed, cors, json } from "../_shared/http.ts";
-import { sendMail } from "../_shared/email.ts";
+import { sendMail, type MailLang } from "../_shared/email.ts";
 import { appUrl } from "../_shared/links.ts";
 import { renderPdf, sha256Hex } from "../_shared/pdf/render.ts";
 import { signPdf, signingKeyFromEnv } from "../_shared/pdf/sign.ts";
@@ -17,6 +17,7 @@ Deno.serve(async (req) => {
   const r = await runConversationExport(a.uid, input, {
     rpc: (n, args) => a.admin.rpc(n, args), render: renderPdf, sha256: sha256Hex, mail: sendMail, appUrl: appUrl(),
     sign: key ? (pdf, id) => signPdf(pdf, key, id) : null,
+    lang: input.lang === "en" || input.lang === "da" ? input.lang as MailLang : undefined,
   });
   const outcome = r.status === 200 ? "sent" : String(r.body.error); // status/error code only, never content
   console.log(`export-conversation: ${outcome}`);

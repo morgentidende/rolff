@@ -9,7 +9,7 @@ import { replyModerationContext } from "../_shared/replyContext.ts";
 import { checkPlanLength, planLengthError } from "../_shared/planLimits.ts";
 import { checkPersonLimits } from "../_shared/limits.ts";
 import { checkRules } from "../_shared/rules.ts";
-import { charCount, moderate, ModerationTechnicalError, providerFromEnv, timeoutFromEnv } from "../_shared/moderation.ts";
+import { charCount, moderate, moderationContract, ModerationTechnicalError, providerFromEnv, resolveSenderLang, timeoutFromEnv } from "../_shared/moderation.ts";
 
 async function sha256Hex(s: string) {
   const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
@@ -81,8 +81,9 @@ Deno.serve(async (req) => {
     return json(hit.rule === "blocked_word" ? { status: "blocked_word", word: hit.word } : { status: "rule", rule: hit.rule }, 200);
   }
 
+  const lang = await resolveSenderLang(input?.lang, async () => (await admin.rpc("locale_of", { p_uid: uid })).data);
   let provider;
-  try { provider = providerFromEnv({ get: (k) => Deno.env.get(k) }); }
+  try { provider = providerFromEnv({ get: (k) => Deno.env.get(k) }, moderationContract(lang)); }
   catch (e) {
     await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "error", p_reason: "config" });
     return json({ status: "technical_error", detail: (e as Error).message === "free_tier_forbidden_in_production" ? "config" : "unavailable" }, 503);

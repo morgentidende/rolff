@@ -14,14 +14,22 @@ export async function verifyExport(f: Fetcher, base: string, key: string, q: { c
   if (r.status === 200 && j?.data?.status) return j.data as VerifyResult;
   return { error: j?.error === "rate_limited" ? "rate_limited" : "failed" };
 }
-const d = (s?: string | null) => s ? new Date(s).toLocaleDateString("da-DK", { day: "numeric", month: "long", year: "numeric" }) : "";
-export function describe(r: VerifyResult): { title: string; tone: "ok" | "info" | "bad"; lines: string[] } {
+export type VerifyLang = "da" | "en";
+const loc = (lang: VerifyLang) => lang === "en" ? "en-GB" : "da-DK";
+const d = (s: string | null | undefined, lang: VerifyLang) => s ? new Date(s).toLocaleDateString(loc(lang), { day: "numeric", month: "long", year: "numeric" }) : "";
+export function describe(r: VerifyResult, lang: VerifyLang = "da"): { title: string; tone: "ok" | "info" | "bad"; lines: string[] } {
+  const en = lang === "en";
   const meta = [
-    r.created_at ? `Udskriften blev lavet ${new Date(r.created_at).toLocaleString("da-DK", { dateStyle: "long", timeStyle: "short" })}.` : "",
-    r.partial ? `Udsnit: ${r.period_from ? d(r.period_from) : "start"} – ${r.period_to ? d(r.period_to) : "nu"}.` : (r.created_at ? "Omfang: hele samtalen (som eksportøren havde adgang til)." : ""),
-    r.message_count != null ? `${r.message_count} beskeder på ${r.page_count ?? "?"} sider.` : "",
+    r.created_at ? (en
+      ? `The transcript was made ${new Date(r.created_at).toLocaleString("en-GB", { dateStyle: "long", timeStyle: "short" })}.`
+      : `Udskriften blev lavet ${new Date(r.created_at).toLocaleString("da-DK", { dateStyle: "long", timeStyle: "short" })}.`) : "",
+    r.partial
+      ? (en ? `Excerpt: ${r.period_from ? d(r.period_from, lang) : "start"} – ${r.period_to ? d(r.period_to, lang) : "now"}.`
+        : `Udsnit: ${r.period_from ? d(r.period_from, lang) : "start"} – ${r.period_to ? d(r.period_to, lang) : "nu"}.`)
+      : (r.created_at ? (en ? "Scope: the whole conversation (as the exporter had access to)." : "Omfang: hele samtalen (som eksportøren havde adgang til).") : ""),
+    r.message_count != null ? (en ? `${r.message_count} messages on ${r.page_count ?? "?"} pages.` : `${r.message_count} beskeder på ${r.page_count ?? "?"} sider.`) : "",
   ].filter(Boolean);
-  if (r.status === "match") return { title: "Ægte og uændret", tone: "ok", lines: ["Filen er præcis den udskrift, Rolff lavede og sendte. Ikke ét tegn er ændret.", ...meta] };
-  if (r.status === "code_valid") return { title: "Koden findes", tone: "info", lines: ["Koden hører til en udskrift fra Rolff. Vælg også PDF-filen for at kontrollere, at netop din fil er uændret.", ...meta] };
-  return { title: "Stemmer ikke", tone: "bad", lines: ["Filen eller koden svarer ikke til en udskrift fra Rolff. Filen kan være ændret, beskåret eller gemt igen af et andet program, eller koden er tastet forkert.", "Bed om at få den oprindelige PDF fra e-mailen."] };
+  if (r.status === "match") return { title: en ? "Genuine and unchanged" : "Ægte og uændret", tone: "ok", lines: [en ? "The file is exactly the transcript Rolff made and sent. Not a single character has been changed." : "Filen er præcis den udskrift, Rolff lavede og sendte. Ikke ét tegn er ændret.", ...meta] };
+  if (r.status === "code_valid") return { title: en ? "The code exists" : "Koden findes", tone: "info", lines: [en ? "The code belongs to a transcript from Rolff. Also choose the PDF file to check that this particular file is unchanged." : "Koden hører til en udskrift fra Rolff. Vælg også PDF-filen for at kontrollere, at netop din fil er uændret.", ...meta] };
+  return { title: en ? "Does not match" : "Stemmer ikke", tone: "bad", lines: [en ? "The file or code does not correspond to a transcript from Rolff. The file may have been changed, cropped or saved again by another programme, or the code was typed incorrectly." : "Filen eller koden svarer ikke til en udskrift fra Rolff. Filen kan være ændret, beskåret eller gemt igen af et andet program, eller koden er tastet forkert.", en ? "Ask to get the original PDF from the e-mail." : "Bed om at få den oprindelige PDF fra e-mailen."] };
 }

@@ -17,3 +17,13 @@ Deno.test("Kun kode og fingeraftryk sendes; svar fortolkes; 429", async () => {
   eq(describe({ status: "mismatch", message_count: 9 }).title, "Stemmer ikke"); eq(describe({ status: "mismatch" }).lines.join(" ").includes("9"), false);
   eq(describe({ status: "code_valid" }).tone, "info");
 });
+
+Deno.test("describe follows da/en", () => {
+  const r = { status: "match" as const, message_count: 3, page_count: 1, created_at: "2026-11-09T10:00:00Z" };
+  eq(describe(r).title, "Ægte og uændret");
+  eq(describe(r, "en").title, "Genuine and unchanged");
+  const en = describe(r, "en").lines.join(" ");
+  if (!en.includes("3 messages on 1 pages") && !en.includes("3 messages")) throw new Error(en);
+  if (/beskeder|Udskriften|sider/.test(en)) throw new Error("Danish leaked: " + en);
+  eq(describe({ status: "mismatch" }, "en").title, "Does not match");
+});

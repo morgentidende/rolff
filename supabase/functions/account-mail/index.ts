@@ -10,7 +10,7 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { crypto as stdCrypto } from "jsr:@std/crypto@1";
 import { authed, cors, json } from "../_shared/http.ts";
-import { recoveryMail, emailChangeMail, sendMail } from "../_shared/email.ts";
+import { recoveryMail, emailChangeMail, sendMail, preferLang, storedLang } from "../_shared/email.ts";
 import { allowed, authLink, EMAIL } from "../_shared/authmail.ts";
 import { appUrl } from "../_shared/links.ts";
 import { checkAddress } from "../_shared/addressCheck.ts";
@@ -31,7 +31,8 @@ Deno.serve(async (req) => {
     if (ok.data === true && allowed(email, env, allow)) {
       const g = await a.auth.admin.generateLink({ type: "recovery", email });
       const h = g.data?.properties?.hashed_token;
-      if (h && !(await sendMail(email, recoveryMail({ link: authLink(app, "recovery", h) })))) console.log(JSON.stringify({ evt: "recovery_mail_failed" }));
+      const lang = preferLang(i?.lang, await storedLang((n, args) => a.rpc(n, args), { uid: g.data?.user?.id, email }));
+      if (h && !(await sendMail(email, recoveryMail({ link: authLink(app, "recovery", h), lang })))) console.log(JSON.stringify({ evt: "recovery_mail_failed" }));
     }
     return json({ data: { ok: true } }); // same answer whether or not the account exists
   }
@@ -57,8 +58,9 @@ Deno.serve(async (req) => {
     if (!otp) return json({ error: /already|exists|registered/i.test(gn.error?.message ?? "") ? "email_taken" : "failed" }, 400);
     // GoTrue stores the new-address token as sha224(new_email + otp); verifyOtp(token_hash) matches on that.
     const th = [...new Uint8Array(await stdCrypto.subtle.digest("SHA-224", new TextEncoder().encode(next + otp)))].map((b) => b.toString(16).padStart(2, "0")).join("");
-    const m2 = await sendMail(next, emailChangeMail({ link: authLink(app, "email_change", th), current: false, newEmail: next }));
-    const m1 = await sendMail(cur, emailChangeMail({ link: "", current: true, newEmail: next }));
+    const lang = preferLang(i?.lang, await storedLang((n, args) => u.admin.rpc(n, args), { uid: u.uid }));
+    const m2 = await sendMail(next, emailChangeMail({ link: authLink(app, "email_change", th), current: false, newEmail: next, lang }));
+    const m1 = await sendMail(cur, emailChangeMail({ link: "", current: true, newEmail: next, lang }));
     if (!m1 || !m2) { console.log(JSON.stringify({ evt: "email_change_mail_failed" })); return json({ error: "mail_failed" }, 502); }
     return json({ data: { sent: true } });
   }

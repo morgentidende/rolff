@@ -1,8 +1,8 @@
 // Court export flow (export-conversation Edge Function). Dependencies are injected so the whole
 // flow is unit-testable without network. The PDF is built ONLY from get_export_messages rows
 // (server-side visibility rules); the request body never carries message content.
-import { buildModel, groupCode, validTimeZone, type ExportMessage } from "./pdf/layout.ts";
-import { exportMail, exportNoticeMail, type MailAttachment } from "./email.ts";
+import { buildModel, groupCode, scopeInLang, validTimeZone, type ExportMessage } from "./pdf/layout.ts";
+import { exportMail, exportNoticeMail, preferLang, storedLang, storedLangIfSet, type MailAttachment, type MailLang } from "./email.ts";
 
 type Rpc = (name: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: { message: string } | null }>;
 export type ExportDeps = {
@@ -12,6 +12,8 @@ export type ExportDeps = {
   sha256: (b: Uint8Array) => Promise<string>;
   mail: (to: string, m: { subject: string; html: string; text: string; attachments?: MailAttachment[] }) => Promise<boolean>;
   appUrl: string;
+  /** Exporter's app language (client or stored). Default da. */
+  lang?: MailLang;
 };
 export type ExportRequest = { conversation_id?: unknown; recipient?: unknown; email?: unknown; from?: unknown; to?: unknown; time_zone?: unknown; confirm?: unknown };
 type Result = { status: number; body: Record<string, unknown> };
@@ -63,10 +65,15 @@ export async function runConversationExport(uid: string, input: ExportRequest, d
   const fin = await deps.rpc("finish_conversation_export", { p_id: b.export_id, p_uid: uid, p_ok: true, p_sha: sha, p_count: model.count, p_pages: pages });
   if (fin.error) return fail(500, "export_failed");
   const code = groupCode(b.verify_code);
-  const mail = exportMail({ exporterEmail: b.exporter_email, toSelf: kind === "self", verifyUrl, code, exportId: b.export_id, scope: model.scope, count: model.count, pages });
+  const exporterLang = preferLang(deps.lang, await storedLang(deps.rpc, { uid }));
+  // A recipient with no Rolff account has no stored language: use the requester's language, not Danish by default.
+  const recipLang = kind === "self" ? exporterLang : ((await storedLangIfSet(deps.rpc, { email: b.recipient })) ?? exporterLang);
+  const recipScope = scopeInLang(model, recipLang);
+  const mail = exportMail({ exporterEmail: b.exporter_email, toSelf: kind === "self", verifyUrl, code, exportId: b.export_id, scope: recipScope, count: model.count, pages, lang: recipLang });
   const day = new Date(b.created_at).toISOString().slice(0, 10);
-  const ok = await deps.mail(b.recipient, { ...mail, attachments: [{ filename: `rolff-udskrift-${day}-${b.verify_code.slice(0, 4)}.pdf`, content_type: "application/pdf", content_b64: b64(signed) }] });
+  const fileStem = recipLang === "en" ? "rolff-transcript" : "rolff-udskrift";
+  const ok = await deps.mail(b.recipient, { ...mail, attachments: [{ filename: `${fileStem}-${day}-${b.verify_code.slice(0, 4)}.pdf`, content_type: "application/pdf", content_b64: b64(signed) }] });
   if (!ok) { await deps.rpc("mark_conversation_export_failed", { p_id: b.export_id, p_uid: uid }); return err(502, "mail_failed"); }
-  if (kind === "other") await deps.mail(b.exporter_email, exportNoticeMail({ recipient: b.recipient, exportId: b.export_id, scope: model.scope, count: model.count }));
+  if (kind === "other") await deps.mail(b.exporter_email, exportNoticeMail({ recipient: b.recipient, exportId: b.export_id, scope: scopeInLang(model, exporterLang), count: model.count, lang: exporterLang }));
   return { status: 200, body: { status: "sent", recipient: b.recipient, export_id: b.export_id, verify_code: code, pages, message_count: model.count } };
 }

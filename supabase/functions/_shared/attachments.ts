@@ -1,6 +1,6 @@
 // Attachment checks + AI moderation of files. Pure module (no Supabase deps), runs in Deno & tests.
 // Never log file content, transcripts or captions.
-import { ContextMsg, ModerationTechnicalError, REASON_CODES, SYSTEM_PROMPT, contextFields, sanitizeSuggestion, sanitizeExplanation, DECISIONS, RESPONSE_SCHEMA, validateDecisionContract, type Decision } from "./moderation.ts";
+import { ContextMsg, ModerationTechnicalError, REASON_CODES, systemPromptForLang, appLang, type AppLang, contextFields, sanitizeSuggestion, sanitizeExplanation, DECISIONS, RESPONSE_SCHEMA, validateDecisionContract, type Decision } from "./moderation.ts";
 
 export const MAX_BYTES = 4 * 1024 * 1024, MAX_PAGES = 5;
 export type AttMime = "image/png" | "image/jpeg" | "image/webp" | "image/gif" | "application/pdf";
@@ -50,7 +50,7 @@ export const FILE_REASON_CODES = [...REASON_CODES, "inappropriate_image"] as con
 export type FileReason = typeof FILE_REASON_CODES[number];
 export interface FileResult { decision: Decision; reason_code: FileReason; spans: string[]; transcript: string; suggestion: string; explanation: string }
 
-export const FILE_PROMPT = `${SYSTEM_PROMPT}
+const FILE_MODE = `
 
 FILE MODE: The NEW MESSAGE is an attached image (screenshot/photo) or PDF plus an optional caption and file name. Apply exactly the same rules to ALL text visible in the file (every page, every line, including screenshots of other apps such as school portals) and to the caption and file name. A file is blocked if ANY single line is a problem, even if the rest is friendly. Text in ALL CAPS or repeated many times to shout or pressure counts as aggression.
 Also BLOCK with reason_code "inappropriate_image" if the image itself (not its text) is inappropriate for a co-parenting/conflict chat: obscene or insulting gestures, nudity or sexual content, gore or violence, degrading or mocking pictures of a person, hateful symbols. Ordinary photos, documents, calendars, receipts and neutral screenshots are allowed. A photo with no visible text is NOT unclear merely because transcript is empty. Apply the base understandability rule to the intended caption/visible message: unfamiliar file names or identifiers alone are not unclear. Recognizable harmful image/text takes priority over clarification.
@@ -58,6 +58,10 @@ Add a field "transcript": the visible text of the file copied verbatim (max 4000
 When you BLOCK, set "suggestion" as in the base rules: only a short constructive rewrite of a concrete legitimate practical wish from caption/visible text; otherwise "". For inappropriate_image with no usable text wish, set "suggestion" to "".
 Set "explanation" as in the base rules (about this file/caption's effect; for inappropriate_image describe the kind of image problem in general terms, never describe body parts or quote text).
 Respond ONLY with JSON: {"decision","reason_code" (one of ${FILE_REASON_CODES.join("|")}),"spans","transcript","suggestion","explanation"}.`;
+export function filePromptForLang(lang: AppLang = "da"): string {
+  return `${systemPromptForLang(appLang(lang))}${FILE_MODE}`;
+}
+export const FILE_PROMPT = filePromptForLang("da");
 
 export function buildFilePayload(caption: string, name: string, ctx: ContextMsg[]): string {
   return JSON.stringify({
@@ -107,14 +111,14 @@ export function b64(b: Uint8Array): string {
 }
 
 /** OpenAI Responses API with input_image / input_file, store:false. Returns raw JSON text + token usage. */
-export async function openaiFileModerate(o: { apiKey: string; model: string; baseUrl: string }, f: { mime: AttMime; bytes: Uint8Array; name: string },
+export async function openaiFileModerate(o: { apiKey: string; model: string; baseUrl: string; prompt?: string }, f: { mime: AttMime; bytes: Uint8Array; name: string },
   caption: string, ctx: ContextMsg[], signal: AbortSignal): Promise<{ raw: string; usage: { input: number; output: number } }> {
   const dataUrl = `data:${f.mime};base64,${b64(f.bytes)}`;
   const part = f.mime === "application/pdf" ? { type: "input_file", filename: "document.pdf", file_data: dataUrl } : { type: "input_image", image_url: dataUrl, detail: "high" };
   const r = await fetch(`${o.baseUrl.replace(/\/+$/, "")}/responses`, {
     method: "POST", signal, headers: { "content-type": "application/json", authorization: `Bearer ${o.apiKey}` },
     body: JSON.stringify({
-      model: o.model, store: false, instructions: FILE_PROMPT,
+      model: o.model, store: false, instructions: o.prompt ?? FILE_PROMPT,
       input: [{ role: "user", content: [{ type: "input_text", text: buildFilePayload(caption, f.name, ctx) }, part] }],
       text: { format: { type: "json_schema", name: "file_moderation", strict: true, schema: FILE_RESPONSE_SCHEMA } },
     }),

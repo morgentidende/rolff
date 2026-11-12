@@ -12,3 +12,10 @@ Deno.test("advarselsmail uden indhold", () => {
   assertEquals(/besked:|body/i.test(m.text), false);
   assert(m.text.includes("14 dage"));
 });
+
+Deno.test("advarselsmail på engelsk er stadig uden indhold", () => {
+  const m = inactivityMail({ link: "https://x", lang: "en" });
+  assertEquals(/besked:|body/i.test(m.text), false);
+  assert(m.text.includes("14 days"));
+  assert(m.html.startsWith('<!doctype html><html lang="en">'));
+});

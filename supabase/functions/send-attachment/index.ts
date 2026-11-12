@@ -11,8 +11,8 @@ import { replyModerationContext } from "../_shared/replyContext.ts";
 import { planLengthError } from "../_shared/planLimits.ts";
 import { checkPersonLimits } from "../_shared/limits.ts";
 import { checkRules, findBlockedWord } from "../_shared/rules.ts";
-import { charCount, ModerationTechnicalError, prefilter, timeoutFromEnv } from "../_shared/moderation.ts";
-import { checkFile, cleanName, MAX_BYTES, openaiFileModerate, validateFileResult } from "../_shared/attachments.ts";
+import { charCount, ModerationTechnicalError, prefilter, resolveSenderLang, timeoutFromEnv } from "../_shared/moderation.ts";
+import { checkFile, cleanName, filePromptForLang, MAX_BYTES, openaiFileModerate, validateFileResult } from "../_shared/attachments.ts";
 
 const hex = (b: ArrayBuffer) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, "0")).join("");
 const sha = async (d: Uint8Array | string) => hex(await crypto.subtle.digest("SHA-256", (typeof d === "string" ? new TextEncoder().encode(d) : d) as BufferSource));
@@ -93,6 +93,7 @@ Deno.serve(async (req) => {
   }
 
   // Files need a provider that accepts images/PDF: OpenAI only. Anything else fails closed.
+  const lang = await resolveSenderLang(input?.lang, async () => (await admin.rpc("locale_of", { p_uid: uid })).data);
   const apiKey = Deno.env.get("OPENAI_API_KEY"); const base = Deno.env.get("OPENAI_BASE_URL") ?? "https://eu.api.openai.com/v1";
   const model = Deno.env.get("OPENAI_MODEL") ?? "gpt-6-luna";
   if (Deno.env.get("MODERATION_PROVIDER") !== "openai" || !apiKey || !/^https:\/\/([a-z0-9-]+\.)*openai\.com\/v1\/?$/.test(base)) {
@@ -102,7 +103,7 @@ Deno.serve(async (req) => {
   const t0 = Date.now(); const ac = new AbortController(); const timer = setTimeout(() => ac.abort(), Math.max(timeoutFromEnv({ get: (k) => Deno.env.get(k) }), 30000));
   let res, usage;
   try {
-    const out = await openaiFileModerate({ apiKey, model, baseUrl: base }, { mime: fc.mime, bytes, name }, caption, modCtx, ac.signal);
+    const out = await openaiFileModerate({ apiKey, model, baseUrl: base, prompt: filePromptForLang(lang) }, { mime: fc.mime, bytes, name }, caption, modCtx, ac.signal);
     usage = out.usage; res = validateFileResult(out.raw, caption);
   } catch (e) {
     const kind = e instanceof ModerationTechnicalError ? e.message : ac.signal.aborted ? "timeout" : "provider_error";
