@@ -1,6 +1,6 @@
 // Luna's sender-facing block explanation. Synthetic text only; providers are mocked (no network).
 import { assertEquals } from "jsr:@std/assert@1";
-import { EXPLANATION_MAX, moderate, OpenAIProvider, prefilter, RESPONSE_SCHEMA, sanitizeExplanation, SYSTEM_PROMPT, validateResult } from "../../supabase/functions/_shared/moderation.ts";
+import { EXPLANATION_MAX, FALLBACK_EXPLANATION, moderate, OpenAIProvider, prefilter, resolveSenderLang, RESPONSE_SCHEMA, sanitizeExplanation, SYSTEM_PROMPT, systemPromptForLang, validateResult } from "../../supabase/functions/_shared/moderation.ts";
 import { FILE_PROMPT, FILE_RESPONSE_SCHEMA, validateFileResult } from "../../supabase/functions/_shared/attachments.ts";
 
 const MSG = "Du skal hente hende kl. 16, punktum.";
@@ -72,5 +72,35 @@ Deno.test("end-to-end with mocked OpenAI: same single call, explanation returned
     const r = await moderate(new OpenAIProvider("sk-test", "m"), MSG, []);
     assertEquals(r.explanation, EXPL); assertEquals(r.decision, "block"); assertEquals(calls, 1);
     assertEquals(schema.required.includes("explanation"), true); assertEquals(schema.additionalProperties, false);
+  } finally { globalThis.fetch = orig; }
+});
+
+Deno.test("systemPromptForLang follows the sender app language, not the message language", () => {
+  const da = systemPromptForLang("da"), en = systemPromptForLang("en");
+  if (!da.includes("APP LANGUAGE: Danish") || !en.includes("APP LANGUAGE: English")) throw new Error("lang line");
+  if (en.includes("APP LANGUAGE: Danish")) throw new Error("en prompt still Danish");
+  if (!da.includes("even if the NEW MESSAGE is in another language") || !en.includes("even if the NEW MESSAGE is in another language")) throw new Error("must ignore message language");
+  if (!SYSTEM_PROMPT.includes("in the sender's APP LANGUAGE")) throw new Error("base prompt");
+  if (SYSTEM_PROMPT === en) throw new Error("default prompt should not already be English");
+});
+Deno.test("resolveSenderLang prefers the client value, then stored, then da", async () => {
+  const stored = async () => "en";
+  if (await resolveSenderLang("da", stored) !== "da") throw new Error("client da");
+  if (await resolveSenderLang("en", async () => "da") !== "en") throw new Error("client en");
+  if (await resolveSenderLang(undefined, stored) !== "en") throw new Error("stored");
+  if (await resolveSenderLang("fr", stored) !== "en") throw new Error("garbage uses stored");
+  if (await resolveSenderLang(undefined, async () => { throw new Error("x"); }) !== "da") throw new Error("error");
+  if (FALLBACK_EXPLANATION.da.includes("sårende") === false || !FALLBACK_EXPLANATION.en.includes("hurtful")) throw new Error("fallback");
+});
+Deno.test("mocked OpenAI is constructed with the English explanation prompt when asked", async () => {
+  const orig = globalThis.fetch; let prompt = "";
+  globalThis.fetch = (async (_u: string, init: any) => {
+    prompt = JSON.parse(init.body).messages[0].content;
+    return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ decision: "block", reason_code: "controlling_demand", spans: ["Du skal"], suggestion: "", explanation: "This may come across as a command." }) } }] }), { status: 200 });
+  }) as any;
+  try {
+    const r = await moderate(new OpenAIProvider("sk-test", "m", "https://eu.api.openai.com/v1", { prompt: systemPromptForLang("en"), schema: RESPONSE_SCHEMA }), MSG, []);
+    if (!prompt.includes("APP LANGUAGE: English")) throw new Error(prompt.slice(-200));
+    if (r.explanation !== "This may come across as a command.") throw new Error("expl");
   } finally { globalThis.fetch = orig; }
 });

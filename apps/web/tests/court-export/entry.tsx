@@ -14,6 +14,6 @@ QA.mount = (mode: string, opt: any = {}) => {
     const ev: ConvEvent[] = [{ id: "e1", kind: "export", actor_label: "Mor (alias)", mine: false, created_at: "2026-11-06T08:30:00Z" }, { id: "e2", kind: "export", actor_label: "a@x.test", mine: true, created_at: "2026-11-06T10:00:00Z" }];
     root.render(<div>{msgs.map((m, i) => <div key={m.id}>{eventsBefore(ev, msgs, i).map((e) => <EventNotice key={e.id} e={e} lang="da" />)}<p className="msg">{m.id}</p></div>)}{eventsBefore(ev, msgs, msgs.length).map((e) => <EventNotice key={e.id} e={e} lang="da" />)}</div>);
   }
-  if (mode === "verify") root.render(<VerifyPage initialCode={opt.code ?? ""} run={async (q) => { QA.calls.push({ name: "verify", body: q }); return opt.result; }} />);
+  if (mode === "verify") root.render(<VerifyPage initialCode={opt.code ?? ""} initialLang={opt.lang ?? "da"} run={async (q) => { QA.calls.push({ name: "verify", body: q }); return opt.result; }} />);
 };
 QA.unmount = () => root.unmount();

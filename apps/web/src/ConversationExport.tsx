@@ -40,7 +40,7 @@ export function ConversationExport({ lang, conv, plan, ownEmail, openPlans, call
   const scopeText = scope === "all" ? (da ? "Hele samtalen" : "Whole conversation") : `${da ? "Udsnit" : "Excerpt"}: ${from || (da ? "start" : "start")} – ${to || (da ? "nu" : "now")}`;
   const send = async () => {
     setBusy(true); setMsg(null);
-    let r; try { r = await call("export-conversation", { conversation_id: conv, recipient: who, email: who === "other" ? recipient : null, from: scope === "period" ? from || null : null, to: scope === "period" ? to || null : null, time_zone: deviceZone(), confirm: true }); } catch { r = { status: 0, data: null }; }
+    let r; try { r = await call("export-conversation", { conversation_id: conv, recipient: who, email: who === "other" ? recipient : null, from: scope === "period" ? from || null : null, to: scope === "period" ? to || null : null, time_zone: deviceZone(), confirm: true, lang }); } catch { r = { status: 0, data: null }; }
     setBusy(false);
     if (r.status === 200) { setStep("done"); setMsg({ ok: true, text: da ? `Udskriften er sendt til ${r.data?.data?.recipient ?? recipient}. Verifikationskode: ${r.data?.data?.verify_code ?? ""}` : `The transcript was sent to ${r.data?.data?.recipient ?? recipient}.` }); }
     else { const e = ERR[r.data?.error as string]; setMsg({ ok: false, text: e ? e[da ? 0 : 1] : (da ? "Udskriften kunne ikke laves. Prøv igen." : "The transcript could not be created.") }); if (r.data?.error === "plan_required") openPlans(); }

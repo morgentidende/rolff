@@ -60,6 +60,7 @@ export function App() {
   useEffect(() => { setRenameContacts(null); }, [session?.user.id]);
   const t = strings[lang]; const da = lang === "da";
   useEffect(() => { localStorage.setItem("lang", lang); document.documentElement.lang = lang; }, [lang]);
+  useEffect(() => { if (session) void supabase.rpc("set_my_locale", { p_locale: lang }); }, [session, lang]);
   useEffect(() => {
     localStorage.setItem("theme", theme);
     const apply = () => { const dark = theme === "dark" || (theme === "system" && matchMedia("(prefers-color-scheme: dark)").matches); document.documentElement.dataset.theme = dark ? "dark" : "light"; };
@@ -447,7 +448,7 @@ function Auth({ lang, peek }: { lang: Lang; peek?: Peek | null }) {
   const [err, setErr] = useState(""); const [busy, setBusy] = useState(false);
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setErr("");
-    if (mode === "forgot") { setBusy(true); try { await callFn("account-mail", { action: "recover", email }); } catch { /* same message */ } setBusy(false); setSent(true); return; }
+    if (mode === "forgot") { setBusy(true); try { await callFn("account-mail", { action: "recover", email, lang }); } catch { /* same message */ } setBusy(false); setSent(true); return; }
     if (mode === "signup" && !passwordsMatch(pw, pw2)) { setErr(pwText[lang].mismatch); return; }
     setBusy(true);
     const r = mode === "login" ? await supabase.auth.signInWithPassword({ email, password: pw })
@@ -750,7 +751,7 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
     const keyStore = `idem:${conv.id}`;
     const saved = { text, reply: reply?.id ?? null, key: retryKey ?? crypto.randomUUID() };
     localStorage.setItem(keyStore, JSON.stringify(saved));
-    let r; try { r = await callFn("send-message", { conversation_id: conv.id, body: text, reply_to_id: reply?.id ?? null, idempotency_key: saved.key }); } catch { r = { status: 0, data: null }; }
+    let r; try { r = await callFn("send-message", { conversation_id: conv.id, body: text, reply_to_id: reply?.id ?? null, idempotency_key: saved.key, lang }); } catch { r = { status: 0, data: null }; }
     setBusy(false);
     if (r.status === 200 && r.data?.status === "accepted") { setText(""); setReply(null); localStorage.removeItem(draftKey); localStorage.removeItem(replyKey); localStorage.removeItem(keyStore); setStatus({ kind: "accepted" }); setAcceptedSeq((x) => x + 1); armFlash(r.data?.message_id); load(); }
     else if (r.status === 200 && r.data?.status === "clarification_required") setStatus({ kind: "clarification" });
@@ -982,7 +983,7 @@ function AccountPanel({ lang }: { lang: Lang }) {
   };
   const changeEmail = async (e: React.FormEvent) => {
     e.preventDefault(); setEMsg(null); setBusy(true);
-    let r; try { r = await callFn("account-mail", { action: "change_email", password: ep, new_email: ne }); } catch { r = { status: 0, data: null as any }; }
+    let r; try { r = await callFn("account-mail", { action: "change_email", password: ep, new_email: ne, lang }); } catch { r = { status: 0, data: null as any }; }
     setBusy(false);
     const err = r.data?.error;
     setEMsg(r.status === 200 ? [true, da ? `Vi har sendt et bekræftelseslink til ${ne}. E-mailen skiftes, når du trykker på linket. ${email} får besked om ændringen.` : `We sent a confirmation link to ${ne}. The email changes when you open it. ${email} is notified.`]
@@ -1081,7 +1082,7 @@ function AttachBar({ lang, conv, plan, openPlans, caption, file, setFile, sendRe
     let buf: Uint8Array;
     try { buf = new Uint8Array(await file.arrayBuffer()); } catch { setBusy(false); onBusy(false); setOut({ ok: false, text: da ? "Filen kunne ikke læses. Vælg den igen." : "Could not read the file. Please select it again." }); return; }
     let bin = ""; for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
-    let r; try { r = await callFn("send-attachment", { conversation_id: conv, idempotency_key: crypto.randomUUID(), file_b64: btoa(bin), file_name: file.name, reply_to_id: replyTo, caption: caption.trim(), alt: alt.trim() }); } catch { r = { status: 0, data: null as any }; }
+    let r; try { r = await callFn("send-attachment", { conversation_id: conv, idempotency_key: crypto.randomUUID(), file_b64: btoa(bin), file_name: file.name, reply_to_id: replyTo, caption: caption.trim(), alt: alt.trim(), lang }); } catch { r = { status: 0, data: null as any }; }
     setBusy(false); onBusy(false); const d = r.data ?? {};
     if (r.status === 200 && d.status === "accepted") { setFile(null); setAlt(""); setOut({ ok: true, text: da ? "Vedhæftningen er sendt." : "Attachment sent." }); sent(typeof d.message_id === "string" ? d.message_id : undefined); }
     else if (limitMsg(d)) setOut({ ok: false, text: limitMsg(d)! });

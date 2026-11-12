@@ -4,6 +4,22 @@ const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&
 export type MailLang = "da" | "en";
 /** Only "da" or "en" are accepted; anything else (missing, garbage) falls back to Danish. */
 export const mailLang = (v: unknown): MailLang => v === "en" ? "en" : "da";
+/** First explicit da/en wins; otherwise Danish. */
+export const preferLang = (...cands: unknown[]): MailLang => {
+  for (const c of cands) if (c === "en" || c === "da") return c;
+  return "da";
+};
+/** Look up a stored profile language (locale_of / locale_for_email). Errors and missing rows -> da. */
+export async function storedLang(
+  rpc: (name: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown }>,
+  args: { uid?: string; email?: string },
+): Promise<MailLang> {
+  try {
+    if (args.uid) return mailLang((await rpc("locale_of", { p_uid: args.uid })).data);
+    if (args.email) return mailLang((await rpc("locale_for_email", { p_email: args.email })).data);
+  } catch { /* default da */ }
+  return "da";
+}
 const fmt = (d: string, lang: MailLang = "da") => new Date(d).toLocaleString(lang === "en" ? "en-GB" : "da-DK", { timeZone: "Europe/Copenhagen", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" });
 
 const logoUrl = () => `${appUrl()}icons/rolff-128.png`;
@@ -153,14 +169,26 @@ export async function sendMail(to: string, m: { subject: string; html: string; t
   } catch { return false; }
 }
 
-export function inactivityMail(p: { link: string }) {
+const btn = (link: string, label: string) => `<table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="#016C72" style="border-radius:10px;background:#016C72"><a href="${esc(link)}" style="display:inline-block;padding:14px 26px;color:#ffffff;text-decoration:none;font-weight:600;font-size:16px">${esc(label)}</a></td></tr></table>`;
+export function inactivityMail(p: { link: string; lang?: MailLang }) {
+  const lang = mailLang(p.lang);
+  if (lang === "en") {
+    const subject = "Your Rolff account will be deleted soon due to inactivity";
+    const html = shell(subject, `<p style="margin:0 0 14px">Hi,</p>
+<p style="margin:0 0 14px">You have not logged in to Rolff for a while. In 14 days we will automatically delete your account and your own data.</p>
+<p style="margin:0 0 22px">If you want to keep the account, just log in. You can also turn off automatic deletion under ⋮ → Privacy.</p>
+${btn(p.link, "Log in")}
+<p style="margin:22px 0 0;font-size:13px;color:#7a807e">What you have written to others stays with them – even after deletion.</p>`, lang);
+    const text = `${TESTWARN_EN}Hi,\n\nYou have not logged in to Rolff for a while. In 14 days we will automatically delete your account and your own data. Log in to keep it: ${p.link}\nYou can turn off automatic deletion under ⋮ → Privacy.\n\nWhat you have written to others stays with them – even after deletion.\n\n${TEXT_FOOT}`;
+    return { subject, html, text };
+  }
   const subject = "Din Rolff-konto slettes snart på grund af inaktivitet";
   const html = shell(subject, `<p style="margin:0 0 14px">Hej,</p>
 <p style="margin:0 0 14px">Du har ikke logget ind i Rolff i et stykke tid. Om 14 dage sletter vi din konto og dine egne data automatisk.</p>
 <p style="margin:0 0 22px">Vil du beholde kontoen, skal du bare logge ind. Du kan også slå automatisk sletning fra under ⋮ → Privatliv.</p>
-<table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="#016C72" style="border-radius:10px;background:#016C72"><a href="${esc(p.link)}" style="display:inline-block;padding:14px 26px;color:#ffffff;text-decoration:none;font-weight:600;font-size:16px">Log ind</a></td></tr></table>
-<p style="margin:22px 0 0;font-size:13px;color:#7a807e">Det, du har skrevet til andre, bliver hos dem – også efter sletning.</p>`);
-  const text = `Hej,\n\nDu har ikke logget ind i Rolff i et stykke tid. Om 14 dage sletter vi din konto og dine egne data automatisk. Log ind for at beholde den: ${p.link}\nDu kan slå automatisk sletning fra under ⋮ → Privatliv.\n\nDet, du har skrevet til andre, bliver hos dem – også efter sletning.`;
+${btn(p.link, "Log ind")}
+<p style="margin:22px 0 0;font-size:13px;color:#7a807e">Det, du har skrevet til andre, bliver hos dem – også efter sletning.</p>`, lang);
+  const text = `${TESTWARN}Hej,\n\nDu har ikke logget ind i Rolff i et stykke tid. Om 14 dage sletter vi din konto og dine egne data automatisk. Log ind for at beholde den: ${p.link}\nDu kan slå automatisk sletning fra under ⋮ → Privatliv.\n\nDet, du har skrevet til andre, bliver hos dem – også efter sletning.`;
   return { subject, html, text };
 }
 
@@ -177,35 +205,77 @@ export function reportMail(p: { category: string; body: string; senderName: stri
   return { subject, html, text };
 }
 
-const btn = (link: string, label: string) => `<table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="#016C72" style="border-radius:10px;background:#016C72"><a href="${esc(link)}" style="display:inline-block;padding:14px 26px;color:#ffffff;text-decoration:none;font-weight:600;font-size:16px">${esc(label)}</a></td></tr></table>`;
-export function recoveryMail(p: { link: string }) {
+export function recoveryMail(p: { link: string; lang?: MailLang }) {
+  const lang = mailLang(p.lang);
+  if (lang === "en") {
+    const subject = "Reset your Rolff password";
+    const html = shell(subject, `<p style="margin:0 0 14px">Hi,</p>
+<p style="margin:0 0 22px">Someone (hopefully you) asked to reset the password for your Rolff account. Tap the button to choose a new one. The link works once and expires shortly.</p>
+${btn(p.link, "Choose a new password")}
+<p style="margin:22px 0 0;font-size:13px;color:#7a807e">If you did not ask for this, you can ignore this e-mail. Your password will not change.</p>`, lang);
+    const text = `${TESTWARN_EN}Hi,\n\nSomeone (hopefully you) asked to reset the password for your Rolff account. Choose a new one here (works once, expires shortly):\n${p.link}\n\nIf you did not ask for this, you can ignore this e-mail. Your password will not change.\n\n${TEXT_FOOT}`;
+    return { subject, html, text };
+  }
   const subject = "Nulstil din adgangskode til Rolff";
   const html = shell(subject, `<p style="margin:0 0 14px">Hej,</p>
 <p style="margin:0 0 22px">Nogen (forhåbentlig dig) har bedt om at nulstille adgangskoden til din Rolff-konto. Tryk på knappen for at vælge en ny. Linket virker én gang og udløber efter kort tid.</p>
 ${btn(p.link, "Vælg ny adgangskode")}
-<p style="margin:22px 0 0;font-size:13px;color:#7a807e">Har du ikke bedt om det, kan du se bort fra denne mail. Din adgangskode ændres ikke.</p>`);
-  const text = `Hej,\n\nNogen (forhåbentlig dig) har bedt om at nulstille adgangskoden til din Rolff-konto. Vælg en ny her (virker én gang, udløber efter kort tid):\n${p.link}\n\nHar du ikke bedt om det, kan du se bort fra denne mail.`;
+<p style="margin:22px 0 0;font-size:13px;color:#7a807e">Har du ikke bedt om det, kan du se bort fra denne mail. Din adgangskode ændres ikke.</p>`, lang);
+  const text = `${TESTWARN}Hej,\n\nNogen (forhåbentlig dig) har bedt om at nulstille adgangskoden til din Rolff-konto. Vælg en ny her (virker én gang, udløber efter kort tid):\n${p.link}\n\nHar du ikke bedt om det, kan du se bort fra denne mail.`;
   return { subject, html, text };
 }
-export function emailChangeMail(p: { link: string; current: boolean; newEmail: string }) {
+export function emailChangeMail(p: { link: string; current: boolean; newEmail: string; lang?: MailLang }) {
+  const lang = mailLang(p.lang);
   if (p.current) {
+    if (lang === "en") {
+      const subject = "Your e-mail in Rolff is about to be changed";
+      const what = `A request was made (with your password) to change the e-mail on your Rolff account to <strong>${esc(p.newEmail)}</strong>. The change happens when the new address is confirmed.`;
+      const html = shell(subject, `<p style="margin:0 0 14px">Hi,</p><p style="margin:0 0 14px">${what}</p>
+<p style="margin:0;font-size:14px">If this was not you, log in and change your password at once (⋮ → Account), or use "Forgot password".</p>`, lang);
+      const text = `${TESTWARN_EN}Hi,\n\n${what.replace(/<[^>]+>/g, "")}\n\nIf this was not you, log in and change your password at once (⋮ → Account), or use "Forgot password".\n\n${TEXT_FOOT}`;
+      return { subject, html, text };
+    }
     const subject = "Din e-mail i Rolff er ved at blive ændret";
     const what = `Der er bedt om at ændre e-mailen på din Rolff-konto til <strong>${esc(p.newEmail)}</strong> (med din adgangskode). Ændringen sker, når den nye adresse bekræftes.`;
     const html = shell(subject, `<p style="margin:0 0 14px">Hej,</p><p style="margin:0 0 14px">${what}</p>
-<p style="margin:0;font-size:14px">Var det ikke dig? Så log ind og skift din adgangskode med det samme (⋮ → Konto), eller brug "Glemt adgangskode".</p>`);
-    const text = `Hej,\n\n${what.replace(/<[^>]+>/g, "")}\n\nVar det ikke dig? Så log ind og skift din adgangskode med det samme (⋮ → Konto), eller brug "Glemt adgangskode".`;
+<p style="margin:0;font-size:14px">Var det ikke dig? Så log ind og skift din adgangskode med det samme (⋮ → Konto), eller brug "Glemt adgangskode".</p>`, lang);
+    const text = `${TESTWARN}Hej,\n\n${what.replace(/<[^>]+>/g, "")}\n\nVar det ikke dig? Så log ind og skift din adgangskode med det samme (⋮ → Konto), eller brug "Glemt adgangskode".`;
+    return { subject, html, text };
+  }
+  if (lang === "en") {
+    const subject = "Confirm your new e-mail in Rolff";
+    const what = "Confirm that this address should be used for your Rolff account. The link works once and expires after one hour.";
+    const html = shell(subject, `<p style="margin:0 0 14px">Hi,</p><p style="margin:0 0 22px">${what}</p>${btn(p.link, "Confirm")}
+<p style="margin:22px 0 0;font-size:13px;color:#7a807e">If you did not ask for this, ignore the e-mail.</p>`, lang);
+    const text = `${TESTWARN_EN}Hi,\n\n${what}\n${p.link}\n\nIf you did not ask for this, ignore the e-mail.\n\n${TEXT_FOOT}`;
     return { subject, html, text };
   }
   const subject = "Bekræft din nye e-mail i Rolff";
   const what = "Bekræft, at denne adresse skal bruges til din Rolff-konto. Linket virker én gang og udløber efter en time.";
   const html = shell(subject, `<p style="margin:0 0 14px">Hej,</p><p style="margin:0 0 22px">${what}</p>${btn(p.link, "Bekræft")}
-<p style="margin:22px 0 0;font-size:13px;color:#7a807e">Har du ikke bedt om det, så ignorer mailen.</p>`);
-  const text = `Hej,\n\n${what}\n${p.link}\n\nHar du ikke bedt om det, så ignorer mailen.`;
+<p style="margin:22px 0 0;font-size:13px;color:#7a807e">Har du ikke bedt om det, så ignorer mailen.</p>`, lang);
+  const text = `${TESTWARN}Hej,\n\n${what}\n${p.link}\n\nHar du ikke bedt om det, så ignorer mailen.`;
   return { subject, html, text };
 }
 
 /** Court export: PDF attached. No message content in the mail body. */
-export function exportMail(p: { exporterEmail: string; toSelf: boolean; verifyUrl: string; code: string; exportId: string; scope: string; count: number; pages: number }) {
+export function exportMail(p: { exporterEmail: string; toSelf: boolean; verifyUrl: string; code: string; exportId: string; scope: string; count: number; pages: number; lang?: MailLang }) {
+  const lang = mailLang(p.lang);
+  if (lang === "en") {
+    const subject = p.toSelf ? "Your transcript of the conversation from Rolff" : `${p.exporterEmail} has sent you a transcript of a conversation from Rolff`;
+    const intro = p.toSelf ? "Here is the transcript of the conversation you asked for. It is attached as a PDF."
+      : `<strong>${esc(p.exporterEmail)}</strong> has asked Rolff to send you a transcript of a conversation. It is attached as a PDF.`;
+    const html = shell(subject, `<p style="margin:0 0 14px">Hi,</p><p style="margin:0 0 14px">${intro}</p>
+<p style="margin:0 0 14px;font-size:14px">${esc(p.scope)} · ${p.count} messages · ${p.pages} pages<br>Export ID: <code>${esc(p.exportId)}</code></p>
+<p style="margin:0 0 8px"><strong>How to check that the transcript is genuine and unchanged</strong></p>
+<ol style="margin:0 0 16px;padding-left:20px;font-size:14px"><li>The PDF is digitally signed by Rolff. In a PDF reader you can see the signature (test certificate – see below).</li>
+<li>Open the page <a href="${esc(p.verifyUrl)}" style="color:#016C72">Check transcript</a> and choose the PDF file. The file is not sent – only its fingerprint (SHA-256) is calculated on your device and compared with Rolff's register.</li>
+<li>You can also enter the code <strong>${esc(p.code)}</strong>, which is printed at the bottom of each page.</li></ol>
+${button(p.verifyUrl, "Check transcript")}
+<p style="margin:18px 0 0;font-size:13px;color:#7a807e">If a single character in the file is changed, the check will not match. The transcript contains only messages the sender of the transcript themselves has access to. In the test version the signature is made with a self-issued test certificate, which PDF readers show as an "unknown issuer". Rolff cannot assess how a court or authority will use the transcript.</p>`, lang);
+    const text = `${TESTWARN_EN}Hi,\n\n${p.toSelf ? "Here is the transcript of the conversation you asked for (PDF attached)." : `${p.exporterEmail} has asked Rolff to send you a transcript of a conversation (PDF attached).`}\n\n${p.scope} · ${p.count} messages · ${p.pages} pages\nExport ID: ${p.exportId}\n\nCheck authenticity: open ${p.verifyUrl} and choose the PDF file (the file is not sent – only the fingerprint is calculated on your device), or enter the code ${p.code}. The PDF is also digitally signed by Rolff (test certificate in the test version).\n\nIf a single character in the file is changed, the check will not match. Rolff cannot assess how a court or authority will use the transcript.\n\n${TEXT_FOOT}`;
+    return { subject, html, text };
+  }
   const subject = p.toSelf ? "Din udskrift af samtalen fra Rolff" : `${p.exporterEmail} har sendt dig en udskrift af en samtale fra Rolff`;
   const intro = p.toSelf ? "Her er den udskrift af samtalen, du bad om. Den ligger som PDF i denne mail."
     : `<strong>${esc(p.exporterEmail)}</strong> har bedt Rolff sende dig en udskrift af en samtale. Den ligger som PDF i denne mail.`;
@@ -216,17 +286,27 @@ export function exportMail(p: { exporterEmail: string; toSelf: boolean; verifyUr
 <li>Åbn siden <a href="${esc(p.verifyUrl)}" style="color:#016C72">Tjek udskrift</a> og vælg PDF-filen. Filen sendes ikke – kun dens fingeraftryk (SHA-256) beregnes på din enhed og sammenlignes med Rolffs register.</li>
 <li>Du kan også indtaste koden <strong>${esc(p.code)}</strong>, som står nederst på hver side.</li></ol>
 ${button(p.verifyUrl, "Tjek udskrift")}
-<p style="margin:18px 0 0;font-size:13px;color:#7a807e">Ændres blot ét tegn i filen, stemmer kontrollen ikke. Udskriften indeholder kun beskeder, som afsenderen af udskriften selv har adgang til. I testversionen er signaturen lavet med et selvudstedt testcertifikat, som PDF-læsere viser som "ukendt udsteder". Rolff kan ikke vurdere, hvordan en domstol eller myndighed vil bruge udskriften.</p>`);
+<p style="margin:18px 0 0;font-size:13px;color:#7a807e">Ændres blot ét tegn i filen, stemmer kontrollen ikke. Udskriften indeholder kun beskeder, som afsenderen af udskriften selv har adgang til. I testversionen er signaturen lavet med et selvudstedt testcertifikat, som PDF-læsere viser som "ukendt udsteder". Rolff kan ikke vurdere, hvordan en domstol eller myndighed vil bruge udskriften.</p>`, lang);
   const text = `${TESTWARN}Hej,\n\n${p.toSelf ? "Her er den udskrift af samtalen, du bad om (PDF vedhæftet)." : `${p.exporterEmail} har bedt Rolff sende dig en udskrift af en samtale (PDF vedhæftet).`}\n\n${p.scope} · ${p.count} beskeder · ${p.pages} sider\nEksport-ID: ${p.exportId}\n\nKontrollér ægthed: åbn ${p.verifyUrl} og vælg PDF-filen (filen sendes ikke – kun fingeraftrykket beregnes på din enhed), eller indtast koden ${p.code}. PDF'en er også digitalt signeret af Rolff (testcertifikat i testversionen).\n\nÆndres blot ét tegn i filen, stemmer kontrollen ikke. Rolff kan ikke vurdere, hvordan en domstol eller myndighed vil bruge udskriften.`;
   return { subject, html, text };
 }
 /** To the account e-mail when an export was sent to another address. */
-export function exportNoticeMail(p: { recipient: string; exportId: string; scope: string; count: number }) {
+export function exportNoticeMail(p: { recipient: string; exportId: string; scope: string; count: number; lang?: MailLang }) {
+  const lang = mailLang(p.lang);
+  if (lang === "en") {
+    const subject = "Rolff: You have sent a transcript of a conversation";
+    const html = shell(subject, `<p style="margin:0 0 14px">Hi,</p>
+<p style="margin:0 0 14px">A transcript of a conversation has just been sent from your Rolff account to <strong>${esc(p.recipient)}</strong>.</p>
+<p style="margin:0 0 14px;font-size:14px">${esc(p.scope)} · ${p.count} messages<br>Export ID: <code>${esc(p.exportId)}</code></p>
+<p style="margin:0;font-size:14px">If this was not you, log in and change your password at once (⋮ → Account).</p>`, lang);
+    const text = `${TESTWARN_EN}Hi,\n\nA transcript of a conversation has just been sent from your Rolff account to ${p.recipient}.\n${p.scope} · ${p.count} messages\nExport ID: ${p.exportId}\n\nIf this was not you, log in and change your password at once (⋮ → Account).\n\n${TEXT_FOOT}`;
+    return { subject, html, text };
+  }
   const subject = "Rolff: Du har sendt en udskrift af en samtale";
   const html = shell(subject, `<p style="margin:0 0 14px">Hej,</p>
 <p style="margin:0 0 14px">Fra din Rolff-konto er der netop sendt en udskrift af en samtale til <strong>${esc(p.recipient)}</strong>.</p>
 <p style="margin:0 0 14px;font-size:14px">${esc(p.scope)} · ${p.count} beskeder<br>Eksport-ID: <code>${esc(p.exportId)}</code></p>
-<p style="margin:0;font-size:14px">Var det ikke dig? Log ind og skift din adgangskode med det samme (⋮ → Konto).</p>`);
+<p style="margin:0;font-size:14px">Var det ikke dig? Log ind og skift din adgangskode med det samme (⋮ → Konto).</p>`, lang);
   const text = `${TESTWARN}Hej,\n\nFra din Rolff-konto er der netop sendt en udskrift af en samtale til ${p.recipient}.\n${p.scope} · ${p.count} beskeder\nEksport-ID: ${p.exportId}\n\nVar det ikke dig? Log ind og skift din adgangskode med det samme (⋮ → Konto).`;
   return { subject, html, text };
 }
