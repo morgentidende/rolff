@@ -2,7 +2,7 @@
 // Reuses the strict loopback + synthetic DB/user + explicit CI guard, no external traffic.
 import assert from 'node:assert/strict';
 import {bootstrap,connectPG} from './timezone-test-db.mjs';
-import {notificationFixture} from './notification-fixtures.mjs';
+import {notificationFixture,closedWindows} from './notification-fixtures.mjs';
 if(process.env.TIMEZONE_SQL_BACKEND!=='postgres')throw Error('Requires guarded disposable PostgreSQL CI');
 const {db,U,V}=await bootstrap(),clients=[];
 const client=async()=>{const c=await connectPG();clients.push(c);return c;};
@@ -23,7 +23,7 @@ try{
   await b.query("set local statement_timeout='1500ms'");assert.equal((await b.query('select * from claim_push_work()')).rows.length,0);await b.query('commit');await a.query('commit');
  });
  await test('claimed dispatch defers under uncommitted receive-settings writer, then sees new closed window',async()=>{
-  const writer=await client(),reader=await client();await auth(writer,U);await writer.query("select save_my_receive_settings(true,'[]','fixed','UTC',null,1)");await reader.query("set statement_timeout='1500ms'");assert.equal(await prepare(reader,work),null);assert.equal(await handoff(reader,work),null);await writer.query('commit');assert.equal(await prepare(reader,work),null);assert.equal(await handoff(reader,work),null);
+  const writer=await client(),reader=await client();await auth(writer,U);await writer.query("select save_my_receive_settings(true,$1::jsonb,'fixed','UTC',null,1)",[closedWindows()]);await reader.query("set statement_timeout='1500ms'");assert.equal(await prepare(reader,work),null);assert.equal(await handoff(reader,work),null);await writer.query('commit');assert.equal(await prepare(reader,work),null);assert.equal(await handoff(reader,work),null);
  });
  await test('normal scheduler never force releases while receive settings locked',async()=>{
   const m=await seed(),writer=await client(),worker=await client();await auth(writer,U);await writer.query("select save_my_receive_settings(false,'[]','fixed','UTC',null,2)");await worker.query("set statement_timeout='1500ms'");await worker.query('select push_release_tick()');assert.equal((await db.query('select released_at from message_deliveries where message_id=$1',[m])).rows[0].released_at,null);await writer.query('rollback');
@@ -46,7 +46,7 @@ try{
  await test('intent-first serializes settings writer after the point, intent is not marked sent',async()=>{
   work=await fresh();const a=await client(),writer=await client();const ap=(await a.query('select pg_backend_pid() p')).rows[0].p,wp=(await writer.query('select pg_backend_pid() p')).rows[0].p;
   await a.query('begin');assert(await handoff(a,work));await auth(writer,U);const rev=(await db.query('select timezone_revision r from receive_settings where user_id=$1',[U])).rows[0].r;
-  const pending=reflect(writer.query("select save_my_receive_settings(true,'[]','fixed','UTC',null,$1)",[rev]));await waitEdge(wp,ap);await a.query('commit');const result=await pending;if(result.error)throw result.error;await writer.query('commit');assert.equal((await db.query('select outcome from push_handoffs')).rows[0].outcome,'intent');assert.equal((await db.query('select sent_at from notification_jobs')).rows[0].sent_at,null);assert.equal((await db.query('select in_receive_window($1) x',[U])).rows[0].x,false);
+  const pending=reflect(writer.query("select save_my_receive_settings(true,$2::jsonb,'fixed','UTC',null,$1)",[rev,closedWindows()]));await waitEdge(wp,ap);await a.query('commit');const result=await pending;if(result.error)throw result.error;await writer.query('commit');assert.equal((await db.query('select outcome from push_handoffs')).rows[0].outcome,'intent');assert.equal((await db.query('select sent_at from notification_jobs')).rows[0].sent_at,null);assert.equal((await db.query('select in_receive_window($1) x',[U])).rows[0].x,false);
  });
  await test('intent-first serializes opt-out, retaining only explicit already-in-flight intent',async()=>{
   work=await fresh();const a=await client(),writer=await client();const ap=(await a.query('select pg_backend_pid() p')).rows[0].p,wp=(await writer.query('select pg_backend_pid() p')).rows[0].p;

@@ -8,4 +8,9 @@
     Header set Cache-Control "no-cache, must-revalidate"
     Header unset Expires
   </FilesMatch>
+  # The push service worker must always be revalidated so fixes reach every device.
+  <Files "sw.js">
+    Header set Cache-Control "no-cache, must-revalidate"
+    Header unset Expires
+  </Files>
 </IfModule>

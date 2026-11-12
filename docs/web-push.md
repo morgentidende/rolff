@@ -1,4 +1,12 @@
-# Voluntary web push — LOCAL, NOT RELEASED
+# Voluntary web push
+
+**Status 2026-11-12:** approved by Nicolai and released from PR54 (migration `20261112210000_web_push.sql`).
+Every user starts opted out; push is only sent after the user's explicit Ja/Slå til on that device.
+The notification text follows the recipient's app language (`profiles.locale` via `locale_of`):
+“ROLFF — Du har nye beskeder klar.” (da, default) or “ROLFF — You have new messages ready.” (en).
+The frontend build gate is now on by default (`VITE_WEB_PUSH_ENABLED=false` hides it); the DB gate
+(`push_runtime.enabled` + VAPID public key) and worker gate (`WEB_PUSH_ENABLED`) are the kill switches.
+The historical notes below describe the original local implementation.
 
 Implementation starts at main `09bcaccd71c6104e6c02ad0abe46103759511032`.
 No production mutation, secret, schedule, actual push, model/mail call, real account,

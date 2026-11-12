@@ -1,4 +1,6 @@
--- LOCAL IMPLEMENTATION ONLY. No scheduling, secrets or opt-in enabled by this migration.
+-- Voluntary web push. Every user starts opted OUT (no push_preferences row = off).
+-- The runtime gate (push_runtime.enabled + VAPID public key) is set separately at release;
+-- no scheduling or secrets are created by this migration.
 create table public.push_runtime (
  singleton boolean primary key default true check(singleton),
  enabled boolean not null default false,
@@ -160,7 +162,7 @@ begin
  if not exists(select 1 from public.message_deliveries where recipient_id=j.user_id and released_at is not null and released_at>=j.created_at-interval '1 second') then return null; end if;
  select * into s from public.push_subscriptions where id=p_sub and user_id=j.user_id and expires_at>clock_timestamp() and created_at<=j.created_at;
  if not found or not public._push_endpoint_ok(s.endpoint) then return null; end if;
- return jsonb_build_object('endpoint',s.endpoint,'keys',jsonb_build_object('p256dh',s.p256dh,'auth',s.auth),'binding',s.id,'prepared_at',clock_timestamp(),'expires_at',clock_timestamp()+interval '30 seconds');
+ return jsonb_build_object('endpoint',s.endpoint,'keys',jsonb_build_object('p256dh',s.p256dh,'auth',s.auth),'binding',s.id,'lang',public.locale_of(j.user_id),'prepared_at',clock_timestamp(),'expires_at',clock_timestamp()+interval '30 seconds');
 end $$;
 
 -- Explicit content-free one-use dispatch intents. No endpoint or key copies.

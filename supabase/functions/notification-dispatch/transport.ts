@@ -4,13 +4,13 @@ import process from "node:process";
 // http_ece has an opt-in key logger: refuse to import it if accidentally configured.
 if(process.env.ECE_KEYLOG === "1")throw Error("unsafe_push_logging_configuration");
 const webpush=(await import("npm:web-push@3.6.7")).default;
-import { outcome, validPrepared, handoffFresh, type Authorize, type Prepared, type Outcome } from "./policy.ts";
+import { outcome, pushLang, validPrepared, handoffFresh, type Authorize, type Prepared, type Outcome } from "./policy.ts";
 export type Vapid = {subject:string;publicKey:string;privateKey:string};
 export async function sendPush(p:Prepared,vapid:Vapid,authorize:Authorize,send:typeof fetch=fetch):Promise<Outcome> {
   if (!validPrepared(p)) return "deferred";
   let details;
   try {
-    details=webpush.generateRequestDetails({endpoint:p.endpoint,keys:p.keys},JSON.stringify({v:1,binding:p.binding,expires:Date.now()+30000}),{
+    details=webpush.generateRequestDetails({endpoint:p.endpoint,keys:p.keys},JSON.stringify({v:1,binding:p.binding,l:pushLang(p),expires:Date.now()+30000}),{
       vapidDetails:vapid,TTL:0,contentEncoding:"aes128gcm",urgency:"normal",topic:"rolff-ready",
     });
   } catch {return "permanent";}

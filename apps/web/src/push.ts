@@ -1,6 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { PushController, type Binding, type PushOwner } from "./pushController";
-export const pushBuildEnabled=import.meta.env?.VITE_WEB_PUSH_ENABLED==="true";
+// Build gate on by default; VITE_WEB_PUSH_ENABLED=false hides it. The DB gate (push_runtime) and the
+// worker gate (WEB_PUSH_ENABLED) still decide availability, and every user starts opted out.
+export const pushBuildEnabled=import.meta.env?.VITE_WEB_PUSH_ENABLED!=="false";
 let registration:Promise<ServiceWorkerRegistration>|null=null;
 function ready(){
  if(!registration)registration=navigator.serviceWorker.register(new URL("./sw.js",document.baseURI),{scope:new URL("./",document.baseURI).pathname,updateViaCache:"none"}).then(async r=>{

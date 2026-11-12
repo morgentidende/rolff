@@ -4,7 +4,9 @@ export function validEndpoint(raw: unknown): raw is string {
   const u = new URL(raw);
   return !u.username && !u.password && !u.port && !u.search && !u.hash && !u.pathname.includes("//") && !u.pathname.includes("/../");
 }
-export type Prepared = {endpoint: string; keys: {p256dh:string;auth:string};binding:string;prepared_at:string;expires_at:string};
+export type Prepared = {endpoint: string; keys: {p256dh:string;auth:string};binding:string;lang?:string;prepared_at:string;expires_at:string};
+/** Notification language follows the recipient's app language (profiles.locale); default Danish. */
+export const pushLang=(p:Pick<Prepared,"lang">):"da"|"en"=>p.lang==="en"?"en":"da";
 export type Outcome = "accepted" | "gone" | "permanent" | "retry" | "deferred" | "expired";
 export function outcome(status:number):Outcome {
   if (status>=200 && status<300) return "accepted";

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createECDH } from "node:crypto";
 import { Buffer } from "node:buffer";
 import { sendPush } from "../../supabase/functions/notification-dispatch/transport.ts";
-import { validEndpoint,outcome,handoffFresh, type Prepared } from "../../supabase/functions/notification-dispatch/policy.ts";
+import { validEndpoint,outcome,handoffFresh,pushLang, type Prepared } from "../../supabase/functions/notification-dispatch/policy.ts";
 import { dispatch } from "../../supabase/functions/notification-dispatch/worker.ts";
 // Known, deterministic PUBLIC test scalars (not deployable secrets). Never generate production keys here.
 const raw=(n:number)=>{const e=createECDH("prime256v1");e.setPrivateKey(Buffer.alloc(32,n));return e.getPublicKey().toString("base64url");};
@@ -82,4 +82,7 @@ Deno.test("a worker cannot request the same intent twice, or finalize a claimed-
 });
 Deno.test("a transport adapter cannot report acceptance from a claim without a handoff",async()=>{
  const result=await dispatch(async name=>({data:name==="claim_push_work"?[{job_id:1,subscription_id:"s",lease:"l"}]:name==="prepare_push"?prepared():null,error:null}),async()=>"accepted");assert.equal(result.accepted,0);assert.equal(result.deferred,1);
+});
+Deno.test("notification language: only explicit en is English, everything else Danish",()=>{
+  if(pushLang({lang:"en"})!=="en" || pushLang({lang:"da"})!=="da" || pushLang({})!=="da" || pushLang({lang:"EN"})!=="da" || pushLang({lang:"xx"})!=="da")throw Error("pushLang");
 });

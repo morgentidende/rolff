@@ -37,7 +37,9 @@ self.addEventListener('push',event=>event.waitUntil(serial(async()=>{
   if(!event.data || event.data.text().length>512)return;
   const p=event.data.json(),s=await store();
   if(p.v!==1 || !uuid.test(p.binding) || s.binding!==p.binding || !s.owner || !Number.isFinite(p.expires) || p.expires<Date.now() || p.expires>Date.now()+31000)return;
-  await self.registration.showNotification('ROLFF',{body:'Du har nye beskeder klar.',tag:'rolff-ready',icon:new URL('icons/rolff-192.png',self.registration.scope).href,data:{binding:s.binding}});
+  // Fixed generic text in the recipient's app language (da default); never message content.
+  const body=p.l==='en'?'You have new messages ready.':'Du har nye beskeder klar.';
+  await self.registration.showNotification('ROLFF',{body,lang:p.l==='en'?'en':'da',tag:'rolff-ready',icon:new URL('icons/rolff-192.png',self.registration.scope).href,data:{binding:s.binding}});
  }catch{/* Fail closed without logging payload or capabilities. */}
 })));
 self.addEventListener('notificationclick',event=>{
