@@ -184,11 +184,12 @@ test('blocked box never pushes the composer away: capped height, internal scroll
   assert.doesNotMatch(bn, /ordre|dikter|dictate/i);
 });
 
-test('messenger look: time + single "sent" tick inside the bubble, original low-opacity wallpaper, Signal-style list rows', () => {
+test('messenger look: time inside the bubble (no sent tick), original low-opacity wallpaper, Signal-style list rows', () => {
   const mb = src('MessageBubble.tsx');
   assert.match(mb, /<span className="msg-meta"><time className="message-time"/);
-  assert.match(mb, /m\.mine && <><svg className="msg-tick"[^]*?<span className="sr-only">\{da \? "Sendt" : "Sent"\}<\/span>/);
+  assert.doesNotMatch(mb, /msg-tick|has-tick|da \? "Sendt" : "Sent"/);
   assert.match(mb, /msg-meta-spacer/);
+  assert.doesNotMatch(css, /msg-tick|has-tick/);
   const ops = [...css.matchAll(/stroke-opacity='([\d.]+)'/g)].map(m => Number(m[1]));
   assert.equal(ops.length, 2); for (const o of ops) assert.ok(o > 0 && o < 0.04, `wallpaper opacity ${o} < 4%`);
   assert.match(css, /\.chat-wrap > \.msgs\{background-color:var\(--bg\);background-image:var\(--wallpaper\)/);
@@ -196,3 +197,16 @@ test('messenger look: time + single "sent" tick inside the bubble, original low-
   assert.match(css, /\.convlist \.convrow button\.dot\{width:48px;height:48px/);
   assert.match(css, /\.convprev\{white-space:normal;display:-webkit-box;[^}]*-webkit-line-clamp:2/);
 });
+
+test('Own bubbles show the time only, never a sent tick', { timeout: 8000 }, async () => {
+  const fx = await env(false); const { d } = fx;
+  try {
+    await click(d.querySelector('.convbtn')); await delay(40);
+    const mine = d.querySelector('.msg.mine'); assert.ok(mine);
+    assert.ok(mine.querySelector('.msg-meta time.message-time'), 'time stays in the bubble');
+    assert.equal(d.querySelectorAll('.msg-tick').length, 0);
+    assert.equal(d.querySelectorAll('.msg-meta-spacer.has-tick').length, 0);
+    assert.ok(![...d.querySelectorAll('.sr-only')].some(el => /^(Sendt|Sent)$/.test((el.textContent || '').trim())), 'no Sendt/Sent screen-reader label');
+  } finally { await fx.close(); }
+});
+
