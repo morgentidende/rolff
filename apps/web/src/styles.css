@@ -432,3 +432,8 @@ button.compact-btn{flex:none;min-height:40px;padding:6px 14px;font-size:15px;whi
 [data-theme=dark] .invite-btn.webapp-btn{color:var(--accent)}
 @media (max-width:370px){.convlist-head .invite-btn{font-size:14px;padding:8px 11px 8px 8px}}
 .install-steps{margin:0 0 8px;padding-left:22px;line-height:1.5}.install-steps li{margin:0 0 8px}
+
+/* Transcript sheet: plan load error/retry in the same language as the other sheets */
+.export-load-error .field-hint{margin:2px 0 14px;font-size:14.5px}
+.export-retry{display:grid;grid-template-columns:1fr;margin:0}
+.export-retry button{width:100%;min-height:48px;border-radius:10px;font-weight:600;margin:0;white-space:nowrap}

@@ -64,8 +64,8 @@ export function ConversationExport({ lang, conv, plan: planProp, ownEmail, openP
   const [step, setStep] = useState<"form" | "confirm" | "done">("form"); const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   if (plan === null && planState === "error") return <div className="export-load-error">
-    <p className="err" role="alert">{da ? "Udskriften kunne ikke hentes lige nu. Tjek din internetforbindelse og prøv igen." : "The transcript could not be loaded right now. Check your internet connection and try again."}</p>
-    <div className="row end"><button type="button" onClick={fetchPlan}>{da ? "Prøv igen" : "Try again"}</button></div>
+    <p className="field-hint" role="alert">{da ? "Udskriften kunne ikke hentes lige nu. Tjek din internetforbindelse og prøv igen." : "The transcript could not be loaded right now. Check your internet connection and try again."}</p>
+    <div className="export-retry"><button type="button" onClick={fetchPlan}>{da ? "Prøv igen" : "Try again"}</button></div>
   </div>;
   if (plan === null) return <p className="meta" role="status">{da ? "Henter…" : "Loading…"}</p>;
   if (plan !== "text_attachments") return <ExportUpgrade lang={lang} openPlans={openPlans} />;
