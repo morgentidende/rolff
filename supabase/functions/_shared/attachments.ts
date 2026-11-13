@@ -129,3 +129,28 @@ export async function openaiFileModerate(o: { apiKey: string; model: string; bas
   if (!raw) throw new ModerationTechnicalError("empty");
   return { raw, usage: { input: j?.usage?.input_tokens ?? 0, output: j?.usage?.output_tokens ?? 0 } };
 }
+
+export type AttachmentKind = "photos" | "files";
+export type AttachmentBlockFlags = { block_photos: boolean; block_files: boolean };
+
+export function attachmentKind(mime: string): AttachmentKind | null {
+  if (mime === "application/pdf") return "files";
+  if (mime === "image/png" || mime === "image/jpeg" || mime === "image/webp" || mime === "image/gif") return "photos";
+  return null;
+}
+
+/** Fail closed: unknown shapes throw so the caller can return 503 rather than deliver. */
+export function parseAttachmentBlocks(data: unknown): AttachmentBlockFlags {
+  const o = typeof data === "string" ? JSON.parse(data) : data;
+  if (!o || typeof o !== "object" || Array.isArray(o)) throw new Error("invalid_attachment_blocks");
+  const row = o as Record<string, unknown>;
+  if (!("block_photos" in row) || !("block_files" in row)) throw new Error("invalid_attachment_blocks");
+  if (typeof row.block_photos !== "boolean" || typeof row.block_files !== "boolean") throw new Error("invalid_attachment_blocks");
+  return { block_photos: row.block_photos, block_files: row.block_files };
+}
+
+export function blockedAttachmentStatus(kind: AttachmentKind, flags: AttachmentBlockFlags): "blocked_photos" | "blocked_files" | null {
+  if (kind === "photos" && flags.block_photos) return "blocked_photos";
+  if (kind === "files" && flags.block_files) return "blocked_files";
+  return null;
+}
