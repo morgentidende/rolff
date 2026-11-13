@@ -11,6 +11,8 @@ export function defaultReceiveWindows(): ReceiveWindow[] {
 const state = { configured: true, enabled: false, windows: [] as ReceiveWindow[], mode: 'fixed' as const, timezone: 'Europe/Copenhagen', revision: 1, is_controller: true, synced_at: null as string | null };
 export const readReceiveSettings = async () => ({ ...state, windows: state.windows.map(w => ({ ...w })) });
 export const saveReceiveSettings = async (_uid: string, _base: unknown, changes: { enabled: boolean; windows: ReceiveWindow[]; mode: 'auto' | 'fixed'; timezone: string; takeOver: boolean }) => {
+  (globalThis as any).__receiveSaves = ((globalThis as any).__receiveSaves ?? 0) + 1;
+  (globalThis as any).__receiveLastSave = changes;
   if (changes.enabled && !changes.windows.length) throw new Error('windows_required');
   state.enabled = changes.enabled;
   state.windows = changes.windows.map(w => ({ ...w }));
