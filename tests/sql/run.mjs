@@ -645,5 +645,7 @@ const {testPushDeviceTokens}=await import('./push-device-tokens.mjs');
 await testPushDeviceTokens({db,as,svc,hash,t,assert,rejects});
 const {testStickyBlocks}=await import('./sticky-blocks.mjs');
 await testStickyBlocks({db,as,svc,hash,t,assert,rejects});
+const {testBlockAttachments}=await import('./block-attachments.mjs');
+await testBlockAttachments({db,as,svc,hash,t,assert,rejects});
 console.log(`\n${pass} bestået, ${fail} fejlet`);
 process.exit(fail ? 1 : 0);

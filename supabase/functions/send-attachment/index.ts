@@ -12,7 +12,7 @@ import { planLengthError } from "../_shared/planLimits.ts";
 import { checkPersonLimits } from "../_shared/limits.ts";
 import { checkRules, findBlockedWord } from "../_shared/rules.ts";
 import { charCount, ModerationTechnicalError, prefilter, resolveSenderLang, timeoutFromEnv, UNCERTAIN_EXPLANATION } from "../_shared/moderation.ts";
-import { checkFile, cleanName, filePromptForLang, MAX_BYTES, openaiFileModerate, validateFileResult } from "../_shared/attachments.ts";
+import { attachmentKind, blockedAttachmentStatus, checkFile, cleanName, filePromptForLang, MAX_BYTES, openaiFileModerate, parseAttachmentBlocks, validateFileResult } from "../_shared/attachments.ts";
 
 const hex = (b: ArrayBuffer) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, "0")).join("");
 const sha = async (d: Uint8Array | string) => hex(await crypto.subtle.digest("SHA-256", (typeof d === "string" ? new TextEncoder().encode(d) : d) as BufferSource));
@@ -79,6 +79,18 @@ Deno.serve(async (req) => {
   const blk = await admin.from("conversation_blocks").select("user_id").eq("conversation_id", conv).neq("user_id", uid).limit(1);
   if (blk.error) return json({ status: "technical_error" }, 503);
   if ((blk.data ?? []).length) return json({ status: "cannot_deliver" }, 200);
+  const flags = await admin.rpc("recipient_attachment_blocks", { conv, p_sender: uid });
+  if (flags.error) return json({ status: "technical_error" }, 503);
+  let typeBlock;
+  try {
+    const kind = attachmentKind(fc.mime);
+    if (!kind) return json({ error: "bad_type" }, 415);
+    typeBlock = blockedAttachmentStatus(kind, parseAttachmentBlocks(flags.data));
+  } catch { return json({ status: "technical_error" }, 503); }
+  if (typeBlock) {
+    await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "block", p_reason: typeBlock });
+    return json({ status: typeBlock }, 200);
+  }
   const snapshot = await admin.rpc("recipient_filter_snapshot", { conv, p_sender: uid });
   let policy;
   try { if (snapshot.error) throw new Error(); policy = validateFilterSnapshot(snapshot.data); }
@@ -149,6 +161,8 @@ Deno.serve(async (req) => {
   if (c.error && /invalid_reply/.test(c.error.message)) return json({ error: "invalid_reply" }, 400);
   if (c.error && /idempotency_conflict/.test(c.error.message)) return json({ error: "idempotency_conflict" }, 409);
   if (c.error && /cannot_deliver/.test(c.error.message)) return json({ status: "cannot_deliver" }, 200);
+  if (c.error && /blocked_photos/.test(c.error.message)) { await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "block", p_reason: "blocked_photos" }); return json({ status: "blocked_photos" }, 200); }
+  if (c.error && /blocked_files/.test(c.error.message)) { await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "block", p_reason: "blocked_files" }); return json({ status: "blocked_files" }, 200); }
   if (c.error && /person_frequency/.test(c.error.message)) { const again = await checkPersonLimits(admin, conv, uid, 0); return json(again && again !== "error" ? again : { status: "frequency_limit" }, 200); }
   if (c.error && /plan_required/.test(c.error.message)) return json({ error: "plan_required" }, 402);
   if (c.error && /rate_limited/.test(c.error.message)) return json({ error: "rate_limited" }, 429);
