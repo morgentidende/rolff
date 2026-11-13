@@ -116,3 +116,20 @@ test('Front page: pills row, dismissible press-and-hold tip remembered in localS
     assert.equal(d.querySelector('.convhint'), null, 'gone after the gesture was used once'); assert.equal(w.localStorage.getItem('convHintDismissed'), '1');
   } finally { await fx.close(); }
 });
+
+test('PWA icons: separate any/maskable/monochrome entries, cache-busted; maskable and apple icons have no transparency', () => {
+  const pub = p => path.join(__dirname, '../../public', p);
+  const m = JSON.parse(fs.readFileSync(pub('manifest.webmanifest'), 'utf8'));
+  const by = k => m.icons.filter(i => i.purpose === k).map(i => i.sizes);
+  assert.deepEqual(by('any').filter(s => s !== 'any'), ['192x192', '512x512']);
+  assert.deepEqual(by('maskable'), ['192x192', '512x512']);
+  assert.deepEqual(by('monochrome'), ['512x512']);
+  assert.ok(m.icons.every(i => /\?v=\d+$/.test(i.src)), 'icon URLs are versioned so phones refetch');
+  const png = f => { const b = fs.readFileSync(pub(f)); return { w: b.readUInt32BE(16), h: b.readUInt32BE(20), colorType: b[25] }; };
+  for (const f of ['icons/rolff-maskable-512.png', 'icons/rolff-maskable-192.png', 'apple-touch-icon.png']) assert.equal(png(f).colorType, 2, `${f} is opaque RGB`);
+  assert.deepEqual([png('apple-touch-icon.png').w, png('apple-touch-icon.png').h], [180, 180]);
+  assert.equal(png('icons/rolff-monochrome-512.png').colorType, 6, 'monochrome keeps alpha');
+  const html = fs.readFileSync(path.join(__dirname, '../../index.html'), 'utf8');
+  assert.match(html, /rel="apple-touch-icon" sizes="180x180" href="\.\/apple-touch-icon\.png\?v=2"/);
+  assert.match(html, /rel="manifest" href="\.\/manifest\.webmanifest\?v=2"/);
+});
