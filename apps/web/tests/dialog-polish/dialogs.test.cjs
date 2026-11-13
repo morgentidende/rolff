@@ -173,3 +173,16 @@ test('blocked box never pushes the composer away: capped height, internal scroll
   assert.match(bn, /"Ikke sendt" : "Not sent"/); assert.match(bn, /"Mere" : "More"/); assert.match(bn, /"Markeret:" : "Flagged:"/);
   assert.doesNotMatch(bn, /ordre|dikter|dictate/i);
 });
+
+test('messenger look: time + single "sent" tick inside the bubble, original low-opacity wallpaper, Signal-style list rows', () => {
+  const mb = src('MessageBubble.tsx');
+  assert.match(mb, /<span className="msg-meta"><time className="message-time"/);
+  assert.match(mb, /m\.mine && <><svg className="msg-tick"[^]*?<span className="sr-only">\{da \? "Sendt" : "Sent"\}<\/span>/);
+  assert.match(mb, /msg-meta-spacer/);
+  const ops = [...css.matchAll(/stroke-opacity='([\d.]+)'/g)].map(m => Number(m[1]));
+  assert.equal(ops.length, 2); for (const o of ops) assert.ok(o > 0 && o < 0.04, `wallpaper opacity ${o} < 4%`);
+  assert.match(css, /\.chat-wrap > \.msgs\{background-color:var\(--bg\);background-image:var\(--wallpaper\)/);
+  assert.match(css, /\[data-theme=dark\]\{--bg:#0d1417;[^}]*--theirs:#1f2c30;--mine:#0b5c52;--mine-text:#e9f2f0;--mine-time:#b9dcd4/);
+  assert.match(css, /\.convlist \.convrow button\.dot\{width:48px;height:48px/);
+  assert.match(css, /\.convprev\{white-space:normal;display:-webkit-box;[^}]*-webkit-line-clamp:2/);
+});

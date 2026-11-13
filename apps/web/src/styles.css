@@ -502,3 +502,33 @@ html[data-keyboard] .blockbox{max-height:calc(var(--vv-h,100dvh) * .34)}
 .blockbox-long{margin:0}
 .blockbox-guide{margin:0;font-size:14px}
 .blockbox-more{align-self:flex-start;min-height:32px;padding:2px 0;background:transparent;border:0;color:var(--accent);font-size:14px;font-weight:600;text-decoration:underline;text-underline-offset:2px}
+/* Messenger look (generic patterns familiar from mainstream chat apps, in Rolff's own colours; no third-party assets).
+   Dark: deep near-black background, dark grey incoming and deep teal-green own bubbles. */
+[data-theme=dark]{--bg:#0d1417;--card:#172124;--theirs:#1f2c30;--mine:#0b5c52;--mine-text:#e9f2f0;--mine-time:#b9dcd4;--theirs-time:#9fb4b0;--composer-surface:#1f2c30;--composer-focus:#243337;--border:#2c3a3d}
+:root{--mine-text:var(--text);--theirs-time:var(--muted);--wallpaper:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'%3E%3Cg fill='none' stroke='%23016C72' stroke-opacity='0.035' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 18h26a6 6 0 0 1 6 6v12a6 6 0 0 1-6 6H26l-8 6v-6h-4a6 6 0 0 1-6-6V24a6 6 0 0 1 6-6z'/%3E%3Cg transform='translate%28118 10%29'%3E%3Cpath d='M4 22L22 6l18 16M9 18v20h26V18'/%3E%3Cpath d='M18 38V28h8v10'/%3E%3C/g%3E%3Cg transform='translate%2872 64%29'%3E%3Cpath d='M16 30S2 21 2 12a7 7 0 0 1 14-2 7 7 0 0 1 14 2c0 9-14 18-14 18z'/%3E%3C/g%3E%3Cg transform='translate%28160 78%29'%3E%3Ccircle cx='14' cy='14' r='6'/%3E%3Cpath d='M14 2v4M14 22v4M2 14h4M22 14h4M5.5 5.5l2.8 2.8M19.7 19.7l2.8 2.8M5.5 22.5l2.8-2.8M19.7 8.3l2.8-2.8'/%3E%3C/g%3E%3Cg transform='translate%2812 98%29'%3E%3Cpath d='M6 34C6 16 18 6 36 6c0 18-10 30-28 28zM6 34L24 16'/%3E%3C/g%3E%3Cg transform='translate%28116 124%29'%3E%3Crect x='3' y='7' width='32' height='28' rx='4'/%3E%3Cpath d='M3 15h32M11 3v8M27 3v8'/%3E%3Cpath d='M11 23h4M19 23h4M11 29h4'/%3E%3C/g%3E%3Cg transform='translate%2858 150%29'%3E%3Cpath d='M2 18L38 3 28 37l-9-12-17-7z'/%3E%3Cpath d='M19 25l19-22'/%3E%3C/g%3E%3Cg transform='translate%28176 166%29'%3E%3Cpath d='M10 1l2.6 6 6.4.6-4.9 4.2 1.5 6.3L10 14.8 4.4 18.1l1.5-6.3L1 7.6l6.4-.6z'/%3E%3C/g%3E%3Cg transform='translate%2814 162%29'%3E%3Crect x='3' y='10' width='22' height='24' rx='5'/%3E%3Cpath d='M9 10V7a5 5 0 0 1 10 0v3M3 20h22'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")}
+[data-theme=dark]{--wallpaper:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='0.03' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 18h26a6 6 0 0 1 6 6v12a6 6 0 0 1-6 6H26l-8 6v-6h-4a6 6 0 0 1-6-6V24a6 6 0 0 1 6-6z'/%3E%3Cg transform='translate%28118 10%29'%3E%3Cpath d='M4 22L22 6l18 16M9 18v20h26V18'/%3E%3Cpath d='M18 38V28h8v10'/%3E%3C/g%3E%3Cg transform='translate%2872 64%29'%3E%3Cpath d='M16 30S2 21 2 12a7 7 0 0 1 14-2 7 7 0 0 1 14 2c0 9-14 18-14 18z'/%3E%3C/g%3E%3Cg transform='translate%28160 78%29'%3E%3Ccircle cx='14' cy='14' r='6'/%3E%3Cpath d='M14 2v4M14 22v4M2 14h4M22 14h4M5.5 5.5l2.8 2.8M19.7 19.7l2.8 2.8M5.5 22.5l2.8-2.8M19.7 8.3l2.8-2.8'/%3E%3C/g%3E%3Cg transform='translate%2812 98%29'%3E%3Cpath d='M6 34C6 16 18 6 36 6c0 18-10 30-28 28zM6 34L24 16'/%3E%3C/g%3E%3Cg transform='translate%28116 124%29'%3E%3Crect x='3' y='7' width='32' height='28' rx='4'/%3E%3Cpath d='M3 15h32M11 3v8M27 3v8'/%3E%3Cpath d='M11 23h4M19 23h4M11 29h4'/%3E%3C/g%3E%3Cg transform='translate%2858 150%29'%3E%3Cpath d='M2 18L38 3 28 37l-9-12-17-7z'/%3E%3Cpath d='M19 25l19-22'/%3E%3C/g%3E%3Cg transform='translate%28176 166%29'%3E%3Cpath d='M10 1l2.6 6 6.4.6-4.9 4.2 1.5 6.3L10 14.8 4.4 18.1l1.5-6.3L1 7.6l6.4-.6z'/%3E%3C/g%3E%3Cg transform='translate%2814 162%29'%3E%3Crect x='3' y='10' width='22' height='24' rx='5'/%3E%3Cpath d='M9 10V7a5 5 0 0 1 10 0v3M3 20h22'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")}
+/* Original Rolff doodle wallpaper (strokes at 3–3.5 % opacity), static behind the scrolling messages. */
+.chat-wrap > .msgs{background-color:var(--bg);background-image:var(--wallpaper);background-size:200px 200px;background-repeat:repeat}
+.msg{padding:6px 10px 7px;border-radius:12px;line-height:1.38}
+.msg.mine{color:var(--mine-text);border-top-right-radius:12px}
+.msg.theirs{border:0;border-top-left-radius:12px;box-shadow:0 1px .5px rgba(11,20,26,.13)}
+[data-theme=dark] .msg.theirs,[data-theme=dark] .msg.mine{box-shadow:0 1px .5px rgba(0,0,0,.25)}
+.msg.mine{box-shadow:0 1px .5px rgba(11,20,26,.13)}
+.msg.mine.tailed{border-top-right-radius:2px}.msg.theirs.tailed{border-top-left-radius:2px}
+.msg.tailed{margin-top:6px}
+.msg-meta-spacer{display:inline-block;width:42px;height:1px;vertical-align:baseline}
+.msg-meta-spacer.has-tick{width:60px}
+.msg-meta{position:absolute;right:9px;bottom:4px;display:inline-flex;align-items:center;gap:3px;line-height:1;pointer-events:none}
+.msg-meta .message-time{display:inline;margin:0;font-size:11px;line-height:1}
+.msg.theirs .msg-meta .message-time{color:var(--theirs-time)}
+.msg-tick{flex:none;color:var(--mine-time)}
+/* Pill date separator, centred. */
+.day-sep span{background:color-mix(in srgb,var(--card) 94%,var(--text));box-shadow:0 1px .5px rgba(11,20,26,.13)}
+[data-theme=dark] .day-sep span{background:#1b2629;color:#a9bbb8}
+/* Signal-style list: 48px avatars, no hard dividers, ~72px rows, bold truncated name, 2-line grey preview. */
+.convlist .convrow button.dot{width:48px;height:48px;min-width:48px;min-height:48px;font-size:19px}
+.convlist .convrow .palette{top:54px}
+.convrow .convbtn,.convrow:last-child .convbtn{border-bottom:0;min-height:72px;padding:10px 16px 10px 0;gap:2px}
+.convname{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:650;min-width:0}
+.convprev{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;font-size:14.5px}
+.convrow{border-radius:0}
