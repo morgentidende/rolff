@@ -140,8 +140,10 @@ export function MessageBubble({ m, lang, children, onReply, canReply = true, hit
       onContextMenu={e => { if ((e.target as HTMLElement).closest("button,a")) return; e.preventDefault(); openActions(false); }}
       onKeyDown={e => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " " || e.key === "ContextMenu" || (e.shiftKey && e.key === "F10"))) { e.preventDefault(); openActions(false); } }}>
       {(m.reply_to_id || m.has_reply) && <ReplyPreview body={m.reply_body} unavailable={m.reply_body == null} lang={lang} />}
-      <div className="message-content">{children ?? m.body}</div>
-      <time className="message-time" dateTime={m.created_at}>{messageTime(m.created_at, lang)}</time>
+      {/* Time (and, on own messages, a single "sent" tick) sit inside the bubble at the bottom right; the
+          invisible spacer reserves room on the last text line so they never overlap the text. */}
+      <div className="message-content">{children ?? m.body}<span className={`msg-meta-spacer${m.mine ? " has-tick" : ""}`} aria-hidden="true" /></div>
+      <span className="msg-meta"><time className="message-time" dateTime={m.created_at}>{messageTime(m.created_at, lang)}</time>{m.mine && <><svg className="msg-tick" width="16" height="11" viewBox="0 0 16 11" aria-hidden="true" focusable="false"><path d="M1.5 5.8l3.6 3.6L14.5 1.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg><span className="sr-only">{da ? "Sendt" : "Sent"}</span></>}</span>
     </div>
     {panel && createPortal(<div className="message-overlay" onPointerDown={e => { if (armed) { e.preventDefault(); return; } if (e.target === e.currentTarget) close(); }} onContextMenu={e => e.preventDefault()}>
       <div className="message-lifted" ref={lifted} aria-hidden="true" />

@@ -1,5 +1,5 @@
 // User-facing tone copy: no "ordre"/"dikterer"/"pressende" wording; moderation rule itself is unchanged elsewhere.
-const files = ["apps/web/src/i18n.ts", "apps/web/src/App.tsx", "apps/web/public/privatliv.html"];
+const files = ["apps/web/src/i18n.ts", "apps/web/src/App.tsx", "apps/web/public/privatliv.html", "apps/web/src/BlockedNotice.tsx"];
 const read = (f: string) => Deno.readTextFileSync(f);
 Deno.test("no ordre/dikter/pressende wording in user-facing copy", () => {
   for (const f of files) {

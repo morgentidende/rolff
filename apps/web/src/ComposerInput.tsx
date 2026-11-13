@@ -80,7 +80,7 @@ export function ComposerInput({ lang, text, onText, textareaRef, plan, cap, busy
       <button type="button" className="composer-icon" disabled={busy || plan === null} aria-label={da ? "Tag billede" : "Take photo"} title={da ? "Tag billede" : "Take photo"} onClick={() => choose("camera")}><Glyph><path d="M4 6h4l2-3h4l2 3h4a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z" /><circle cx="12" cy="13" r="4" /></Glyph></button>
       </div>
       </div>
-      <button type="button" className="composer-send" aria-label={busy ? (da ? "Sender" : "Sending") : file ? (da ? "Send vedhæftning" : "Send attachment") : (da ? "Send besked" : "Send message")} title={da ? "Send" : "Send"} disabled={busy || !canSend || (count > cap && !retry) || plan === null} onClick={onSend}><Glyph><path d="m22 2-7 20-4-9-9-4Z" /><path d="m22 2-11 11" /></Glyph></button>
+      <button type="button" className="composer-send" aria-busy={busy || undefined} aria-label={busy ? (da ? "Sender" : "Sending") : file ? (da ? "Send vedhæftning" : "Send attachment") : (da ? "Send besked" : "Send message")} title={da ? "Send" : "Send"} disabled={busy || !canSend || (count > cap && !retry) || plan === null} onClick={onSend}>{busy ? <span className="send-spinner" aria-hidden="true" /> : <Glyph><path d="m22 2-7 20-4-9-9-4Z" /><path d="m22 2-11 11" /></Glyph>}</button>
     </div>
     <input type="file" ref={picker} accept={FILE_ACCEPT} hidden disabled={busy} onChange={e => selected(e.currentTarget)} />
     <input type="file" ref={camera} accept="image/*" capture="environment" hidden disabled={busy} onChange={e => selected(e.currentTarget)} />

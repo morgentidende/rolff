@@ -71,13 +71,14 @@ test('Rapportér: fixed textarea + counter, contained list newest first with nic
     assert.equal(sheet.querySelector('h2').textContent, 'Rapportér');
     const ta = d.getElementById('rb'); assert.ok(ta.classList.contains('fixed-text')); assert.equal(ta.maxLength, 2000);
     assert.equal(d.getElementById('rb-count').textContent, '0/2000');
-    const btn = button(d, 'Se forhåndsvisning'); assert.ok(btn.disabled); assert.ok(btn.closest('.sheet-actions'));
+    const btn = button(d, 'Se forhåndsvisning'); assert.equal(btn.getAttribute('aria-disabled'), 'true', 'not ready yet, but still tappable'); assert.ok(!btn.disabled); assert.ok(btn.closest('.sheet-actions'));
+    await click(btn); assert.equal(d.querySelector('.sheet h2').textContent, 'Rapportér', 'stays on the form'); assert.equal(d.getElementById('report-hint').getAttribute('role'), 'alert', 'tap explains what is missing'); assert.equal(d.activeElement, d.getElementById('rb'), 'focus moves to the description'); assert.match(d.getElementById('rb').getAttribute('aria-describedby'), /report-hint/);
     assert.match(d.querySelector('.rm-head').textContent, /Valgt 0 af højst 20/);
     assert.match(d.querySelector('.rm-sub').textContent, /Nyeste øverst/);
     const row = d.querySelector('.report-msgs .report-msg'); assert.ok(row.querySelector('input.check'));
     assert.match(row.querySelector('.rm-meta').textContent, /^Dig · /); assert.ok(row.querySelector('time'));
     assert.ok(row.querySelector('.rm-body.clamp2'));
-    await put(w, ta, 'Synthetic description\nline two'); assert.equal(d.getElementById('rb-count').textContent, '30/2000'); assert.ok(!btn.disabled);
+    await put(w, ta, 'Synthetic description\nline two'); assert.equal(d.getElementById('rb-count').textContent, '30/2000'); assert.ok(!btn.hasAttribute('aria-disabled'));
     await click(btn); await delay(30);
     assert.equal(d.querySelector('.sheet h2').textContent, 'Rapportér · Tjek og send');
     const dts = [...d.querySelectorAll('.report-summary dt')].map(x => x.textContent); assert.deepEqual(dts, ['Kategori', 'Beskrivelse', 'Vedhæftede beskeder (0)']);

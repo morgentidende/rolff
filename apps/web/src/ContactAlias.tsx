@@ -55,6 +55,7 @@ export function ContactAliasDialog({ lang, contacts, save, saved, close }: {
   };
   const selected = contacts.find(c => c.user_id === id);
   return <dialog ref={dialog} className="contact-alias-dialog" aria-labelledby="contact-alias-title"
+    onScroll={e => { const el = e.currentTarget; if (el.scrollTop > 2) el.dataset.scrolled = ""; else delete el.dataset.scrolled; }}
     onPointerDown={e => { backdropDown.current = e.target === e.currentTarget; }}
     onCancel={e => { e.preventDefault(); close(); }} onClick={e => {
       // Only a press that STARTED on the backdrop dismisses: the release of the long-press that
@@ -69,9 +70,12 @@ export function ContactAliasDialog({ lang, contacts, save, saved, close }: {
     {!contacts.length ? <p>{da ? "Kaldenavnet kan ændres, når invitationen er accepteret." : "You can change the nickname after the invitation is accepted."}</p> : <>
       {contacts.length > 1 && <label>{da ? "Vælg person" : "Choose person"}<select value={id} disabled={busy} onChange={e => { const c = contacts.find(c => c.user_id === e.target.value); setId(c?.user_id ?? ""); setValue(c?.alias ?? ""); setErr(""); }}><option value="">{da ? "Vælg person…" : "Choose person…"}</option>{contacts.map(c => <option key={c.user_id} value={c.user_id}>{c.alias || c.email}</option>)}</select></label>}
       {selected && <form onSubmit={e => { e.preventDefault(); void submit(value); }}>
-        <label htmlFor="contact-alias-input">{da ? "Kaldenavn" : "Nickname"}</label><input ref={input} id="contact-alias-input" maxLength={40} value={value} placeholder={selected.email} disabled={busy} onChange={e => { setValue(e.target.value); setErr(""); }} />
-        <p className="meta">{da ? "Nulstil for at vise personens oprindelige navn igen." : "Reset to show the person's original name again."}</p>
-        <div className="row end"><button type="button" className="ghost" disabled={busy} onClick={() => void submit("")}>{da ? "Nulstil kaldenavn" : "Reset nickname"}</button><button type="submit" disabled={busy}>{busy ? (da ? "Gemmer…" : "Saving…") : (da ? "Gem" : "Save")}</button><button type="button" className="ghost" disabled={busy} onClick={dismiss}>{da ? "Annuller" : "Cancel"}</button></div>
+        <label htmlFor="contact-alias-input">{da ? "Kaldenavn" : "Nickname"}</label>
+        {/* A private display name for someone else: never the user's own name/email, so no autofill. */}
+        <input ref={input} id="contact-alias-input" name="contact-nickname" type="text" inputMode="text" autoComplete="off" autoCorrect="off" autoCapitalize="words" spellCheck={false} enterKeyHint="done" data-lpignore="true" data-1p-ignore="true" data-form-type="other" maxLength={40} value={value} placeholder={da ? "Skriv et kaldenavn" : "Enter a nickname"} aria-describedby="contact-alias-original" disabled={busy} onChange={e => { setValue(e.target.value); setErr(""); }} />
+        <p className="meta" id="contact-alias-original">{da ? "Oprindeligt navn: " : "Original name: "}<span className="alias-original">{selected.email}</span></p>
+        {selected.alias && <button type="button" className="text-link alias-reset" disabled={busy} onClick={() => void submit("")}>{da ? "Nulstil kaldenavn" : "Reset nickname"}</button>}
+        <div className="dialog-actions"><button type="button" className="ghost" disabled={busy} onClick={dismiss}>{da ? "Annuller" : "Cancel"}</button><button type="submit" disabled={busy}>{busy ? (da ? "Gemmer…" : "Saving…") : (da ? "Gem" : "Save")}</button></div>
       </form>}
     </>}
     {err && <p className="err" role="alert">{err}</p>}

@@ -5,3 +5,27 @@
 .export-confirm .export-recipient{display:inline-block;margin-top:4px;padding:6px 10px;border-radius:8px;background:color-mix(in srgb,var(--accent) 12%,var(--card));font-weight:700;word-break:break-all}
 .export-upgrade{margin:4px 0}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+/* Form polish: short lead, radio cards with a secondary line, full-width dates, presets, one primary button */
+.export-lead{margin:0 0 4px;font-size:14.5px;line-height:1.45;color:var(--muted)}
+.export-more{margin:6px 0 4px}
+.export-fieldset{border:0;padding:0;margin:16px 0 0;min-width:0}
+.export-fieldset legend{padding:0;margin:0 0 6px;font-size:16px;font-weight:650;color:var(--text)}
+.export-form .choices{margin:0}
+.export-form .choice{min-height:52px;padding:8px 14px;align-items:center}
+.export-form .choice input{flex:none;margin:0}
+.choice-text{display:flex;flex-direction:column;min-width:0;flex:1}
+.choice-title{font-size:16px;line-height:1.3}
+.choice-sub{font-size:13.5px;line-height:1.35;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.export-period{margin:10px 0 0}
+.export-presets{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 10px}
+.chip-btn{min-height:36px;padding:0 14px;border-radius:999px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:14px;font-weight:550;white-space:nowrap}
+.chip-btn.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--text)}
+.export-dates{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+.export-dates label{display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--muted);min-width:0}
+.export-dates input[type=date]{width:100%;min-width:0;min-height:48px;padding:0 10px;font:inherit;font-size:16px;color:var(--text);background:var(--card);border:1px solid var(--border);border-radius:10px;box-sizing:border-box}
+.export-email-wrap{margin:10px 0 0;display:flex;flex-direction:column;gap:4px}
+.export-email-wrap label{font-size:14px;color:var(--muted)}
+.export-email-wrap input{width:100%;box-sizing:border-box}
+.export-actions{display:grid;grid-template-columns:1fr;margin:18px 0 0}
+.export-actions button{width:100%;min-height:48px;border-radius:10px;font-weight:600;white-space:nowrap}
+.export-confirm .dialog-actions{margin-top:14px}

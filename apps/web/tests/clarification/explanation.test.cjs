@@ -46,3 +46,29 @@ for (const explanation of [EXPL, undefined]) test(`file: ${explanation ? 'explan
     else assert.match(d.body.textContent, /Filen blev ikke sendt: teksten/);
   } finally { await f.close(); }
 });
+test('compact blocked box: header + close, one flagged line, quoted suggestion with primary button, short fine print, Mere expands', async () => {
+  const f = await env(); const { w, d } = f; try {
+    const box = await sendText(f, { status: 'blocked', reason_code: 'controlling_demand', spans: ['blokeret'], suggestion: 'Opdigtet venligt forslag.', explanation: EXPL });
+    assert.ok(box.classList.contains('blockbox'));
+    assert.equal(box.querySelector('.blockbox-head strong').textContent, 'Ikke sendt');
+    assert.equal(box.querySelector('.blockbox-flag mark').textContent, 'blokeret');
+    assert.equal(box.querySelectorAll('.blockbox-flag').length, 1);
+    assert.equal(box.querySelector('.blockbox-quote').textContent, 'Opdigtet venligt forslag.');
+    const use = box.querySelector('.blockbox-use'); assert.equal(use.textContent, 'Brug forslaget'); assert.ok(!use.classList.contains('ghost'));
+    assert.equal(box.querySelector('.blockbox-act .blockbox-fine').textContent, 'Du kan rette den – det tjekkes igen.');
+    assert.equal(box.querySelector('.blockbox-long'), null);
+    const more = box.querySelector('.blockbox-more'); assert.equal(more.getAttribute('aria-expanded'), 'false');
+    await click(more); assert.equal(more.getAttribute('aria-expanded'), 'true'); assert.ok(box.querySelector('.blockbox-reason.open')); assert.ok(box.querySelector('.blockbox-long'));
+    await click(use); await delay(30);
+    assert.equal(label(d, 'Skriv en besked').value, 'Opdigtet venligt forslag.'); assert.equal(d.querySelector('.blockbox'), null);
+  } finally { await f.close(); }
+});
+test('compact blocked box: close (X) dismisses and keeps the typed text; guidance shown without a use button', async () => {
+  const f = await env(); const { d } = f; try {
+    const box = await sendText(f, { status: 'blocked', reason_code: 'personal_attack', spans: [], suggestion: '', explanation: EXPL });
+    assert.equal(box.querySelector('.blockbox-use'), null); assert.match(box.querySelector('.blockbox-guide').textContent, /^Vejledning: /);
+    assert.equal(box.querySelector('.blockbox-flag'), null);
+    await click(box.querySelector('button[aria-label="Luk"]')); await delay(30);
+    assert.equal(d.querySelector('.blockbox'), null); assert.equal(label(d, 'Skriv en besked').value, 'Opdigtet blokeret testbesked.');
+  } finally { await f.close(); }
+});

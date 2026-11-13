@@ -1,0 +1,188 @@
+// Synthetic UI checks for the dialog/sheet polish. Mocked Supabase only (see back-navigation/mock-supabase.ts).
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const esbuild = require('esbuild');
+const { env, delay, button, label, click } = require('../back-navigation/support.cjs');
+const src = f => fs.readFileSync(path.join(__dirname, '../../src', f), 'utf8');
+const css = src('styles.css');
+
+test('Kaldenavn: no autofill of own emails, neutral placeholder, two-button row, reset only when an alias exists', { timeout: 8000 }, async () => {
+  const fx = await env(false); const { w, d } = fx;
+  try {
+    d.querySelector('.convbtn').dispatchEvent(new w.MouseEvent('contextmenu', { bubbles: true, cancelable: true })); await delay(30);
+    const dlg = d.querySelector('dialog.contact-alias-dialog[open]'); assert.ok(dlg);
+    const input = d.getElementById('contact-alias-input');
+    assert.equal(input.getAttribute('name'), 'contact-nickname');
+    assert.equal(input.getAttribute('autocomplete'), 'off');
+    assert.equal(input.getAttribute('inputmode'), 'text');
+    assert.equal(input.getAttribute('type'), 'text');
+    assert.equal(input.getAttribute('placeholder'), 'Skriv et kaldenavn');
+    assert.ok(!/@/.test(input.getAttribute('placeholder')), 'placeholder never shows an email');
+    assert.match(d.getElementById('contact-alias-original').textContent, /kontakt@example\.invalid/, 'original name shown as help text instead');
+    const actions = dlg.querySelector('.dialog-actions'); assert.ok(actions);
+    assert.deepEqual([...actions.querySelectorAll('button')].map(b => b.textContent), ['Annuller', 'Gem']);
+    assert.ok(![...dlg.querySelectorAll('button')].some(b => b.textContent === 'Nulstil kaldenavn'), 'no reset without an alias');
+  } finally { await fx.close(); }
+});
+
+test('Deltagere og roller: one-line name + role line, compact Indstillinger, separated outlined Forlad with in-app confirm', { timeout: 8000 }, async () => {
+  const fx = await env(false); const { w, d } = fx;
+  try {
+    await click(d.querySelector('.convbtn')); await delay(40);
+    await click(label(d, 'Menu')); await click(button(d, 'Deltagere og roller')); await delay(40);
+    const rows = [...d.querySelectorAll('.member-list > li')]; assert.equal(rows.length, 2);
+    assert.deepEqual(rows.map(r => r.querySelector('.member-name').textContent), ['Dig', 'Testkontakt']);
+    assert.deepEqual(rows.map(r => r.querySelector('.member-role').textContent), ['Part', 'Part']);
+    const set = rows[1].querySelector('button.member-settings');
+    assert.equal(set.textContent.trim(), 'Indstillinger'); assert.equal(set.getAttribute('aria-label'), 'Indstillinger for Testkontakt');
+    assert.ok(!d.body.textContent.includes('Indstillinger for denne person'));
+    const leave = d.querySelector('.member-leave button'); assert.ok(leave.classList.contains('danger-outline')); assert.equal(leave.textContent, 'Forlad samtalen');
+    assert.ok(d.querySelector('.member-note').compareDocumentPosition(leave) & 4, 'leave sits below the help text, in its own block');
+    await click(leave); await delay(20);
+    assert.ok(d.querySelector('.confirm-card'), 'in-app confirm before leaving');
+    assert.ok(!w.QA.calls.some(c => c.name === 'leave_conversation'), 'nothing happens before confirming');
+  } finally { await fx.close(); }
+});
+
+test('CSS: composer hidden behind any modal; sheets and dialogs sit above the keyboard; buttons never wrap', () => {
+  assert.match(css, /:root:has\(dialog\[open\]\) \.chat-wrap \.card\.composer,:root:has\(\.overlay\) \.chat-wrap \.card\.composer\{visibility:hidden\}/);
+  assert.match(css, /\.chat-wrap \.card\.composer dialog\[open\]\{visibility:visible\}/, 'dialogs inside the composer stay visible');
+  assert.match(css, /\.overlay\{bottom:var\(--kbd-inset,0px\)\}/);
+  assert.match(css, /\.contact-alias-dialog\{bottom:var\(--kbd-inset,0px\);max-height:min\(88dvh,calc\(var\(--vv-h,100dvh\)/);
+  assert.match(css, /dialog\.composer-upgrade,dialog\.blocking-dialog\{bottom:var\(--kbd-inset,0px\)/);
+  assert.match(css, /\.dialog-actions button\{[^}]*white-space:nowrap/);
+  assert.match(css, /\.member-name\{white-space:nowrap;overflow:hidden;text-overflow:ellipsis/);
+  assert.match(css, /\.member-text\{flex:1;min-width:0/);
+  assert.match(css, /button\[aria-disabled=true\]\{opacity:\.55\}/);
+});
+
+test('viewportVars: keyboard inset = layout height minus the visible viewport', async () => {
+  const out = await esbuild.build({ entryPoints: [path.join(__dirname, '../../src/viewport.ts')], bundle: true, write: false, format: 'cjs', logLevel: 'silent' });
+  const m = { exports: {} }; new Function('module', 'exports', out.outputFiles[0].text)(m, m.exports);
+  const { viewportVars } = m.exports;
+  assert.deepEqual(viewportVars({ innerHeight: 844, visualViewport: { height: 514, offsetTop: 0 } }), { vh: 514, inset: 330 });
+  assert.deepEqual(viewportVars({ innerHeight: 844, visualViewport: { height: 514, offsetTop: 100 } }), { vh: 514, inset: 230 });
+  assert.deepEqual(viewportVars({ innerHeight: 800, visualViewport: null }), { vh: 800, inset: 0 });
+});
+
+test('Non-credential fields never invite address/email autofill', () => {
+  const app = src('App.tsx'), alias = src('ContactAlias.tsx'), exp = src('ConversationExport.tsx'), bl = src('BlockingLists.tsx');
+  assert.match(alias, /name="contact-nickname" type="text" inputMode="text" autoComplete="off"/);
+  assert.match(exp, /id="export-email" name="recipient-email" type="email" inputMode="email" autoComplete="off"/);
+  assert.match(app, /const inviteEmailProps = \{ name: "invitee-email", type: "email", inputMode: "email", enterKeyHint: "send", autoComplete: "off"/);
+  assert.match(app, /id="rb" name="report-description" autoComplete="off"/);
+  assert.match(app, /id="fb" name="feedback" autoComplete="off"/);
+  assert.match(bl, /id="blocked-word"[^>]*autoComplete="off"/);
+  assert.match(bl, /id="blocked-topic"[^>]*autoComplete="off"/);
+});
+
+test('Feedback and Slet konto: tapping an incomplete form explains why and moves focus', { timeout: 8000 }, async () => {
+  const fx = await env(false); const { w, d } = fx;
+  try {
+    await click(label(d, 'Menu')); await click(button(d, 'Feedback')); await delay(30);
+    const send = button(d, 'Send feedback'); assert.equal(send.disabled, false); assert.equal(send.getAttribute('aria-disabled'), 'true');
+    send.closest('form').requestSubmit(); await delay(20);
+    assert.equal(d.getElementById('fb-hint').textContent, 'Skriv din feedback for at sende.'); assert.equal(d.activeElement, d.getElementById('fb'));
+    assert.ok(!w.QA.calls.some(c => c.name === 'feedback'));
+    await click(d.querySelector('.sheethead button.icon')); await delay(20);
+    await click(label(d, 'Menu')); await click(button(d, 'Privatliv og sletning')); await delay(40);
+    const del = button(d, 'Slet min konto permanent'); assert.equal(del.getAttribute('aria-disabled'), 'true');
+    del.closest('form').requestSubmit(); await delay(20);
+    assert.match(d.getElementById('delpw-hint').textContent, /Skriv din adgangskode/); assert.equal(d.activeElement, d.getElementById('delpw'));
+    const pw = d.getElementById('delpw'); Object.getOwnPropertyDescriptor(w.HTMLInputElement.prototype, 'value').set.call(pw, 'x'); pw.dispatchEvent(new w.Event('input', { bubbles: true })); await delay(10);
+    del.closest('form').requestSubmit(); await delay(20);
+    assert.equal(d.getElementById('delack-hint').textContent, 'Sæt flueben i ”Jeg forstår …” for at slette.'); assert.equal(d.activeElement, d.getElementById('delack'));
+    assert.equal(d.getElementById('delack').getAttribute('aria-describedby'), 'delack-hint');
+    await click(d.getElementById('delack')); assert.ok(!d.getElementById('delack-hint'), 'cleared when ticked');
+  } finally { await fx.close(); }
+});
+
+test('Front page: pills row, dismissible press-and-hold tip remembered in localStorage, hidden after first use', { timeout: 8000 }, async () => {
+  let fx = await env(false); let { w, d } = fx;
+  try {
+    assert.ok(!d.querySelector('.convlist-head h2'));
+    const pills = [...d.querySelectorAll('.convlist-head button')].map(b => b.textContent.trim());
+    assert.equal(pills[pills.length - 1], 'Inviter person');
+    const hint = d.querySelector('.convhint'); assert.ok(hint); assert.match(hint.textContent, /Hold fingeren på en samtale/);
+    await click(hint.querySelector('button[aria-label="Skjul tip"]'));
+    assert.equal(d.querySelector('.convhint'), null); assert.equal(w.localStorage.getItem('convHintDismissed'), '1');
+  } finally { await fx.close(); }
+  fx = await env(false); ({ w, d } = fx);
+  try {
+    assert.ok(d.querySelector('.convhint'), 'fresh device shows the tip');
+    d.querySelector('.convbtn').dispatchEvent(new w.MouseEvent('contextmenu', { bubbles: true, cancelable: true })); await delay(30);
+    assert.equal(d.querySelector('.convhint'), null, 'gone after the gesture was used once'); assert.equal(w.localStorage.getItem('convHintDismissed'), '1');
+  } finally { await fx.close(); }
+});
+
+test('PWA icons: separate any/maskable/monochrome entries, cache-busted; maskable and apple icons have no transparency', () => {
+  const pub = p => path.join(__dirname, '../../public', p);
+  const m = JSON.parse(fs.readFileSync(pub('manifest.webmanifest'), 'utf8'));
+  const by = k => m.icons.filter(i => i.purpose === k).map(i => i.sizes);
+  assert.deepEqual(by('any').filter(s => s !== 'any'), ['192x192', '512x512']);
+  assert.deepEqual(by('maskable'), ['192x192', '512x512']);
+  assert.deepEqual(by('monochrome'), ['512x512']);
+  assert.ok(m.icons.every(i => /\?v=\d+$/.test(i.src)), 'icon URLs are versioned so phones refetch');
+  const png = f => { const b = fs.readFileSync(pub(f)); return { w: b.readUInt32BE(16), h: b.readUInt32BE(20), colorType: b[25] }; };
+  for (const f of ['icons/rolff-maskable-512.png', 'icons/rolff-maskable-192.png', 'apple-touch-icon.png']) assert.equal(png(f).colorType, 2, `${f} is opaque RGB`);
+  assert.deepEqual([png('apple-touch-icon.png').w, png('apple-touch-icon.png').h], [180, 180]);
+  assert.equal(png('icons/rolff-monochrome-512.png').colorType, 6, 'monochrome keeps alpha');
+  const html = fs.readFileSync(path.join(__dirname, '../../index.html'), 'utf8');
+  assert.match(html, /rel="apple-touch-icon" sizes="180x180" href="\.\/apple-touch-icon\.png\?v=2"/);
+  assert.match(html, /rel="manifest" href="\.\/manifest\.webmanifest\?v=2"/);
+});
+
+test('Day separators: I dag / I går / weekday / date, in da and en; tail stays on the first bubble of a group', async () => {
+  const out = await esbuild.build({ entryPoints: [path.join(__dirname, '../../src/daySeparator.ts')], bundle: true, write: false, format: 'cjs', logLevel: 'silent' });
+  const m = { exports: {} }; new Function('module', 'exports', out.outputFiles[0].text)(m, m.exports);
+  const { dayLabel, dayKey } = m.exports; const now = new Date(2026, 10, 13, 8, 51);
+  const at = (d, h, mi = 0) => new Date(2026, 10, d, h, mi).toISOString();
+  assert.equal(dayLabel(at(13, 0, 5), 'da', now), 'I dag'); assert.equal(dayLabel(at(13, 0, 5), 'en', now), 'Today');
+  assert.equal(dayLabel(at(12, 22, 57), 'da', now), 'I går'); assert.equal(dayLabel(at(12, 22, 57), 'en', now), 'Yesterday');
+  assert.equal(dayLabel(at(10, 12), 'da', now), 'Tirsdag'); assert.equal(dayLabel(at(10, 12), 'en', now), 'Tuesday');
+  assert.match(dayLabel(at(2, 12), 'da', now), /^Man\.? 2\. november$/); assert.match(dayLabel(at(2, 12), 'en', now), /^Mon,? 2 November$/);
+  assert.notEqual(dayKey(at(12, 23, 59)), dayKey(at(13, 0, 1)));
+  const app = src('App.tsx');
+  assert.match(app, /tailed=\{newDay \|\| !sameSender\(msgs\[i - 1\], m\)\}/, 'tail on the first bubble of each group (WhatsApp style), new group per day');
+  assert.match(app, /className="day-sep" role="separator"/);
+  assert.match(css, /\.msg\.mine \.message-time\{opacity:1;color:var\(--mine-time\)\}/);
+  assert.match(css, /\.composer-send:disabled\{opacity:1;background:/);
+});
+
+test('Luna checking state: crisp 32px robot (no glow blur), separate "Tjekker…" chip, busy send button; animation untouched', () => {
+  const luna = src('LunaRobot.tsx'), lcss = src('lunaRobot.css'), comp = src('ComposerInput.tsx');
+  assert.match(luna, /<span className="luna-robot-slot"><LunaRobot size=\{32\} \/><\/span>/);
+  assert.match(luna, /filter=\{crisp \? undefined : `url\(#\$\{id\}g\)`\}/);
+  assert.match(lcss, /\.luna-in-composer \.luna-check-label\{display:inline-flex;[^}]*border-radius:999px/);
+  assert.match(lcss, /@keyframes lr-bob/); assert.match(lcss, /@keyframes lr-eyes/);
+  assert.match(comp, /className="composer-send" aria-busy=\{busy \|\| undefined\}/);
+  assert.match(comp, /busy \? <span className="send-spinner" aria-hidden="true" \/>/);
+  assert.match(css, /prefers-reduced-motion:reduce\)\{\.send-spinner\{animation:none/);
+});
+
+test('blocked box never pushes the composer away: capped height, internal scroll, smaller with keyboard, no shrinking children', () => {
+  assert.match(css, /\.blockbox\{[^}]*max-height:min\(40dvh,calc\(var\(--vv-h,100dvh\) \* \.4\)\);overflow-y:auto;overscroll-behavior:contain/);
+  assert.match(css, /\.blockbox > \*\{flex-shrink:0\}/);
+  assert.match(css, /html\[data-keyboard\] \.blockbox\{max-height:calc\(var\(--vv-h,100dvh\) \* \.34\)\}/);
+  assert.match(css, /\.blockbox-reason\{[^}]*-webkit-line-clamp:2/);
+  assert.match(css, /\.blockbox-flag\{[^}]*white-space:nowrap;overflow:hidden;text-overflow:ellipsis/);
+  const bn = src('BlockedNotice.tsx');
+  assert.match(bn, /role="alert" aria-labelledby="blockbox-title"/);
+  assert.match(bn, /"Ikke sendt" : "Not sent"/); assert.match(bn, /"Mere" : "More"/); assert.match(bn, /"Markeret:" : "Flagged:"/);
+  assert.doesNotMatch(bn, /ordre|dikter|dictate/i);
+});
+
+test('messenger look: time + single "sent" tick inside the bubble, original low-opacity wallpaper, Signal-style list rows', () => {
+  const mb = src('MessageBubble.tsx');
+  assert.match(mb, /<span className="msg-meta"><time className="message-time"/);
+  assert.match(mb, /m\.mine && <><svg className="msg-tick"[^]*?<span className="sr-only">\{da \? "Sendt" : "Sent"\}<\/span>/);
+  assert.match(mb, /msg-meta-spacer/);
+  const ops = [...css.matchAll(/stroke-opacity='([\d.]+)'/g)].map(m => Number(m[1]));
+  assert.equal(ops.length, 2); for (const o of ops) assert.ok(o > 0 && o < 0.04, `wallpaper opacity ${o} < 4%`);
+  assert.match(css, /\.chat-wrap > \.msgs\{background-color:var\(--bg\);background-image:var\(--wallpaper\)/);
+  assert.match(css, /\[data-theme=dark\]\{--bg:#0d1417;[^}]*--theirs:#1f2c30;--mine:#0b5c52;--mine-text:#e9f2f0;--mine-time:#b9dcd4/);
+  assert.match(css, /\.convlist \.convrow button\.dot\{width:48px;height:48px/);
+  assert.match(css, /\.convprev\{white-space:normal;display:-webkit-box;[^}]*-webkit-line-clamp:2/);
+});

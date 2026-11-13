@@ -12,7 +12,8 @@
     "test:clarification": "node --test tests/clarification/*.test.cjs && node tests/moderation-endpoints/run.cjs",
     "test:blocking": "node --test tests/blocking-lists/*.test.cjs",
     "test:court-export": "node --test tests/court-export/*.test.cjs",
-    "test:native": "node --test tests/native-ready/*.test.cjs"
+    "test:native": "node --test tests/native-ready/*.test.cjs",
+    "test:dialogs": "node --test tests/dialog-polish/*.test.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2",

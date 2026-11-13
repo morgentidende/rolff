@@ -209,7 +209,6 @@ button.danger{background:#c0392b;color:#fff;border-color:#c0392b}button.danger:d
 
 .receive-fields{border:0;padding:0;margin:0;min-width:0}.timezone-summary{justify-content:space-between;margin:8px 0}.timezone-current{flex:1;min-width:0;overflow-wrap:anywhere}.timezone-current strong{display:block;font-size:16px}.timezone-choices{border:1px solid var(--border);border-radius:10px;padding:8px 12px;margin:8px 0;min-width:0}.timezone-choices legend{font-size:14px}.timezone-choices select{font:inherit;max-width:100%}.timezone-choices .notice p{margin:0 0 8px}
 
-@media(max-width:380px){.times .wrow{grid-template-columns:minmax(68px,.9fr) minmax(0,1.2fr) 8px minmax(0,1.2fr) 40px;gap:4px}}
 
 /* Chat = fixed-height column (WhatsApp-like): only .msgs scrolls, composer stays pinned at the bottom. */
 .wrap.chat-wrap{height:100vh;height:100dvh;height:var(--app-h,100dvh);min-height:0;overflow:hidden;padding-bottom:calc(8px + env(safe-area-inset-bottom))}
@@ -328,3 +327,208 @@ textarea.fixed-text{font:inherit;font-size:16px;line-height:1.4;resize:none;heig
 .rs-quotes{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
 .rs-quotes li{display:flex;flex-direction:column;gap:2px;border-left:3px solid var(--border);padding:2px 0 2px 10px}
 .rs-foot{font-size:12px;margin:8px 0 0}
+
+/* ===== Dialog & sheet polish (keyboard, stacking, hierarchy, explained buttons) ===== */
+/* While any modal/sheet is open the chat composer is hidden (it must never show above or around a dialog).
+   visibility keeps the layout stable; dialogs rendered inside the composer stay visible. */
+:root:has(dialog[open]) .chat-wrap .card.composer,:root:has(.overlay) .chat-wrap .card.composer{visibility:hidden}
+.chat-wrap .card.composer dialog[open]{visibility:visible}
+/* Keyboard: bottom sheets/dialogs end at the top of the keyboard and never grow taller than the visible area. */
+.overlay{bottom:var(--kbd-inset,0px)}
+.overlay:not(.anchored-overlay) .sheet{max-height:min(88dvh,calc(var(--vv-h,100dvh) - 16px - env(safe-area-inset-top)))}
+:root[data-keyboard] .overlay:not(.anchored-overlay) .sheet{padding-bottom:12px}
+.contact-alias-dialog{bottom:var(--kbd-inset,0px);max-height:min(88dvh,calc(var(--vv-h,100dvh) - 16px - env(safe-area-inset-top)))}
+:root[data-keyboard] .contact-alias-dialog{padding-bottom:12px}
+dialog.composer-upgrade,dialog.blocking-dialog{bottom:var(--kbd-inset,0px);max-height:min(85dvh,calc(var(--vv-h,100dvh) - 32px));overflow:auto}
+.contact-alias-dialog::backdrop,.composer-upgrade::backdrop{background:#000b}
+.overlay{background:rgba(0,0,0,.55)}
+/* Sticky sheet header with a clear title; a hairline appears once the content scrolls under it. */
+.sheethead{padding-bottom:6px;margin-bottom:6px;border-bottom:1px solid transparent;transition:border-color .15s}
+.sheethead h2{font-size:20px;font-weight:700;line-height:1.25;min-width:0;overflow-wrap:anywhere}
+.sheet[data-scrolled] .sheethead,.contact-alias-dialog[data-scrolled] .sheethead{border-bottom-color:var(--border)}
+.sheet-subhead{font-size:15px;font-weight:650;margin:18px 0 6px;color:var(--text)}
+/* Buttons that are "not ready yet" stay tappable and explain why (aria-disabled instead of disabled). */
+button[aria-disabled=true]{opacity:.55}
+.sheet-actions button[aria-disabled=true]{opacity:1;background:color-mix(in srgb,var(--muted) 22%,var(--card));border-color:transparent;color:var(--muted)}
+.field-hint{margin:6px 0 0;font-size:13.5px;line-height:1.4;color:#b42318;display:flex;gap:6px;align-items:flex-start}
+.field-hint::before{content:"!";flex:none;display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:#b42318;color:#fff;font-size:12px;font-weight:700;margin-top:1px}
+[data-theme=dark] .field-hint{color:#ffb4ab}[data-theme=dark] .field-hint::before{background:#ffb4ab;color:#3a0b06}
+.needs-attention{background:color-mix(in srgb,#b42318 10%,transparent);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,#b42318 60%,transparent)}
+[data-theme=dark] .needs-attention{background:color-mix(in srgb,#ffb4ab 10%,transparent);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,#ffb4ab 55%,transparent)}
+input[aria-invalid=true],textarea[aria-invalid=true]{border-color:#b42318}[data-theme=dark] input[aria-invalid=true],[data-theme=dark] textarea[aria-invalid=true]{border-color:#ffb4ab}
+/* Quiet text actions. */
+button.text-link,button.text-danger{background:transparent;border:0;min-height:44px;padding:8px 6px;font-weight:600;font-size:15px;border-radius:8px}
+button.text-link{color:var(--accent)}
+button.text-danger{color:#c0392b}[data-theme=dark] button.text-danger{color:#ff8a80}
+button.text-link:hover{background:color-mix(in srgb,var(--accent) 10%,transparent)}button.text-danger:hover{background:color-mix(in srgb,#c0392b 10%,transparent)}
+button.danger-outline{background:transparent;color:#c0392b;border:1.5px solid color-mix(in srgb,#c0392b 70%,transparent);width:100%;font-weight:600}
+[data-theme=dark] button.danger-outline{color:#ff8a80;border-color:color-mix(in srgb,#ff8a80 60%,transparent)}
+button.danger-outline:hover{background:color-mix(in srgb,#c0392b 8%,transparent)}
+.sheet-danger-zone{margin-top:22px;padding-top:14px;border-top:1px solid var(--border);display:flex;justify-content:center}
+/* Two-button action rows that never wrap at 360px (da + en). */
+.dialog-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
+.dialog-actions button{width:100%;min-height:48px;white-space:nowrap;font-weight:600;padding:8px 10px}
+.contact-alias-dialog .dialog-actions button.ghost{border-color:var(--border);color:var(--text)}
+.alias-reset{margin:4px 0 0 -6px}
+.contact-alias-dialog input{width:100%;box-sizing:border-box}
+/* Participants and roles */
+.member-list{list-style:none;margin:4px 0 0;padding:0}
+.member-list > li{padding:10px 0;border-bottom:1px solid color-mix(in srgb,var(--border) 80%,transparent)}
+.member-main{display:flex;align-items:center;gap:8px;min-width:0}
+.member-text{flex:1;min-width:0;display:flex;flex-direction:column}
+.member-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:16px;line-height:1.3}
+.member-role{font-size:13px;color:var(--muted);line-height:1.35}
+.member-settings{flex:none;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;min-height:40px;padding:6px 12px;font-size:14px;border-radius:999px;border-color:var(--border);color:var(--text)}
+.member-settings[aria-expanded=true]{border-color:var(--accent);color:var(--accent)}
+.member-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.member-actions button{min-height:36px;padding:4px 12px;font-size:14px}
+.member-note{margin:14px 0 0;font-size:13px;line-height:1.45}
+.member-leave{margin-top:22px;padding-top:16px;border-top:1px solid var(--border)}
+/* Settings rows with a switch (Notifikationer) */
+.push-lead{margin:2px 0 14px;font-size:15px;line-height:1.45;color:var(--text)}
+.setting-row{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--border);border-radius:14px;background:color-mix(in srgb,var(--bg) 45%,var(--card))}
+.setting-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.setting-title{font-size:16px;font-weight:600;line-height:1.3}
+.setting-status{font-size:13.5px;color:var(--muted)}.setting-status.is-on{color:var(--accent);font-weight:600}.setting-status.is-blocked{color:#b42318}[data-theme=dark] .setting-status.is-blocked{color:#ffb4ab}
+button.toggle-switch{flex:none;position:relative;width:52px;min-width:52px;height:32px;min-height:32px;padding:0;border-radius:999px;border:0;background:color-mix(in srgb,var(--muted) 45%,var(--card));transition:background .15s}
+button.toggle-switch::after{content:"";position:absolute;inset:-6px}
+button.toggle-switch .switch-knob{position:absolute;top:3px;left:3px;width:26px;height:26px;border-radius:50%;background:#fff;box-shadow:0 1px 3px #0005;transition:transform .15s}
+button.toggle-switch[aria-checked=true]{background:var(--accent)}button.toggle-switch[aria-checked=true] .switch-knob{transform:translateX(20px)}
+button.toggle-switch:disabled{opacity:.45}
+@media (prefers-reduced-motion:reduce){button.toggle-switch,button.toggle-switch .switch-knob{transition:none}}
+.push-renew{margin:4px 0 0 -6px;font-size:14px}
+.push-help{margin-top:12px}
+.device-list{list-style:none;margin:0;padding:0}
+.device-list li{display:flex;align-items:center;gap:10px;min-height:52px;border-bottom:1px solid color-mix(in srgb,var(--border) 80%,transparent)}
+.device-text{flex:1;min-width:0;display:flex;flex-direction:column}
+.device-name{display:flex;align-items:center;gap:8px;font-size:15px;flex-wrap:wrap}
+.tag{font-size:12px;font-weight:600;padding:1px 8px;border-radius:999px;background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent)}
+details.more{margin-top:16px;border:1px solid var(--border);border-radius:12px;padding:0 12px}
+details.more summary{min-height:44px;display:flex;align-items:center;cursor:pointer;font-size:14.5px;font-weight:600;color:var(--accent);list-style:none}
+details.more summary::-webkit-details-marker{display:none}
+details.more summary::after{content:"";margin-left:auto;margin-right:4px;width:8px;height:8px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);transition:transform .15s}
+details.more[open] summary::after{transform:rotate(-135deg)}
+details.more p{font-size:13.5px;line-height:1.5;color:var(--muted);margin:0 0 10px}
+/* Modtagetider */
+.timezone-summary{display:flex;align-items:center;gap:10px;margin:10px 0 4px;padding:10px 12px;border:1px solid var(--border);border-radius:12px}
+.timezone-current{display:flex;flex-direction:column;gap:1px;min-width:0;flex:1}
+.timezone-current strong{font-size:15.5px;line-height:1.3}
+.timezone-note{font-size:12.5px;line-height:1.35;color:var(--muted)}
+button.compact-btn{flex:none;min-height:40px;padding:6px 14px;font-size:15px;white-space:nowrap}
+.times .wrow{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 12px minmax(0,1fr) 44px;gap:6px;border-radius:10px}
+.times .wrow{padding:3px}
+.times .wrow.needs-attention{padding:3px;margin:0}
+.wrow button.rm{width:44px;min-width:44px;min-height:44px;border-radius:50%}
+.wnote{margin:0 0 8px}
+.field-hint-block{margin:4px 0 10px;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.field-hint-block .field-hint{margin:0}
+.times-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px}
+.times-actions button{min-height:48px;width:100%;white-space:nowrap;font-weight:600}
+.times-saved{text-align:right;margin:6px 0 0}
+/* Front page: two pills on one row (Download webapp = outlined secondary, Inviter person = primary). */
+.convlist-head{justify-content:flex-end;flex-wrap:nowrap;gap:8px;padding:2px 16px 6px}
+.convlist-head .invite-btn{white-space:nowrap;padding:8px 14px 8px 10px;gap:6px;font-size:15px}
+.invite-btn.webapp-btn{background:transparent;color:var(--accent);border:1.5px solid var(--accent);margin-right:auto}
+[data-theme=dark] .invite-btn.webapp-btn{color:var(--accent)}
+@media (max-width:370px){.convlist-head .invite-btn{font-size:14px;padding:8px 11px 8px 8px}}
+.install-steps{margin:0 0 8px;padding-left:22px;line-height:1.5}.install-steps li{margin:0 0 8px}
+
+/* Transcript sheet: plan load error/retry in the same language as the other sheets */
+.export-load-error .field-hint{margin:2px 0 14px;font-size:14.5px}
+.export-retry{display:grid;grid-template-columns:1fr;margin:0}
+.export-retry button{width:100%;min-height:48px;border-radius:10px;font-weight:600;margin:0;white-space:nowrap}
+
+/* Front page list polish: same 16px gutters as header/banner, subtle dividers, aligned time, dismissible tip, calm empty state */
+.convrow .convbtn{border-bottom-color:color-mix(in srgb,var(--border) 70%,transparent);min-height:76px}
+.convrow:last-child .convbtn{border-bottom:1px solid color-mix(in srgb,var(--border) 70%,transparent)}
+.convtop{align-items:center}
+.convtime{line-height:1;margin-left:auto;padding-left:4px}
+.convhint{display:flex;align-items:flex-start;gap:10px;margin:14px 16px 0;padding:10px 6px 10px 12px;border-radius:12px;background:color-mix(in srgb,var(--text) 4%,transparent);color:var(--muted);font-size:13.5px;line-height:1.45}
+.convhint > svg{flex:none;margin-top:1px;opacity:.8}
+.convhint p{margin:0;flex:1;min-width:0}
+.convhint .convhint-close{flex:none;width:32px;height:32px;min-width:32px;min-height:32px;margin:-6px 0 -6px 0;padding:0;border:0;background:transparent;color:var(--muted);display:inline-flex;align-items:center;justify-content:center;border-radius:50%;position:relative}
+.convhint .convhint-close::after{content:"";position:absolute;inset:-6px}
+.convempty{margin:24px 16px 0;padding:28px 20px;border:1px dashed var(--border);border-radius:16px}
+.convempty-icon{display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:50%;margin:0 auto 12px;background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent)}
+.convempty p strong{color:var(--text);font-size:17px}
+
+/* Conversation view polish: day separators, calmer own bubbles (AA timestamps), tight groups (tail on the FIRST bubble), slim pending bar, clear send state */
+.day-sep{align-self:center;margin:12px 0 6px;position:sticky;top:4px;z-index:2}
+.day-sep span{display:inline-block;padding:3px 12px;border-radius:999px;font-size:12.5px;font-weight:600;line-height:1.4;color:var(--muted);background:color-mix(in srgb,var(--card) 92%,var(--text));box-shadow:0 1px 2px rgba(0,0,0,.08)}
+[data-theme=dark] .day-sep span{background:#263030;color:#b9c8c5}
+.msgs > .day-sep:first-child{margin-top:4px}
+.day-sep + .msg.tailed{margin-top:2px}
+.msgs{gap:2px}
+.msg.tailed{margin-top:10px}
+:root{--mine:#c6ecdf;--mine-time:#36524d}
+[data-theme=dark]{--mine:#155545;--mine-time:#b8d4cc}
+.msg.mine .message-time{opacity:1;color:var(--mine-time)}
+.msg.theirs .message-time{opacity:1;color:var(--muted)}
+.pendbar{background:color-mix(in srgb,var(--warn) 65%,var(--card));border:1px solid color-mix(in srgb,var(--warn-b) 35%,transparent);border-left:3px solid var(--warn-b);border-radius:8px;font-size:13px}
+.pendbar-head{min-height:32px;padding:4px 10px}
+.pendbar.needs-me .pendbar-sum{font-weight:600}
+.pendbar-dot{width:6px;height:6px}
+.composer-send{background:var(--accent);color:var(--accent-text);transition:background .15s,color .15s,transform .1s}
+.composer-send:not(:disabled):active{transform:scale(.94)}
+.composer-send:disabled{opacity:1;background:color-mix(in srgb,var(--muted) 18%,transparent);color:color-mix(in srgb,var(--muted) 75%,transparent)}
+.wrap.chat-wrap{padding-bottom:calc(6px + env(safe-area-inset-bottom))}
+.composer-send[aria-busy=true]:disabled{background:color-mix(in srgb,var(--accent) 35%,transparent);color:var(--accent-text)}
+.send-spinner{width:20px;height:20px;border-radius:50%;border:2.5px solid currentColor;border-right-color:transparent;animation:send-spin .8s linear infinite;box-sizing:border-box}
+@keyframes send-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.send-spinner{animation:none;border-right-color:currentColor;opacity:.7}}
+/* Blocked-message box ("Ikke sendt"): compact, capped height with internal scroll so the composer always stays on screen. */
+.blockbox{position:relative;display:flex;flex-direction:column;gap:6px;padding:8px 10px 10px 12px;max-height:min(40dvh,calc(var(--vv-h,100dvh) * .4));overflow-y:auto;overscroll-behavior:contain;flex-shrink:0;line-height:1.4}
+.blockbox > *{flex-shrink:0}
+html[data-keyboard] .blockbox{max-height:calc(var(--vv-h,100dvh) * .34)}
+.blockbox-head{display:flex;align-items:center;gap:6px;min-height:32px;margin-right:-4px}
+.blockbox-head strong{font-size:15px;font-weight:650;flex:1}
+.blockbox-icon{color:#a35a00;flex-shrink:0}
+[data-theme=dark] .blockbox-icon{color:#f5b45a}
+.blockbox-x{min-height:36px;min-width:36px;width:36px;padding:0;display:grid;place-items:center;background:transparent;border:0;border-radius:999px;color:inherit;opacity:.75}
+.blockbox-x:hover,.blockbox-x:focus-visible{opacity:1;background:color-mix(in srgb,currentColor 10%,transparent)}
+.blockbox-reason{margin:0;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden}
+.blockbox-reason.open{display:block;-webkit-line-clamp:unset}
+.blockbox-flag{margin:0;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--muted)}
+.blockbox-flag-k{font-weight:600}
+.blockbox-flag mark{background:color-mix(in srgb,#f59e0b 38%,transparent);color:var(--text);border-radius:3px;padding:0 2px}
+.blockbox-sugg{display:flex;flex-direction:column;gap:4px;padding:8px 10px;border-radius:10px;background:var(--card);border:1px solid color-mix(in srgb,var(--warn-b) 55%,transparent);border-left:3px solid var(--accent)}
+.blockbox-sugg-k{font-size:12px;font-weight:650;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.blockbox-quote{font-size:15px;overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-clamp:3;overflow:hidden}
+.blockbox-quote::before{content:"“"}.blockbox-quote::after{content:"”"}
+.blockbox-quote.open{display:block}
+.blockbox-act{display:flex;align-items:center;gap:10px;margin-top:4px;flex-wrap:wrap}
+.blockbox-use{min-height:40px;padding:6px 14px;font-size:15px;font-weight:600;flex-shrink:0;user-select:none;-webkit-user-select:none}
+.blockbox-fine{font-size:12.5px;color:var(--muted);flex:1;min-width:0}
+.blockbox-long{margin:0}
+.blockbox-guide{margin:0;font-size:14px}
+.blockbox-more{align-self:flex-start;min-height:32px;padding:2px 0;background:transparent;border:0;color:var(--accent);font-size:14px;font-weight:600;text-decoration:underline;text-underline-offset:2px}
+/* Messenger look (generic patterns familiar from mainstream chat apps, in Rolff's own colours; no third-party assets).
+   Dark: deep near-black background, dark grey incoming and deep teal-green own bubbles. */
+[data-theme=dark]{--bg:#0d1417;--card:#172124;--theirs:#1f2c30;--mine:#0b5c52;--mine-text:#e9f2f0;--mine-time:#b9dcd4;--theirs-time:#9fb4b0;--composer-surface:#1f2c30;--composer-focus:#243337;--border:#2c3a3d}
+:root{--mine-text:var(--text);--theirs-time:var(--muted);--wallpaper:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'%3E%3Cg fill='none' stroke='%23016C72' stroke-opacity='0.035' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 18h26a6 6 0 0 1 6 6v12a6 6 0 0 1-6 6H26l-8 6v-6h-4a6 6 0 0 1-6-6V24a6 6 0 0 1 6-6z'/%3E%3Cg transform='translate%28118 10%29'%3E%3Cpath d='M4 22L22 6l18 16M9 18v20h26V18'/%3E%3Cpath d='M18 38V28h8v10'/%3E%3C/g%3E%3Cg transform='translate%2872 64%29'%3E%3Cpath d='M16 30S2 21 2 12a7 7 0 0 1 14-2 7 7 0 0 1 14 2c0 9-14 18-14 18z'/%3E%3C/g%3E%3Cg transform='translate%28160 78%29'%3E%3Ccircle cx='14' cy='14' r='6'/%3E%3Cpath d='M14 2v4M14 22v4M2 14h4M22 14h4M5.5 5.5l2.8 2.8M19.7 19.7l2.8 2.8M5.5 22.5l2.8-2.8M19.7 8.3l2.8-2.8'/%3E%3C/g%3E%3Cg transform='translate%2812 98%29'%3E%3Cpath d='M6 34C6 16 18 6 36 6c0 18-10 30-28 28zM6 34L24 16'/%3E%3C/g%3E%3Cg transform='translate%28116 124%29'%3E%3Crect x='3' y='7' width='32' height='28' rx='4'/%3E%3Cpath d='M3 15h32M11 3v8M27 3v8'/%3E%3Cpath d='M11 23h4M19 23h4M11 29h4'/%3E%3C/g%3E%3Cg transform='translate%2858 150%29'%3E%3Cpath d='M2 18L38 3 28 37l-9-12-17-7z'/%3E%3Cpath d='M19 25l19-22'/%3E%3C/g%3E%3Cg transform='translate%28176 166%29'%3E%3Cpath d='M10 1l2.6 6 6.4.6-4.9 4.2 1.5 6.3L10 14.8 4.4 18.1l1.5-6.3L1 7.6l6.4-.6z'/%3E%3C/g%3E%3Cg transform='translate%2814 162%29'%3E%3Crect x='3' y='10' width='22' height='24' rx='5'/%3E%3Cpath d='M9 10V7a5 5 0 0 1 10 0v3M3 20h22'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")}
+[data-theme=dark]{--wallpaper:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 200 200'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='0.03' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M14 18h26a6 6 0 0 1 6 6v12a6 6 0 0 1-6 6H26l-8 6v-6h-4a6 6 0 0 1-6-6V24a6 6 0 0 1 6-6z'/%3E%3Cg transform='translate%28118 10%29'%3E%3Cpath d='M4 22L22 6l18 16M9 18v20h26V18'/%3E%3Cpath d='M18 38V28h8v10'/%3E%3C/g%3E%3Cg transform='translate%2872 64%29'%3E%3Cpath d='M16 30S2 21 2 12a7 7 0 0 1 14-2 7 7 0 0 1 14 2c0 9-14 18-14 18z'/%3E%3C/g%3E%3Cg transform='translate%28160 78%29'%3E%3Ccircle cx='14' cy='14' r='6'/%3E%3Cpath d='M14 2v4M14 22v4M2 14h4M22 14h4M5.5 5.5l2.8 2.8M19.7 19.7l2.8 2.8M5.5 22.5l2.8-2.8M19.7 8.3l2.8-2.8'/%3E%3C/g%3E%3Cg transform='translate%2812 98%29'%3E%3Cpath d='M6 34C6 16 18 6 36 6c0 18-10 30-28 28zM6 34L24 16'/%3E%3C/g%3E%3Cg transform='translate%28116 124%29'%3E%3Crect x='3' y='7' width='32' height='28' rx='4'/%3E%3Cpath d='M3 15h32M11 3v8M27 3v8'/%3E%3Cpath d='M11 23h4M19 23h4M11 29h4'/%3E%3C/g%3E%3Cg transform='translate%2858 150%29'%3E%3Cpath d='M2 18L38 3 28 37l-9-12-17-7z'/%3E%3Cpath d='M19 25l19-22'/%3E%3C/g%3E%3Cg transform='translate%28176 166%29'%3E%3Cpath d='M10 1l2.6 6 6.4.6-4.9 4.2 1.5 6.3L10 14.8 4.4 18.1l1.5-6.3L1 7.6l6.4-.6z'/%3E%3C/g%3E%3Cg transform='translate%2814 162%29'%3E%3Crect x='3' y='10' width='22' height='24' rx='5'/%3E%3Cpath d='M9 10V7a5 5 0 0 1 10 0v3M3 20h22'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")}
+/* Original Rolff doodle wallpaper (strokes at 3–3.5 % opacity), static behind the scrolling messages. */
+.chat-wrap > .msgs{background-color:var(--bg);background-image:var(--wallpaper);background-size:200px 200px;background-repeat:repeat}
+.msg{padding:6px 10px 7px;border-radius:12px;line-height:1.38}
+.msg.mine{color:var(--mine-text);border-top-right-radius:12px}
+.msg.theirs{border:0;border-top-left-radius:12px;box-shadow:0 1px .5px rgba(11,20,26,.13)}
+[data-theme=dark] .msg.theirs,[data-theme=dark] .msg.mine{box-shadow:0 1px .5px rgba(0,0,0,.25)}
+.msg.mine{box-shadow:0 1px .5px rgba(11,20,26,.13)}
+.msg.mine.tailed{border-top-right-radius:2px}.msg.theirs.tailed{border-top-left-radius:2px}
+.msg.tailed{margin-top:6px}
+.msg-meta-spacer{display:inline-block;width:42px;height:1px;vertical-align:baseline}
+.msg-meta-spacer.has-tick{width:60px}
+.msg-meta{position:absolute;right:9px;bottom:4px;display:inline-flex;align-items:center;gap:3px;line-height:1;pointer-events:none}
+.msg-meta .message-time{display:inline;margin:0;font-size:11px;line-height:1}
+.msg.theirs .msg-meta .message-time{color:var(--theirs-time)}
+.msg-tick{flex:none;color:var(--mine-time)}
+/* Pill date separator, centred. */
+.day-sep span{background:color-mix(in srgb,var(--card) 94%,var(--text));box-shadow:0 1px .5px rgba(11,20,26,.13)}
+[data-theme=dark] .day-sep span{background:#1b2629;color:#a9bbb8}
+/* Signal-style list: 48px avatars, no hard dividers, ~72px rows, bold truncated name, 2-line grey preview. */
+.convlist .convrow button.dot{width:48px;height:48px;min-width:48px;min-height:48px;font-size:19px}
+.convlist .convrow .palette{top:54px}
+.convrow .convbtn,.convrow:last-child .convbtn{border-bottom:0;min-height:72px;padding:10px 16px 10px 0;gap:2px}
+.convname{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:650;min-width:0}
+.convprev{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden;font-size:14.5px}
+.convrow{border-radius:0}
