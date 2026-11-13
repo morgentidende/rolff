@@ -37,8 +37,13 @@ export async function testDelayedMessages({ db, as, svc, hash, t, assert, reject
     assert.ok(mine);
     assert.equal(mine.body, 'Jeg henter kl. 16.');
     assert.ok(mine.deliver_after);
+    const forSv3 = await as(S, `select * from get_messages_v3($1)`, [conv]);
+    const mineV3 = forSv3.find((m) => m.id === mid);
+    assert.ok(mineV3);
+    assert.ok(mineV3.deliver_after);
     const forR = await as(R, `select * from get_messages_v2($1)`, [conv]);
     assert.equal(forR.some((m) => m.id === mid), false);
+    assert.equal((await as(R, `select * from get_messages_v3($1)`, [conv])).some((m) => m.id === mid), false);
     assert.equal((await as(R, `select my_pending_count() n`))[0].n, 0);
     const jobsAfter = (await db.query(`select count(*)::int n from notification_jobs where user_id=$1`, [R])).rows[0].n;
     assert.equal(jobsAfter, jobsBefore);

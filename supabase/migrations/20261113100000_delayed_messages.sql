@@ -195,6 +195,27 @@ end $$;
 revoke execute on function public.get_messages_v2(uuid) from public,anon;
 grant execute on function public.get_messages_v2(uuid) to authenticated;
 
+-- Live client uses get_messages_v3 (thumbs + same visibility as v2).
+-- Pass deliver_after through so the sender can see a held message's countdown.
+drop function if exists public.get_messages_v3(uuid);
+create function public.get_messages_v3(conv uuid)
+returns table(id uuid, sender_id uuid, sender_name text, body text, created_at timestamptz, mine boolean,
+  att_mime text, att_name text, att_alt text, att_pages int, sender_email text,
+  reply_to_id uuid, reply_body text, has_reply boolean, thumb_count int, i_thumbed boolean, deliver_after timestamptz)
+language plpgsql security definer set search_path = public as $$
+begin
+  return query with visible as materialized (select * from get_messages_v2(conv))
+    select g.id, g.sender_id, g.sender_name, g.body, g.created_at, g.mine, g.att_mime, g.att_name, g.att_alt, g.att_pages,
+      g.sender_email, g.reply_to_id, g.reply_body, g.has_reply,
+      (select count(*)::int from message_reactions r where r.message_id = g.id),
+      exists(select 1 from message_reactions r where r.message_id = g.id and r.user_id = auth.uid()),
+      g.deliver_after
+    from visible g
+    order by g.created_at, g.id;
+end $$;
+revoke execute on function public.get_messages_v3(uuid) from public, anon;
+grant execute on function public.get_messages_v3(uuid) to authenticated;
+
 -- Sender ends the delay now (tap the countdown, or the 30 s timer elapsed).
 -- Already-moderated text is not changed. Delivery uses the normal release path
 -- (receive windows + notification job only if something is actually released).

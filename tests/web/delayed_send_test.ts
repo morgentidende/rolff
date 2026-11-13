@@ -35,6 +35,7 @@ Deno.test("Chat menu has a delayed-messages checkmark toggle; pending bubbles ca
   const app = await Deno.readTextFile("apps/web/src/App.tsx");
   const bubble = await Deno.readTextFile("apps/web/src/MessageBubble.tsx");
   assert(app.includes('"Forsinkede beskeder"') && app.includes('"Delayed messages"'), "menu labels");
+  assert(app.includes("get_messages_v3"), "client uses v3");
   assert(app.includes("checked: delayedOn") && app.includes("menuitemcheckbox"), "checkmark toggle");
   assert(app.includes("release_delayed_message") && app.includes("cancel_delayed_message") && app.includes("set_delayed_send"), "server RPCs");
   assert(app.includes("edit_message_id") && app.includes("beginEdit"), "edit goes through send-message");
@@ -48,6 +49,7 @@ Deno.test("Edits of delayed messages are re-moderated in send-message; delivery 
   assert(fn.includes("edit_message_id") && fn.includes("update_delayed_message"), "edit path");
   assert(fn.includes("applySticky") && fn.includes("doubleCheckFromEnv"), "sticky and double check still run");
   assert(mig.includes("deliver_after") && mig.includes("_release_for"), "server hold");
+  assert(mig.includes("create function public.get_messages_v3"), "v3 passes deliver_after");
   assert(mig.includes("m.deliver_after is null or m.deliver_after <= clock_timestamp()"), "release waits for due time");
   assert(mig.includes("release_delayed_message") && mig.includes("cancel_delayed_message"), "send-now and delete");
 });

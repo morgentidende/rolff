@@ -96,14 +96,14 @@ for (const strict of [false, true])
             await openChatWithDraft(w, d);
             let p = await press(w, d);
             assert.equal(p.getAttribute('role'), 'menu');
-            assert.deepEqual([...p.querySelectorAll('[role=menuitem]')].map(b => b.textContent.trim()), ['Besvar', 'Kopiér', 'Information']);
+            assert.deepEqual([...p.querySelectorAll('[role=menuitem]')].map(b => (b.querySelector('span:last-child') || b).textContent.trim()), ['Svar med 👍', 'Besvar', 'Kopiér', 'Information']);
             assert.equal(p.querySelectorAll('[role=menuitem] svg').length, 3);
             assert.equal(p.dataset.placement, 'below');
             assert.equal(px(p, 'top'), 368);
             assert.equal(px(p, 'left'), 378 - 200, 'own message: right-aligned to bubble');
             assert.equal(d.activeElement, p.querySelector('[role=menuitem]'), 'focus moves into menu');
             d.activeElement.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
-            assert.equal(d.activeElement.textContent.trim(), 'Kopiér');
+            assert.equal(d.activeElement.textContent.trim(), 'Besvar');
             const lifted = d.querySelector('.message-lifted');
             assert.equal(lifted.getAttribute('aria-hidden'), 'true');
             assert.ok(lifted.querySelector('.msg.mine'), 'pressed bubble is drawn above the dim');

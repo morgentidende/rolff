@@ -524,6 +524,18 @@ html[data-keyboard] .blockbox{max-height:calc(var(--vv-h,100dvh) * .34)}
 .msg-meta{position:absolute;right:9px;bottom:4px;display:inline-flex;align-items:center;line-height:1;pointer-events:none}
 .msg-meta .message-time{display:inline;margin:0;font-size:11px;line-height:1}
 .msg.theirs .msg-meta .message-time{color:var(--theirs-time)}
+.msg.has-thumb{margin-bottom:16px}
+.msg-thumb{position:absolute;left:8px;bottom:-12px;z-index:1;display:inline-flex;align-items:center;justify-content:center;gap:2px;min-width:26px;height:22px;min-height:22px;margin:0;padding:0 6px;border-radius:999px;border:1px solid var(--border);background:var(--card);color:var(--text);box-shadow:0 1px 2px rgba(11,20,26,.16);font:inherit;font-size:13px;line-height:1;cursor:pointer}
+.msg-thumb:disabled{cursor:default;opacity:1}
+.msg-thumb.is-mine{border-color:color-mix(in srgb,var(--accent) 55%,var(--border));background:color-mix(in srgb,var(--accent) 14%,var(--card))}
+.msg-thumb:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.msg-thumb-n{font-size:11px;font-weight:600;color:var(--muted);padding-left:1px}
+[data-theme=dark] .msg-thumb{box-shadow:0 1px 2px rgba(0,0,0,.4)}
+.message-panel>.message-thumb-item{font-weight:600}
+.message-thumb-emoji{flex:none;width:24px;font-size:22px;line-height:1;text-align:center}
+.message-panel>.message-thumb-item[aria-pressed=true]{background:color-mix(in srgb,var(--accent) 14%,transparent)}
+.message-menu-sep{height:1px;margin:4px 10px;background:var(--border);border:0}
+
 /* Pill date separator, centred, solid so it stays readable over bubbles. */
 .day-sep span{background:#e8eceb;box-shadow:0 1px 2px rgba(11,20,26,.16)}
 [data-theme=dark] .day-sep span{background:#1b2629;color:#a9bbb8}
