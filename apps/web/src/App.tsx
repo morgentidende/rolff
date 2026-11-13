@@ -26,7 +26,7 @@ import { LunaIndicator } from "./LunaRobot";
 import { applySuggestion } from "./suggestion";
 import { KEY as A2HS_KEY, platform as a2hsPlatform, shouldAsk } from "./install";
 import { makeZip, myDataFiles, findHits } from "./exportUtil";
-import { ConversationExport } from "./ConversationExport";
+import { ConversationExport, fetchMyPlan, PLAN_TIMEOUT_MS, withTimeout } from "./ConversationExport";
 import { EventNotice, eventsBefore, useConversationEvents } from "./ConversationEvents";
 
 import { labelOf, convDisplay } from "./convDisplay";
@@ -638,7 +638,11 @@ const Icon = ({ d }: { d: React.ReactNode }) => <svg width="22" height="22" view
 
 function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButtonRef }: { session: Session; lang: Lang; conv: Conv; back: () => void; openPlans: () => void; planKey: Sheet; rename: (contacts: Other[]) => void; menuButtonRef?: React.RefObject<HTMLButtonElement | null> }) {
   const [plan, setPlan] = useState<string | null>(null);
-  const loadPlan = useCallback(() => { supabase.rpc("get_my_plan").then(({ data }) => { if (data?.[0]) setPlan(data[0].plan); }); }, []);
+  // One retry on failure/timeout; the export sheet also loads the plan itself if this never lands.
+  const loadPlan = useCallback(() => {
+    const go = (left: number) => withTimeout(fetchMyPlan(), PLAN_TIMEOUT_MS).then(setPlan, () => { if (left > 0) setTimeout(() => go(left - 1), 3000); });
+    go(1);
+  }, []);
   useEffect(() => { loadPlan(); }, [planKey, loadPlan]);
   const [others, setOthers] = useState<Other[]>(conv.others ?? []); const [color, setColor] = useState<string | null>(conv.color);
   useEffect(() => { setOthers(conv.others ?? []); }, [conv.others]);
@@ -862,7 +866,7 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
       {sheet === "report" && <SheetView title={reportStep === "preview" ? (da ? "Rapportér · Tjek og send" : "Report · Check and send") : (da ? "Rapportér" : "Report")} close={() => { setSheet(null); setReportStep("edit"); }} lang={lang} anchor={menuButtonRef}><ReportForm lang={lang} conv={conv.id} msgs={msgs} who={(m) => m.mine ? (da ? "Dig" : "You") : replyWho(m)} onStep={setReportStep} done={() => { setSheet(null); setReportStep("edit"); }} /></SheetView>}
       {sheet === "words" && <SheetView title={da ? "Blokeringer" : "Blocking lists"} close={() => setSheet(null)} lang={lang}><BlockingLists key={`${session.user.id}:${conv.id}`} session={session} lang={lang} conv={conv.id} /></SheetView>}
       {sheet === "members" && <SheetView title={da ? "Deltagere og roller" : "Participants and roles"} close={() => setSheet(null)} lang={lang}><Members lang={lang} conv={conv.id} isParent={conv.role === "parent"} left={back} openWords={() => setSheet("words")} /></SheetView>}
-      {sheet === "export" && <SheetView title={da ? "Udskrift af samtale" : "Conversation transcript"} close={() => setSheet(null)} lang={lang}><ConversationExport lang={lang} conv={conv.id} plan={plan} ownEmail={session.user.email ?? ""} openPlans={() => { setSheet(null); openPlans(); }} /></SheetView>}
+      {sheet === "export" && <SheetView title={da ? "Udskrift af samtale" : "Conversation transcript"} close={() => setSheet(null)} lang={lang}><ConversationExport lang={lang} conv={conv.id} plan={plan} onPlan={setPlan} ownEmail={session.user.email ?? ""} openPlans={() => { setSheet(null); openPlans(); }} /></SheetView>}
       {sheet === "addMember" && <SheetView title={da ? "Tilføj person" : "Add person"} close={() => setSheet(null)} lang={lang} anchor={addPersonRef}><AddMember lang={lang} conv={conv.id} done={(toast) => { load(); setSheet(null); showToast(toast, { tone: "success", ms: 4000, at: "top" }); }} openPlans={openPlans} /></SheetView>}
     </>
   );

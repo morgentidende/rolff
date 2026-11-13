@@ -1,12 +1,30 @@
 // "Udskrift af samtale": requested here, built and signed on the SERVER (export-conversation) and
 // e-mailed. Nothing is generated or downloaded on the device. 79 DKK plan only (enforced server-side).
-import { useState } from "react";
-import { callFn } from "./supabase";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { callFn, supabase } from "./supabase";
 
 export type ExportCall = (name: string, body: unknown) => Promise<{ status: number; data: any }>;
 const EMAIL = /^[^\s@,;<>"]+@[^\s@,;<>"]+\.[^\s@,;<>"]+$/;
 export const validRecipient = (s: string) => s.trim().length <= 254 && EMAIL.test(s.trim());
 const deviceZone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Copenhagen"; } catch { return "Europe/Copenhagen"; } };
+
+export type PlanLoader = () => Promise<string>;
+export const PLAN_TIMEOUT_MS = 10000;
+// Reads the caller's effective plan. Rejects on any RPC error or empty answer so the sheet can
+// show a clear error instead of waiting forever.
+export const fetchMyPlan: PlanLoader = async () => {
+  const { data, error } = await supabase.rpc("get_my_plan");
+  if (error) throw new Error(error.code || "plan_error");
+  const plan = (data as { plan?: string }[] | null)?.[0]?.plan;
+  if (typeof plan !== "string" || !plan) throw new Error("plan_empty");
+  return plan;
+};
+export function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error("timeout")), ms);
+    p.then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); });
+  });
+}
 
 export function ExportUpgrade({ lang, openPlans, close }: { lang: string; openPlans: () => void; close?: () => void }) {
   const da = lang === "da";
@@ -26,13 +44,30 @@ const ERR: Record<string, [string, string]> = {
   signing_unavailable: ["Udskrifter er midlertidigt ikke tilgængelige.", "Transcripts are temporarily unavailable."],
 };
 
-export function ConversationExport({ lang, conv, plan, ownEmail, openPlans, call = callFn }: { lang: string; conv: string; plan: string | null; ownEmail: string; openPlans: () => void; call?: ExportCall }) {
+export function ConversationExport({ lang, conv, plan: planProp, ownEmail, openPlans, call = callFn, loadPlan = fetchMyPlan, onPlan, timeoutMs = PLAN_TIMEOUT_MS }: { lang: string; conv: string; plan: string | null; ownEmail: string; openPlans: () => void; call?: ExportCall; loadPlan?: PlanLoader; onPlan?: (plan: string) => void; timeoutMs?: number }) {
   const da = lang === "da";
+  // The sheet must always resolve: it never waits on the chat's one-shot plan load. If the plan is
+  // not known yet it asks for it itself, with a timeout, and shows an error with a retry.
+  const [loaded, setLoaded] = useState<string | null>(null);
+  const [planState, setPlanState] = useState<"idle" | "loading" | "error">(planProp ? "idle" : "loading");
+  const attempt = useRef(0);
+  const fetchPlan = useCallback(() => {
+    const id = ++attempt.current; setPlanState("loading");
+    let p: Promise<string>; try { p = loadPlan(); } catch (e) { p = Promise.reject(e); }
+    withTimeout(p, timeoutMs).then((v) => { if (id !== attempt.current) return; setLoaded(v); setPlanState("idle"); onPlan?.(v); },
+      () => { if (id !== attempt.current) return; setPlanState("error"); });
+  }, [loadPlan, timeoutMs, onPlan]);
+  useEffect(() => { if (!planProp) fetchPlan(); return () => { attempt.current++; }; }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const plan = planProp ?? loaded;
   const [scope, setScope] = useState<"all" | "period">("all"); const [from, setFrom] = useState(""); const [to, setTo] = useState("");
   const [who, setWho] = useState<"self" | "other">("self"); const [other, setOther] = useState("");
   const [step, setStep] = useState<"form" | "confirm" | "done">("form"); const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  if (plan === null) return <p className="meta">{da ? "Henter…" : "Loading…"}</p>;
+  if (plan === null && planState === "error") return <div className="export-load-error">
+    <p className="err" role="alert">{da ? "Udskriften kunne ikke hentes lige nu. Tjek din internetforbindelse og prøv igen." : "The transcript could not be loaded right now. Check your internet connection and try again."}</p>
+    <div className="row end"><button type="button" onClick={fetchPlan}>{da ? "Prøv igen" : "Try again"}</button></div>
+  </div>;
+  if (plan === null) return <p className="meta" role="status">{da ? "Henter…" : "Loading…"}</p>;
   if (plan !== "text_attachments") return <ExportUpgrade lang={lang} openPlans={openPlans} />;
   const recipient = who === "self" ? ownEmail : other.trim().toLowerCase();
   const periodOk = scope === "all" || ((from || to) && (!from || !to || from <= to));
