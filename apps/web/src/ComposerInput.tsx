@@ -20,10 +20,42 @@ type Props = {
   /** Luna checking/happy row rendered inside the composer surface. */
   statusSlot?: React.ReactNode;
   recipientBlocks?: RecipientAttachmentBlocks;
+  /** ISO time when a delayed own message becomes due. Shows countdown + send-now on the button. */
+  countdownUntil?: string | null;
+  onSendNow?: () => void;
 };
 const Glyph = ({ children }: { children: React.ReactNode }) => <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{children}</svg>;
+const RING_R = 21.5;
+const RING_C = 2 * Math.PI * RING_R;
+function SendCountdown({ sec, frac }: { sec: number; frac: number }) {
+  return (
+    <span className="send-now-face">
+      <svg className="send-now-ring" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+        <circle className="send-now-ring-track" cx="24" cy="24" r={RING_R} fill="none" />
+        <circle className="send-now-ring-value" cx="24" cy="24" r={RING_R} fill="none"
+          strokeDasharray={RING_C} strokeDashoffset={RING_C * (1 - frac)} transform="rotate(-90 24 24)" />
+      </svg>
+      <span className="send-now-stack">
+        <Glyph><path d="m22 2-7 20-4-9-9-4Z" /><path d="m22 2-11 11" /></Glyph>
+        <span className="send-now-count">{sec}</span>
+      </span>
+    </span>
+  );
+}
 
-export function ComposerInput({ lang, text, onText, textareaRef, plan, cap, busy, file, onFile, onSend, openPlans, canSend, retry = false, leading, statusSlot, recipientBlocks = { photos: false, files: false } }: Props) {
+export function ComposerInput({ lang, text, onText, textareaRef, plan, cap, busy, file, onFile, onSend, openPlans, canSend, retry = false, leading, statusSlot, recipientBlocks = { photos: false, files: false }, countdownUntil = null, onSendNow }: Props) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!countdownUntil || canSend || busy) return;
+    const tick = () => setNow(Date.now());
+    tick();
+    const id = window.setInterval(tick, 100);
+    return () => window.clearInterval(id);
+  }, [countdownUntil, canSend, busy]);
+  const remainMs = countdownUntil && !canSend && !busy ? Math.max(0, Date.parse(countdownUntil) - now) : 0;
+  const counting = !!countdownUntil && !canSend && !busy && remainMs > 0;
+  const countSec = counting ? Math.max(1, Math.ceil(remainMs / 1000)) : 0;
+  const ringFrac = counting ? Math.max(0, Math.min(1, remainMs / 30000)) : 0;
   const da = lang === "da"; const count = messageCharCount(text);
   const accept = pickerAccept(recipientBlocks); const showPaperclip = accept !== null; const showCamera = !recipientBlocks.photos;
   const attachHint = recipientAttachHint(lang, recipientBlocks);
@@ -92,7 +124,7 @@ export function ComposerInput({ lang, text, onText, textareaRef, plan, cap, busy
       {showCamera && <button type="button" className="composer-icon" disabled={busy || plan === null} aria-label={da ? "Tag billede" : "Take photo"} title={da ? "Tag billede" : "Take photo"} onClick={() => choose("camera")}><Glyph><path d="M4 6h4l2-3h4l2 3h4a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z" /><circle cx="12" cy="13" r="4" /></Glyph></button>}
       </div>
       </div>
-      <button type="button" className="composer-send" aria-busy={busy || undefined} aria-label={busy ? (da ? "Sender" : "Sending") : file ? (da ? "Send vedhæftning" : "Send attachment") : (da ? "Send besked" : "Send message")} title={da ? "Send" : "Send"} disabled={busy || !canSend || (count > cap && !retry) || plan === null} onClick={onSend}>{busy ? <span className="send-spinner" aria-hidden="true" /> : <Glyph><path d="m22 2-7 20-4-9-9-4Z" /><path d="m22 2-11 11" /></Glyph>}</button>
+      <button type="button" className={`composer-send${counting ? " is-countdown" : ""}`} aria-busy={busy || undefined} aria-label={busy ? (da ? "Sender" : "Sending") : counting ? (da ? `Send nu (${countSec} s)` : `Send now (${countSec} s)`) : file ? (da ? "Send vedhæftning" : "Send attachment") : (da ? "Send besked" : "Send message")} title={counting ? (da ? `Send nu (${countSec} s)` : `Send now (${countSec} s)`) : (da ? "Send" : "Send")} disabled={busy || (!counting && (!canSend || (count > cap && !retry) || plan === null))} onClick={counting ? onSendNow : onSend}>{busy ? <span className="send-spinner" aria-hidden="true" /> : counting ? <SendCountdown sec={countSec} frac={ringFrac} /> : <Glyph><path d="m22 2-7 20-4-9-9-4Z" /><path d="m22 2-11 11" /></Glyph>}</button>
     </div>
     {showPaperclip && <input type="file" ref={picker} accept={accept ?? FILE_ACCEPT} hidden disabled={busy} onChange={e => selected(e.currentTarget)} />}
     {showCamera && <input type="file" ref={camera} accept="image/*" capture="environment" hidden disabled={busy} onChange={e => selected(e.currentTarget)} />}

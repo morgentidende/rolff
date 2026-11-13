@@ -11,6 +11,7 @@ import { ComposerInput } from "./ComposerInput";
 import { blockedAttachmentNotice, type RecipientAttachmentBlocks } from "./attachmentBlocks";
 import { effectiveCharLimit, textRetryKey } from "./composerLimits";
 import { MessageBubble, ReplyComposer, type Message } from "./MessageBubble";
+import { isPendingSend, pendingSeconds, soonestPending } from "./delayedSend";
 import { Toast, showToast } from "./toast";
 import { ConfirmHost, confirmDialog } from "./confirmDialog";
 import { PolicyView } from "./PolicyView";
@@ -52,7 +53,7 @@ function readInviteToken(): string | null {
 }
 
 type Sheet = "notifications" | "members" | "privacy" | "words" | null | "lang" | "theme" | "times" | "faq" | "feedback" | "invite" | "export" | "addMember" | "report" | "account" | "newpw" | "plans";
-export type MenuItem = { label: string; run: () => void; danger?: boolean; divider?: boolean };
+export type MenuItem = { label: string; run: () => void; danger?: boolean; divider?: boolean; checked?: boolean };
 
 export function App() {
   const [inviteToken, setInviteToken] = useState<string | null>(() => readInviteToken());
@@ -196,7 +197,7 @@ function Menu({ lang, items, buttonRef }: { lang: Lang; items: MenuItem[]; butto
       <button type="button" ref={buttonRef} className="icon" aria-label={lang === "da" ? "Menu" : "Menu"} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
         <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><circle cx="12" cy="5" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="12" cy="19" r="2" /></svg>
       </button>
-      {open && <div className="menu" role="menu">{items.map((it) => <Fragment key={it.label}>{it.divider && <div className="menu-sep" role="separator" />}<button type="button" role="menuitem" className={it.danger ? "danger" : ""} onClick={() => { setOpen(false); it.run(); }}>{it.label}</button></Fragment>)}</div>}
+      {open && <div className="menu" role="menu">{items.map((it) => <Fragment key={it.label}>{it.divider && <div className="menu-sep" role="separator" />}<button type="button" role={it.checked === undefined ? "menuitem" : "menuitemcheckbox"} aria-checked={it.checked} className={it.danger ? "danger" : ""} onClick={() => { setOpen(false); it.run(); }}><span className="menu-label">{it.label}</span>{it.checked ? <svg className="menu-check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12.5 10 17.5 19 7" /></svg> : null}</button></Fragment>)}</div>}
     </div>
   );
 }
@@ -652,6 +653,21 @@ function markAll(text: string, q: string, current: boolean): (string | React.Rea
   out.push(text.slice(i)); return out;
 }
 
+function EditComposer({ lang, onCancel }: { lang: Lang; onCancel: () => void }) {
+  const da = lang === "da";
+  return (
+    <div className="reply-composer" role="status">
+      <div className="reply-composer-main">
+        <span className="reply-composer-who">{da ? "Retter forsinket besked" : "Editing delayed message"}</span>
+        <p className="reply-composer-text">{da ? "Send gemmer rettelsen og starter 30 sekunder forfra." : "Send saves the edit and restarts the 30-second delay."}</p>
+      </div>
+      <button type="button" className="reply-composer-close" aria-label={da ? "Annullér rettelse" : "Cancel edit"} onClick={onCancel}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+      </button>
+    </div>
+  );
+}
+
 const Icon = ({ d }: { d: React.ReactNode }) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">{d}</svg>;
 
 function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButtonRef }: { session: Session; lang: Lang; conv: Conv; back: () => void; openPlans: () => void; planKey: Sheet; rename: (contacts: Other[]) => void; menuButtonRef?: React.RefObject<HTMLButtonElement | null> }) {
@@ -707,6 +723,9 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
     const i = setInterval(load, 8000);
     return () => { live = false; window.removeEventListener("focus", onFocus); clearInterval(i); };
   }, [conv.id]);
+  const [delayedOn, setDelayedOn] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [tickNow, setTickNow] = useState(() => Date.now());
   // Never auto-reload for a new app version mid-send or with an attachment picked (text drafts survive a reload).
   useEffect(() => { const k = `composer:${conv.id}`; setReloadBlocked(k, sending || !!file); return () => setReloadBlocked(k, false); }, [sending, file, conv.id]);
   const retryKey = !file ? textRetryKey(localStorage.getItem(`idem:${conv.id}`), text, reply?.id ?? null) : null;
@@ -749,8 +768,31 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
     else if (error && uid) { const c = await cacheGet<Msg[]>(uid, conv.id); if (c) setMsgs(c); }
     const p = await supabase.rpc("my_pending_count"); setPending((p.data as number) ?? 0);
     const i = await supabase.rpc("list_pending_invitations", { conv: conv.id }); setInvs((i.data as Pending[]) ?? []);
+    const d = await supabase.rpc("delayed_send_enabled", { conv: conv.id }); if (!d.error) setDelayedOn(!!d.data);
   }, [conv.id]);
   useEffect(() => { load(); const i = setInterval(load, 8000); return () => clearInterval(i); }, [load]);
+  const pendingSend = soonestPending(msgs, tickNow);
+  const pendingLeft = pendingSend ? pendingSeconds(pendingSend.deliver_after, tickNow) : null;
+  const releasing = useRef(new Set<string>());
+  useEffect(() => {
+    if (!msgs.some((m) => m.deliver_after)) return;
+    const i = setInterval(() => setTickNow(Date.now()), 200);
+    return () => clearInterval(i);
+  }, [msgs]);
+  const releaseNow = useCallback(async (id: string) => {
+    const { error } = await supabase.rpc("release_delayed_message", { p_id: id });
+    if (error) { showToast(lang === "da" ? "Beskeden kunne ikke sendes nu. Prøv igen." : "Could not send the message now. Try again.", { at: "top", ms: 3000 }); return false; }
+    setEditId((cur) => cur === id ? null : cur);
+    load();
+    return true;
+  }, [lang, load]);
+  useEffect(() => {
+    for (const m of msgs) {
+      if (!m.mine || !m.deliver_after || isPendingSend(m.deliver_after, tickNow) || releasing.current.has(m.id)) continue;
+      releasing.current.add(m.id);
+      void releaseNow(m.id).finally(() => releasing.current.delete(m.id));
+    }
+  }, [msgs, tickNow, releaseNow]);
   // The chat is a fixed-height column: only the message list scrolls, so the
   // composer stays pinned at the bottom. Never use scrollIntoView here — it also
   // scrolls the page and pushed the composer off-screen after approval.
@@ -809,9 +851,9 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
     const keyStore = `idem:${conv.id}`;
     const saved = { text, reply: reply?.id ?? null, key: retryKey ?? crypto.randomUUID() };
     localStorage.setItem(keyStore, JSON.stringify(saved));
-    let r; try { r = await callFn("send-message", { conversation_id: conv.id, body: text, reply_to_id: reply?.id ?? null, idempotency_key: saved.key, lang }); } catch { r = { status: 0, data: null }; }
+    let r; try { r = await callFn("send-message", { conversation_id: conv.id, body: text, reply_to_id: editId ? null : (reply?.id ?? null), idempotency_key: saved.key, lang, ...(editId ? { edit_message_id: editId } : {}) }); } catch { r = { status: 0, data: null }; }
     setBusy(false);
-    if (r.status === 200 && r.data?.status === "accepted") { setText(""); setReply(null); localStorage.removeItem(draftKey); localStorage.removeItem(replyKey); localStorage.removeItem(keyStore); setStatus({ kind: "accepted" }); setAcceptedSeq((x) => x + 1); armFlash(r.data?.message_id); load(); }
+    if (r.status === 200 && r.data?.status === "accepted") { setText(""); setReply(null); setEditId(null); localStorage.removeItem(draftKey); localStorage.removeItem(replyKey); localStorage.removeItem(keyStore); setStatus({ kind: "accepted" }); setAcceptedSeq((x) => x + 1); armFlash(r.data?.message_id); load(); }
     else if (r.status === 200 && r.data?.status === "clarification_required") setStatus({ kind: "clarification" });
     else if (r.status === 200 && r.data?.status === "blocked") setStatus({ kind: "blocked", spans: r.data.spans ?? [], blockedText: text, suggestion: typeof r.data.suggestion === "string" ? r.data.suggestion : "", reason: r.data.reason_code, explanation: cleanExplanation(r.data.explanation) });
     else if (r.status === 200 && r.data?.status === "private_boundary") setStatus({ kind: "note", blockedText: da ? "Beskeden kan ikke sendes på grund af en privat modtagerindstilling. Ret beskeden og prøv igen." : "Not sent due to a private recipient setting. Edit your message and retry." });
@@ -820,6 +862,7 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
     else if (r.status === 200 && limitMsg(r.data)) { setStatus({ kind: "note", blockedText: limitMsg(r.data)! }); loadLim(); }
     else if (r.status === 200 && r.data?.status === "cannot_deliver") setStatus({ kind: "note", blockedText: da ? "Beskeden kan ikke sendes i denne samtale." : "Messages cannot be sent in this conversation." });
     else if (r.data?.error === "invalid_reply") setStatus({ kind: "note", blockedText: da ? "Den valgte besked kan ikke besvares. Fjern svarvalget, og prøv igen." : "The selected message cannot be replied to. Remove the reply and try again." });
+    else if (r.data?.error === "no_longer_pending") { setEditId(null); setStatus({ kind: "note", blockedText: da ? "Beskeden er allerede sendt, så den kan ikke rettes." : "The message has already been sent, so it cannot be edited." }); load(); }
     else if (r.data?.error === "read_only") setStatus({ kind: "readOnly" });
     else if (r.status === 429) setStatus({ kind: "rateLimited" });
     else setStatus({ kind: "techError" });
@@ -847,6 +890,28 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
     return m.sender_name || m.sender_email || (da ? "Modtageren" : "The recipient");
   };
   const sameSender = (a: Msg, b: Msg) => a.mine === b.mine && ((a.sender_id && b.sender_id) ? a.sender_id === b.sender_id : true);
+  const beginEdit = (selected: Message) => {
+    setReply(null);
+    setEditId(selected.id);
+    setText(selected.body);
+    setStatus(null);
+    setReplyFocus((n) => n + 1);
+  };
+  const askCancelDelayed = async (selected: Message) => {
+    const ok = await confirmDialog({
+      title: da ? "Slet den forsinkede besked?" : "Delete the delayed message?",
+      body: da ? "Beskeden er ikke leveret endnu og bliver slettet." : "The message has not been delivered yet and will be deleted.",
+      confirm: da ? "Slet" : "Delete",
+      cancel: da ? "Annuller" : "Cancel",
+      danger: true,
+    });
+    if (!ok) return;
+    const { error } = await supabase.rpc("cancel_delayed_message", { p_id: selected.id });
+    if (error) { showToast(da ? "Beskeden kunne ikke slettes. Den er måske allerede sendt." : "The message could not be deleted. It may already have been sent.", { at: "top", ms: 3000 }); load(); return; }
+    if (editId === selected.id) { setEditId(null); setText(""); }
+    showToast(da ? "Beskeden er slettet" : "Message deleted", { tone: "success", at: "top", ms: 2500 });
+    load();
+  };
   const beginReply = (selected: Message) => {
     if (sending) return;
     setReply({ id: selected.id, body: selected.body ?? null, mine: selected.mine, sender_id: selected.sender_id, sender_name: selected.sender_name, sender_email: selected.sender_email });
@@ -877,7 +942,8 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
         <button ref={searchBtnRef} className="icon" aria-label={da ? "Søg i samtalen" : "Search conversation"} aria-pressed={q !== null} onClick={() => { setQ(q === null ? "" : null); setCur(0); }}><Icon d={<><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></>} /></button>
         {conv.role === "parent" && <button ref={addPersonRef} className="icon" aria-label={da ? "Tilføj person" : "Add person"} aria-haspopup="dialog" aria-expanded={sheet === "addMember"} onClick={() => setSheet("addMember")}><Icon d={<><circle cx="9" cy="8" r="4" /><path d="M2 21c0-4 3-6 7-6s7 2 7 6" /><path d="M19 8v6M16 11h6" /></>} /></button>}
         {/* Conversation-only actions; app-wide settings live on the front-page menu. */}
-        <Menu lang={lang} buttonRef={menuButtonRef} items={[{ label: da ? "Deltagere og roller" : "Participants and roles", run: () => setSheet("members") },
+        <Menu lang={lang} buttonRef={menuButtonRef} items={[{ label: da ? "Forsinkede beskeder" : "Delayed messages", checked: delayedOn, run: () => { void (async () => { const next = !delayedOn; const { error } = await supabase.rpc("set_delayed_send", { conv: conv.id, p_enabled: next }); if (error) { showToast(da ? "Kunne ikke gemme indstillingen. Prøv igen." : "Could not save the setting. Try again.", { at: "top", ms: 3000 }); return; } setDelayedOn(next); showToast(next ? (da ? "Forsinkede beskeder er slået til" : "Delayed messages are on") : (da ? "Forsinkede beskeder er slået fra" : "Delayed messages are off"), { tone: "success", at: "top", ms: 2500 }); })(); } },
+          { label: da ? "Deltagere og roller" : "Participants and roles", run: () => setSheet("members") },
           ...(others.length ? [{ label: da ? "Kontaktens kaldenavn" : "Contact nickname", run: () => rename(others) }] : []),
           { label: da ? "Eksportér samtale" : "Export conversation", run: () => setSheet("export") },
           { label: da ? "Blokeringer" : "Blocking lists", run: () => setSheet("words") },
@@ -899,7 +965,7 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
         {msgs.length === 0 && <p className="meta">{t.empty}</p>}
         {groupMessagesByDay(msgs).map((g) => <section className="day-group" key={g.key}>
           <div className="day-sep" role="separator" aria-label={dayLabel(g.msgs[0].created_at, lang)}><span>{dayLabel(g.msgs[0].created_at, lang)}</span></div>
-          {g.msgs.map((m, j) => { const i = g.start + j; const newDay = j === 0; return <Fragment key={m.id}>{eventsBefore(events, msgs, i).map((e) => <EventNotice key={e.id} e={e} lang={lang} />)}<MessageBubble m={m} lang={lang} index={i} hit={i === curIdx} tailed={newDay || !sameSender(msgs[i - 1], m)} flash={m.mine && m.id === flashId} canReply={conv.role !== "reader" && !sending} canReact={conv.role !== "reader"} onReply={beginReply} onThumb={toggleThumb}>{q ? markAll(m.body, q, i === curIdx) : m.body}{m.att_mime && <AttachmentView lang={lang} m={m} />}</MessageBubble></Fragment>; })}
+          {g.msgs.map((m, j) => { const i = g.start + j; const newDay = j === 0; return <Fragment key={m.id}>{eventsBefore(events, msgs, i).map((e) => <EventNotice key={e.id} e={e} lang={lang} />)}<MessageBubble m={m} lang={lang} index={i} hit={i === curIdx} tailed={newDay || !sameSender(msgs[i - 1], m)} flash={m.mine && m.id === flashId} canReply={conv.role !== "reader" && !sending} canReact={conv.role !== "reader" && !isPendingSend(m.deliver_after, tickNow)} onReply={beginReply} onThumb={toggleThumb} pendingSec={pendingSeconds(m.deliver_after, tickNow)} onEdit={m.mine && isPendingSend(m.deliver_after, tickNow) && !m.att_mime ? beginEdit : undefined} onDelete={m.mine && isPendingSend(m.deliver_after, tickNow) ? askCancelDelayed : undefined}>{q ? markAll(m.body, q, i === curIdx) : m.body}{m.att_mime && <AttachmentView lang={lang} m={m} />}</MessageBubble></Fragment>; })}
         </section>)}
         {eventsBefore(events, msgs, msgs.length).map((e) => <EventNotice key={e.id} e={e} lang={lang} />)}
         <div ref={endRef} />
@@ -912,7 +978,7 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
       <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">{status?.kind === "accepted" && <span key={acceptedSeq}>{t.accepted}</span>}</div>
       {conv.role !== "reader" ? (
         <div className="card composer" ref={composerRootRef}><fieldset className="composer-fields" disabled={sending}>
-          <ComposerInput lang={lang} text={text} onText={setText} textareaRef={composerRef} plan={plan} cap={cap} busy={sending} file={file} onFile={setFile} openPlans={openPlans} retry={!!retryKey} canSend={!!file || !!text.trim()} onSend={() => { if (file) attachmentSend.current?.(); else send(); }} leading={reply ? <ReplyComposer who={replyWho(reply)} body={reply.body} unavailable={reply.body == null} lang={lang} onCancel={() => { setReply(null); composerRef.current?.focus(); }} /> : null} statusSlot={<LunaIndicator checking={sending} accepted={status?.kind === "accepted"} label={t.sending} pendingText={sending ? (file ? (text.trim() || file.name) : text) : undefined} />} recipientBlocks={recipientBlocks} />
+          <ComposerInput lang={lang} text={text} onText={setText} textareaRef={composerRef} plan={plan} cap={cap} busy={sending} file={file} onFile={setFile} openPlans={openPlans} retry={!!retryKey} canSend={!!file || !!text.trim()} onSend={() => { if (file) attachmentSend.current?.(); else send(); }} countdownUntil={!file && !text.trim() && !editId && pendingSend ? pendingSend.deliver_after : null} onSendNow={() => { if (pendingSend) void releaseNow(pendingSend.id); }} leading={editId ? <EditComposer lang={lang} onCancel={() => { setEditId(null); setText(""); composerRef.current?.focus(); }} /> : reply ? <ReplyComposer who={replyWho(reply)} body={reply.body} unavailable={reply.body == null} lang={lang} onCancel={() => { setReply(null); composerRef.current?.focus(); }} /> : null} statusSlot={<LunaIndicator checking={sending} accepted={status?.kind === "accepted"} label={t.sending} pendingText={sending ? (file ? (text.trim() || file.name) : text) : undefined} />} recipientBlocks={recipientBlocks} />
           <AttachBar lang={lang} conv={conv.id} plan={plan} openPlans={openPlans} caption={text} file={file} setFile={setFile} sendRef={attachmentSend} cap={cap} replyTo={reply?.id ?? null} onBusy={setAttachmentBusy} limitMsg={limitMsg} sent={(messageId) => { setText(""); setReply(null); localStorage.removeItem(draftKey); localStorage.removeItem(replyKey); setStatus({ kind: "accepted" }); setAcceptedSeq((x) => x + 1); armFlash(messageId); load(); loadLim(); }} />
           {(() => { const wait = lim?.next_at ? Math.ceil((new Date(lim.next_at).getTime() - Date.now()) / 1000) : 0; return wait > 0 ? <p className="meta" role="status">{da ? `Du kan sende igen ${waitText(wait, true)}.` : `You can send again ${waitText(wait, false)}.`}</p> : null; })()}
         </fieldset></div>) : <div className="notice" role="note">{t.readOnly}</div>}

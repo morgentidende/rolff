@@ -167,7 +167,7 @@ test('Luna checking state: crisp 32px robot (no glow blur), separate "Tjekker…
   assert.match(luna, /filter=\{crisp \? undefined : `url\(#\$\{id\}g\)`\}/);
   assert.match(lcss, /\.luna-in-composer \.luna-check-label\{display:inline-flex;[^}]*border-radius:999px/);
   assert.match(lcss, /@keyframes lr-bob/); assert.match(lcss, /@keyframes lr-eyes/);
-  assert.match(comp, /className="composer-send" aria-busy=\{busy \|\| undefined\}/);
+  assert.match(comp, /className=\{`composer-send\$\{counting \? " is-countdown" : ""\}`\} aria-busy=\{busy \|\| undefined\}/);
   assert.match(comp, /busy \? <span className="send-spinner" aria-hidden="true" \/>/);
   assert.match(css, /prefers-reduced-motion:reduce\)\{\.send-spinner\{animation:none/);
 });
