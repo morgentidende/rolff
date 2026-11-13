@@ -86,4 +86,19 @@ function assertPrivateHistory(w) {
     assert.ok(!/example\.invalid|synthetic|kladde|testbesked|40000000|30000000|20000000|10000000/i.test(JSON.stringify(state)));
     assert.ok(Object.values(marker).every(v => typeof v !== 'function' && typeof v !== 'object'), 'No callbacks or payload objects in history');
 }
-module.exports = { webRoot, env, delay, button, label, click, back, forward, assertPrivateHistory };
+async function openConversation(d) {
+    const row = d.querySelector('.convbtn');
+    assert.ok(row, 'conversation row');
+    row.click();
+    await delay(60);
+    assert.ok(d.querySelector('.topbar.chat'), 'chat is open');
+}
+async function openTimes(d, w, next) {
+    if (w && w.__resetReceiveSettingsMock) w.__resetReceiveSettingsMock(next);
+    if (!d.querySelector('.topbar.chat')) await openConversation(d);
+    await click(label(d, 'Menu'));
+    await click(button(d, 'Modtagetider'));
+    await delay(40);
+}
+module.exports = { webRoot, env, delay, button, label, click, back, forward, assertPrivateHistory, openConversation, openTimes };
+
