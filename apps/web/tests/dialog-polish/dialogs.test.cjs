@@ -161,3 +161,15 @@ test('Luna checking state: crisp 32px robot (no glow blur), separate "Tjekker…
   assert.match(comp, /busy \? <span className="send-spinner" aria-hidden="true" \/>/);
   assert.match(css, /prefers-reduced-motion:reduce\)\{\.send-spinner\{animation:none/);
 });
+
+test('blocked box never pushes the composer away: capped height, internal scroll, smaller with keyboard, no shrinking children', () => {
+  assert.match(css, /\.blockbox\{[^}]*max-height:min\(40dvh,calc\(var\(--vv-h,100dvh\) \* \.4\)\);overflow-y:auto;overscroll-behavior:contain/);
+  assert.match(css, /\.blockbox > \*\{flex-shrink:0\}/);
+  assert.match(css, /html\[data-keyboard\] \.blockbox\{max-height:calc\(var\(--vv-h,100dvh\) \* \.34\)\}/);
+  assert.match(css, /\.blockbox-reason\{[^}]*-webkit-line-clamp:2/);
+  assert.match(css, /\.blockbox-flag\{[^}]*white-space:nowrap;overflow:hidden;text-overflow:ellipsis/);
+  const bn = src('BlockedNotice.tsx');
+  assert.match(bn, /role="alert" aria-labelledby="blockbox-title"/);
+  assert.match(bn, /"Ikke sendt" : "Not sent"/); assert.match(bn, /"Mere" : "More"/); assert.match(bn, /"Markeret:" : "Flagged:"/);
+  assert.doesNotMatch(bn, /ordre|dikter|dictate/i);
+});

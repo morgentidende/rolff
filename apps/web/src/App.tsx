@@ -25,6 +25,7 @@ import { passwordsMatch, pwText, toggleLabel } from "./pw";
 import { cacheClear, cacheGet, cacheSet } from "./localStore";
 import { LunaIndicator } from "./LunaRobot";
 import { applySuggestion } from "./suggestion";
+import { BlockedNotice } from "./BlockedNotice";
 import { KEY as A2HS_KEY, platform as a2hsPlatform, shouldAsk } from "./install";
 import { makeZip, myDataFiles, findHits } from "./exportUtil";
 import { ConversationExport, fetchMyPlan, PLAN_TIMEOUT_MS, withTimeout } from "./ConversationExport";
@@ -639,14 +640,6 @@ function InviteByEmail({ lang, done }: { lang: Lang; done: (toast: string) => vo
   );
 }
 
-function highlight(text: string, spans: string[]) {
-  if (!spans.length) return text;
-  const parts: (string | React.ReactElement)[] = []; let rest = text; let k = 0;
-  for (const s of spans) { const i = rest.indexOf(s); if (i < 0) continue; parts.push(rest.slice(0, i), <mark key={k++}>{s}</mark>); rest = rest.slice(i + s.length); }
-  parts.push(rest); return parts;
-}
-
-
 type Pending = { id: string; role: string; invitee_email: string | null; consents: number; required: number; i_consented: boolean; mine: boolean };
 
 function markAll(text: string, q: string, current: boolean): (string | React.ReactElement)[] | string {
@@ -872,7 +865,7 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
         {eventsBefore(events, msgs, msgs.length).map((e) => <EventNotice key={e.id} e={e} lang={lang} />)}
         <div ref={endRef} />
       </div>
-      {status?.kind === "blocked" && <div className="notice" role="alert"><p style={{ margin: 0 }} className={status.explanation ? "block-explained" : undefined}>{status.explanation ? `${t.blockedLead} ${status.explanation} ${t.blockedRetry}` : t.blocked}</p>{status.spans!.length > 0 && <p className="meta" style={{ marginBottom: 0 }}>{t.flagged}: {highlight(status.blockedText!, status.spans!)}</p>}{status.suggestion ? <div className="suggest"><p className="meta" style={{ margin: "8px 0 4px" }}><strong>{t.suggestionLabel}</strong></p><p style={{ margin: "0 0 8px" }}>{status.suggestion}</p><button type="button" className="ghost" onClick={() => { setText(applySuggestion(text, status.suggestion)); setStatus(null); }}>{t.useSuggestion}</button><p className="meta" style={{ margin: "6px 0 0" }}>{da ? "Forslaget kopieres til skrivefeltet. Du kan rette det og skal selv trykke Send — det tjekkes igen. Originalteksten står stadig i feltet, indtil du vælger forslaget." : "The suggestion is copied into the composer. You can edit it and must press Send yourself — it is checked again. Your original text stays until you use the suggestion."}</p></div> : <div className="suggest"><p className="meta" style={{ margin: "8px 0 4px" }}><strong>{t.guidanceLabel}</strong></p><p className="meta" style={{ margin: 0 }}>{t.blockGuidance}</p></div>}</div>}
+      {status?.kind === "blocked" && <BlockedNotice key={status.blockedText} lang={lang} explanation={status.explanation} spans={status.spans ?? []} blockedText={status.blockedText ?? ""} suggestion={status.suggestion ?? ""} onUse={() => { setText(applySuggestion(text, status.suggestion)); setStatus(null); }} onClose={() => setStatus(null)} />}
       {status?.kind === "clarification" && <div className="notice" role="alert">{da ? "Beskeden er ikke sendt. Vi er usikre på, hvad du mener. Vil du skrive det lidt tydeligere?" : "Your message was not sent. We’re not sure what you mean. Could you write it a little more clearly?"}</div>}
       {status?.kind === "note" && <div className="notice" role="alert">{status.blockedText}</div>}
       {status && status.kind !== "blocked" && status.kind !== "note" && status.kind !== "clarification" && status.kind !== "accepted" && <div className="err" role="status">{(t as any)[status.kind]}</div>}
