@@ -53,7 +53,9 @@ await t('saving times on A does not change B, and becomes the template for a new
   assert.deepEqual(ra.windows,closed);
   const rb=await get(U,B);
   assert.equal(rb.configured,false);
-  assert.equal((await db.query('select in_receive_window($1,clock_timestamp(),$2) v',[U,B])).rows[0].v,true);
+  // No row of B's own, so delivery falls back to the just-written global template.
+  assert.equal((await db.query('select in_receive_window($1,$2::timestamptz,$3) v',[U,TUE,B])).rows[0].v,false);
+  assert.equal((await db.query('select in_receive_window($1,$2::timestamptz) v',[U,TUE])).rows[0].v,false);
   const C=await conv();
   const rc=await get(U,C);
   assert.equal(rc.configured,true);
@@ -97,7 +99,7 @@ await t('force receive on a closed conversation does not open the push window ye
   assert.equal((await db.query('select notification_in_receive_window($1,clock_timestamp(),$2) v',[U,jobs[0].id])).rows[0].v,true);
 });
 
-await t('missing per-conversation row always receives, even if the global template is closed', async () => {
+await t('fail-safe: missing per-conversation row uses the global setting', async () => {
   await save(U,A,(await get(U,A)).revision,closed,true);
   const C=await conv();
   assert.equal((await get(U,C)).configured,true);
@@ -105,7 +107,7 @@ await t('missing per-conversation row always receives, even if the global templa
   await db.query('delete from conversation_receive_settings where user_id=$1 and conversation_id=$2',[U,C]);
   assert.equal((await get(U,C)).configured,false);
   assert.equal((await db.query('select in_receive_window($1,$2::timestamptz) v',[U,TUE])).rows[0].v,false);
-  assert.equal((await db.query('select in_receive_window($1,$2::timestamptz,$3) v',[U,TUE,C])).rows[0].v,true);
+  assert.equal((await db.query('select in_receive_window($1,$2::timestamptz,$3) v',[U,TUE,C])).rows[0].v,false);
 });
 
 await t('save of empty enabled windows is rejected; disabled empty is allowed', async () => {

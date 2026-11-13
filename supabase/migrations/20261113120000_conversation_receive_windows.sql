@@ -2,11 +2,11 @@
 --
 -- New conversations copy the user's last-saved defaults (the existing
 -- receive_settings / receive_windows row, which is updated whenever the user
--- saves a conversation's times). If the user has never saved times, a new
--- conversation has no row and always receives. A conversation without its own
--- row also always receives, so the unconfigured UI and delivery stay in sync;
--- saving times in another chat does not start holding messages here. The
--- current editable default when turning times on is still Mon–Sun 18:00–19:00.
+-- saves a conversation's times). If a conversation has no row of its own,
+-- in_receive_window falls back to that global setting (or always receives
+-- when none exists). The sheet shows the same inherited times so the UI and
+-- delivery stay in sync. The current editable default when turning times on
+-- is still Mon–Sun 18:00–19:00.
 --
 -- Existing active memberships get a snapshot of the current global windows
 -- and timezone at release, so behaviour does not change.
@@ -120,10 +120,9 @@ create trigger memberships_rejoin_receive_settings
   after update of left_at on public.memberships
   for each row execute function public._rejoin_conversation_receive_settings();
 
--- Core window check. A conversation with no row of its own always receives
--- (matches the unconfigured UI). The two-argument form keeps global-only
--- behaviour for existing tests. New memberships are seeded from the last-saved
--- global template when that template exists.
+-- Core window check. A conversation with no row of its own uses the global
+-- setting (two-argument form). New memberships are seeded from the last-saved
+-- global template when that template exists, so most chats have their own row.
 create function public.in_receive_window(uid uuid, at timestamptz, conv uuid)
 returns boolean language plpgsql stable security definer set search_path = pg_catalog, public as $$
 declare s_enabled boolean; s_tz text; local_ts timestamp; dow int; mins int; prev_dow int; has_row boolean := false;
@@ -135,13 +134,10 @@ begin
     has_row := found;
   end if;
   if not has_row then
-    -- Unconfigured conversation, or a caller without a conversation id.
-    -- Missing rows fail open so the UI (no times set) and delivery stay in sync.
-    -- A later save on another chat must not start holding messages here.
-    if conv is null then
-      return public.in_receive_window(uid, at);
-    end if;
-    return true;
+    -- Fail-safe: no per-conversation row means "use the user's global windows".
+    -- That keeps existing callers and chats created before the first save
+    -- consistent with the template the sheet also shows as inherited times.
+    return public.in_receive_window(uid, at);
   end if;
   if not s_enabled then return true; end if;
   local_ts := at at time zone s_tz;
@@ -516,6 +512,7 @@ begin
     'own_private_aliases', coalesce((select jsonb_agg(jsonb_build_object('contact_user_id', a.contact_user_id, 'alias', a.alias)) from contact_aliases a where a.owner_id = p_uid), '[]'),
     'own_blocked_topics', coalesce((select jsonb_agg(jsonb_build_object('conversation_id', w.conversation_id, 'word', w.word, 'created_at', w.created_at)) from conversation_blocked_topics w where w.user_id = p_uid), '[]'),
     'own_blocked_words', coalesce((select jsonb_agg(jsonb_build_object('conversation_id', w.conversation_id, 'word', w.word, 'created_at', w.created_at)) from conversation_blocked_words w where w.user_id = p_uid), '[]'),
+    'own_attachment_blocks', coalesce((select jsonb_agg(jsonb_build_object('conversation_id', b.conversation_id, 'block_photos', b.block_photos, 'block_files', b.block_files, 'updated_at', b.updated_at)) from conversation_attachment_blocks b where b.user_id = p_uid), '[]'),
     'own_conversation_blocks', coalesce((select jsonb_agg(jsonb_build_object('conversation_id', b.conversation_id, 'created_at', b.created_at)) from conversation_blocks b where b.user_id = p_uid), '[]'),
     'invitations_created', coalesce((select jsonb_agg(jsonb_build_object('conversation_id', i.conversation_id, 'role', i.role, 'invitee_email', i.invitee_email, 'created_at', i.created_at, 'expires_at', i.expires_at, 'accepted_at', i.accepted_at, 'revoked_at', i.revoked_at)) from invitations i where i.created_by = p_uid), '[]'),
     'consents_given', coalesce((select jsonb_agg(jsonb_build_object('invitation_id', c.invitation_id, 'role', c.role, 'created_at', c.created_at)) from invitation_consents c where c.user_id = p_uid), '[]'),
