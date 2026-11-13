@@ -3,12 +3,14 @@ import { checkTopics, validateFilterSnapshot } from "../_shared/topics.ts";
 // Server-enforced pipeline: auth -> membership/role/length/rate (prepare_send) -> prefilter -> LLM ->
 // strict validation -> single-use approval bound to sender+conversation+sha256(body) (60s) ->
 // atomic consume + store (commit_message, idempotent). Fail closed on any error.
+// A text blocked once (sender+conversation, normalized hash) stays blocked: sticky blocks beat model nondeterminism.
 import { authed, cors, json } from "../_shared/http.ts";
 import { normalizeReplyId } from "../_shared/replies.ts";
 import { replyModerationContext } from "../_shared/replyContext.ts";
 import { checkPlanLength, planLengthError } from "../_shared/planLimits.ts";
 import { checkPersonLimits } from "../_shared/limits.ts";
 import { checkRules } from "../_shared/rules.ts";
+import { applySticky, stickyHash } from "../_shared/stickyBlock.ts";
 import { charCount, moderate, moderationContract, ModerationTechnicalError, providerFromEnv, resolveSenderLang, timeoutFromEnv } from "../_shared/moderation.ts";
 
 async function sha256Hex(s: string) {
@@ -88,6 +90,10 @@ Deno.serve(async (req) => {
     await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "error", p_reason: "config" });
     return json({ status: "technical_error", detail: (e as Error).message === "free_tier_forbidden_in_production" ? "config" : "unavailable" }, 503);
   }
+  // Sticky block lookup (fail closed): a text blocked before stays blocked, whatever the model says now.
+  const textKey = await stickyHash(body);
+  const remembered = await admin.rpc("recent_moderation_block", { p_sender: uid, conv, p_hash: textKey });
+  if (remembered.error) return json({ status: "technical_error" }, 503);
   let res;
   try { res = await moderate(provider, body, modCtx, timeoutFromEnv({ get: (k) => Deno.env.get(k) })); }
   catch (e) {
@@ -96,7 +102,13 @@ Deno.serve(async (req) => {
     console.log(JSON.stringify({ evt: "moderation_error", kind: e instanceof ModerationTechnicalError ? e.message : "unknown" }));
     return json({ status: "technical_error" }, 503);
   }
-  if (res.decision !== "allow") await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: res.decision, p_reason: res.reason_code });
+  res = applySticky(res, remembered.data);
+  if (res.decision === "block") {
+    const mem = await admin.rpc("remember_moderation_block", { p_sender: uid, conv, p_hash: textKey, p_reason: res.reason_code });
+    if (mem.error) console.log(JSON.stringify({ evt: "sticky_block_store_error" }));
+    if ("sticky" in res) console.log(JSON.stringify({ evt: "sticky_block_applied" }));
+  }
+  if (res.decision !== "allow") await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: res.decision, p_reason: "sticky" in res ? "sticky_" + res.reason_code : res.reason_code });
   if (res.decision === "block") return json({ status: "blocked", reason_code: res.reason_code, spans: res.spans, suggestion: res.suggestion, ...(res.explanation ? { explanation: res.explanation } : {}) }, 200);
   if (res.decision === "clarify") return json({ status: "clarification_required" }, 200);
 
