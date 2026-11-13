@@ -64,3 +64,14 @@
   20%{outline:2px solid color-mix(in srgb,var(--accent) 35%,transparent);outline-offset:2px}
   100%{outline:2px solid color-mix(in srgb,var(--accent) 0%,transparent);outline-offset:0}
 }
+
+/* Composer checking state: crisp 32px robot in its own centred slot, "Tjekker…" as a separate chip above the one-line pending text. Existing animation unchanged. */
+.luna-in-composer{gap:10px;padding:4px 12px 4px 6px}
+.luna-robot-slot{flex:none;width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center}
+.luna-in-composer .luna-robot{width:32px;height:32px}
+.luna-robot--crisp{filter:none}
+[data-theme=dark] .luna-robot--crisp{filter:none}
+.luna-in-composer .luna-check-copy{gap:3px;align-items:flex-start}
+.luna-in-composer .luna-check-label{display:inline-flex;align-items:center;padding:1px 8px;border-radius:999px;font-size:11.5px;font-weight:650;line-height:1.5;letter-spacing:.01em;color:var(--accent);background:color-mix(in srgb,var(--accent) 13%,transparent)}
+.luna-in-composer .luna-check-text{max-width:100%;font-size:15px;color:var(--text);opacity:.6}
+.luna-in-composer.luna-done .luna-robot{width:32px;height:32px}

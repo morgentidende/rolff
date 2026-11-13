@@ -133,3 +133,31 @@ test('PWA icons: separate any/maskable/monochrome entries, cache-busted; maskabl
   assert.match(html, /rel="apple-touch-icon" sizes="180x180" href="\.\/apple-touch-icon\.png\?v=2"/);
   assert.match(html, /rel="manifest" href="\.\/manifest\.webmanifest\?v=2"/);
 });
+
+test('Day separators: I dag / I går / weekday / date, in da and en; tail stays on the first bubble of a group', async () => {
+  const out = await esbuild.build({ entryPoints: [path.join(__dirname, '../../src/daySeparator.ts')], bundle: true, write: false, format: 'cjs', logLevel: 'silent' });
+  const m = { exports: {} }; new Function('module', 'exports', out.outputFiles[0].text)(m, m.exports);
+  const { dayLabel, dayKey } = m.exports; const now = new Date(2026, 10, 13, 8, 51);
+  const at = (d, h, mi = 0) => new Date(2026, 10, d, h, mi).toISOString();
+  assert.equal(dayLabel(at(13, 0, 5), 'da', now), 'I dag'); assert.equal(dayLabel(at(13, 0, 5), 'en', now), 'Today');
+  assert.equal(dayLabel(at(12, 22, 57), 'da', now), 'I går'); assert.equal(dayLabel(at(12, 22, 57), 'en', now), 'Yesterday');
+  assert.equal(dayLabel(at(10, 12), 'da', now), 'Tirsdag'); assert.equal(dayLabel(at(10, 12), 'en', now), 'Tuesday');
+  assert.match(dayLabel(at(2, 12), 'da', now), /^Man\.? 2\. november$/); assert.match(dayLabel(at(2, 12), 'en', now), /^Mon,? 2 November$/);
+  assert.notEqual(dayKey(at(12, 23, 59)), dayKey(at(13, 0, 1)));
+  const app = src('App.tsx');
+  assert.match(app, /tailed=\{newDay \|\| !sameSender\(msgs\[i - 1\], m\)\}/, 'tail on the first bubble of each group (WhatsApp style), new group per day');
+  assert.match(app, /className="day-sep" role="separator"/);
+  assert.match(css, /\.msg\.mine \.message-time\{opacity:1;color:var\(--mine-time\)\}/);
+  assert.match(css, /\.composer-send:disabled\{opacity:1;background:/);
+});
+
+test('Luna checking state: crisp 32px robot (no glow blur), separate "Tjekker…" chip, busy send button; animation untouched', () => {
+  const luna = src('LunaRobot.tsx'), lcss = src('lunaRobot.css'), comp = src('ComposerInput.tsx');
+  assert.match(luna, /<span className="luna-robot-slot"><LunaRobot size=\{32\} \/><\/span>/);
+  assert.match(luna, /filter=\{crisp \? undefined : `url\(#\$\{id\}g\)`\}/);
+  assert.match(lcss, /\.luna-in-composer \.luna-check-label\{display:inline-flex;[^}]*border-radius:999px/);
+  assert.match(lcss, /@keyframes lr-bob/); assert.match(lcss, /@keyframes lr-eyes/);
+  assert.match(comp, /className="composer-send" aria-busy=\{busy \|\| undefined\}/);
+  assert.match(comp, /busy \? <span className="send-spinner" aria-hidden="true" \/>/);
+  assert.match(css, /prefers-reduced-motion:reduce\)\{\.send-spinner\{animation:none/);
+});

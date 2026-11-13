@@ -4,8 +4,10 @@ import { useEffect, useId, useRef, useState } from "react";
 // Pure inline SVG + CSS (see lunaRobot.css). Purely visual: it never affects sending.
 export function LunaRobot({ mood = "checking", size = 60 }: { mood?: "checking" | "happy"; size?: number }) {
   const id = "lr" + useId().replace(/[^a-zA-Z0-9_-]/g, "");
+  // Small sizes skip the soft-glow filter: blurred eyes look smeared at ~32px. Same shapes and animation.
+  const crisp = size < 48;
   return (
-    <svg className={`luna-robot luna-robot--${mood}`} viewBox="0 0 64 64" width={size} height={size} aria-hidden="true" focusable="false">
+    <svg className={`luna-robot luna-robot--${mood}${crisp ? " luna-robot--crisp" : ""}`} shapeRendering="geometricPrecision" viewBox="0 0 64 64" width={size} height={size} aria-hidden="true" focusable="false">
       <defs>
         <linearGradient id={`${id}b`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#ffffff" />
@@ -38,7 +40,7 @@ export function LunaRobot({ mood = "checking", size = 60 }: { mood?: "checking" 
           <circle cx="52.4" cy="28.5" r="4.4" fill={`url(#${id}m)`} />
           <circle cx="53" cy="28.5" r="2.1" fill="#bfeee2" />
           <rect x="16.5" y="16.5" width="31" height="20.5" rx="10.25" fill="#132423" />
-          <g filter={`url(#${id}g)`} fill="#5ff0cf">
+          <g filter={crisp ? undefined : `url(#${id}g)`} fill="#5ff0cf">
             <g className="lr-look"><g className="lr-eyes">
               <ellipse cx="26.5" cy="26.8" rx="2.8" ry="3.6" />
               <ellipse cx="37.5" cy="26.8" rx="2.8" ry="3.6" />
@@ -82,10 +84,10 @@ export function LunaIndicator({ checking, accepted, label, pendingText }: {
     const body = (pendingText ?? "").replace(/\s+/g, " ").trim();
     return (
       <div className="luna-evaluating luna-in-composer" role="status" aria-live="polite">
-        <LunaRobot size={44} />
+        <span className="luna-robot-slot"><LunaRobot size={32} /></span>
         <div className="luna-check-copy">
           <span className="luna-check-label">{label}</span>
-          {body ? <p className="luna-check-text">{body}</p> : null}
+          {body ? <p className="luna-check-text" aria-hidden="true">{body}</p> : null}
         </div>
       </div>
     );
@@ -93,7 +95,7 @@ export function LunaIndicator({ checking, accepted, label, pendingText }: {
   if (happy) {
     return (
       <div className="luna-evaluating luna-in-composer luna-done" aria-hidden="true">
-        <LunaRobot mood="happy" size={44} />
+        <LunaRobot mood="happy" size={32} />
       </div>
     );
   }

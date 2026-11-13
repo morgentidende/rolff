@@ -29,6 +29,7 @@ import { KEY as A2HS_KEY, platform as a2hsPlatform, shouldAsk } from "./install"
 import { makeZip, myDataFiles, findHits } from "./exportUtil";
 import { ConversationExport, fetchMyPlan, PLAN_TIMEOUT_MS, withTimeout } from "./ConversationExport";
 import { EventNotice, eventsBefore, useConversationEvents } from "./ConversationEvents";
+import { dayKey, dayLabel } from "./daySeparator";
 
 import { labelOf, convDisplay } from "./convDisplay";
 import { listTime, previewText, type ConvPreview } from "./convList";
@@ -867,7 +868,7 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
       {pending > 0 && <div className="notice row"><span>{t.pending(pending)}</span><span className="spacer" /><button onClick={receiveNow}>{t.receiveNow}</button></div>}
       <div className="msgs" aria-live="polite" ref={listRef}>
         {msgs.length === 0 && <p className="meta">{t.empty}</p>}
-        {msgs.map((m, i) => <Fragment key={m.id}>{eventsBefore(events, msgs, i).map((e) => <EventNotice key={e.id} e={e} lang={lang} />)}<MessageBubble m={m} lang={lang} index={i} hit={i === curIdx} tailed={i === 0 || !sameSender(msgs[i - 1], m)} flash={m.mine && m.id === flashId} canReply={conv.role !== "reader" && !sending} onReply={beginReply}>{q ? markAll(m.body, q, i === curIdx) : m.body}{m.att_mime && <AttachmentView lang={lang} m={m} />}</MessageBubble></Fragment>)}
+        {msgs.map((m, i) => { const newDay = i === 0 || dayKey(msgs[i - 1].created_at) !== dayKey(m.created_at); return <Fragment key={m.id}>{newDay && <div className="day-sep" role="separator" aria-label={dayLabel(m.created_at, lang)}><span>{dayLabel(m.created_at, lang)}</span></div>}{eventsBefore(events, msgs, i).map((e) => <EventNotice key={e.id} e={e} lang={lang} />)}<MessageBubble m={m} lang={lang} index={i} hit={i === curIdx} tailed={newDay || !sameSender(msgs[i - 1], m)} flash={m.mine && m.id === flashId} canReply={conv.role !== "reader" && !sending} onReply={beginReply}>{q ? markAll(m.body, q, i === curIdx) : m.body}{m.att_mime && <AttachmentView lang={lang} m={m} />}</MessageBubble></Fragment>; })}
         {eventsBefore(events, msgs, msgs.length).map((e) => <EventNotice key={e.id} e={e} lang={lang} />)}
         <div ref={endRef} />
       </div>

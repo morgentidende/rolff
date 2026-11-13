@@ -451,3 +451,28 @@ button.compact-btn{flex:none;min-height:40px;padding:6px 14px;font-size:15px;whi
 .convempty{margin:24px 16px 0;padding:28px 20px;border:1px dashed var(--border);border-radius:16px}
 .convempty-icon{display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:50%;margin:0 auto 12px;background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent)}
 .convempty p strong{color:var(--text);font-size:17px}
+
+/* Conversation view polish: day separators, calmer own bubbles (AA timestamps), tight groups (tail on the FIRST bubble), slim pending bar, clear send state */
+.day-sep{align-self:center;margin:12px 0 6px;position:sticky;top:4px;z-index:2}
+.day-sep span{display:inline-block;padding:3px 12px;border-radius:999px;font-size:12.5px;font-weight:600;line-height:1.4;color:var(--muted);background:color-mix(in srgb,var(--card) 92%,var(--text));box-shadow:0 1px 2px rgba(0,0,0,.08)}
+[data-theme=dark] .day-sep span{background:#263030;color:#b9c8c5}
+.msgs > .day-sep:first-child{margin-top:4px}
+.day-sep + .msg.tailed{margin-top:2px}
+.msgs{gap:2px}
+.msg.tailed{margin-top:10px}
+:root{--mine:#c6ecdf;--mine-time:#36524d}
+[data-theme=dark]{--mine:#155545;--mine-time:#b8d4cc}
+.msg.mine .message-time{opacity:1;color:var(--mine-time)}
+.msg.theirs .message-time{opacity:1;color:var(--muted)}
+.pendbar{background:color-mix(in srgb,var(--warn) 65%,var(--card));border:1px solid color-mix(in srgb,var(--warn-b) 35%,transparent);border-left:3px solid var(--warn-b);border-radius:8px;font-size:13px}
+.pendbar-head{min-height:32px;padding:4px 10px}
+.pendbar.needs-me .pendbar-sum{font-weight:600}
+.pendbar-dot{width:6px;height:6px}
+.composer-send{background:var(--accent);color:var(--accent-text);transition:background .15s,color .15s,transform .1s}
+.composer-send:not(:disabled):active{transform:scale(.94)}
+.composer-send:disabled{opacity:1;background:color-mix(in srgb,var(--muted) 18%,transparent);color:color-mix(in srgb,var(--muted) 75%,transparent)}
+.wrap.chat-wrap{padding-bottom:calc(6px + env(safe-area-inset-bottom))}
+.composer-send[aria-busy=true]:disabled{background:color-mix(in srgb,var(--accent) 35%,transparent);color:var(--accent-text)}
+.send-spinner{width:20px;height:20px;border-radius:50%;border:2.5px solid currentColor;border-right-color:transparent;animation:send-spin .8s linear infinite;box-sizing:border-box}
+@keyframes send-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.send-spinner{animation:none;border-right-color:currentColor;opacity:.7}}
