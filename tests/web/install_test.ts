@@ -19,3 +19,14 @@ Deno.test("install prompt memory", () => {
   assertEquals(shouldAsk(`later:${now - 864e5}`, now), false);
   assertEquals(shouldAsk(`later:${now - 8 * 864e5}`, now), true);
 });
+
+Deno.test("front-page download pill stays visible in the installed webapp", async () => {
+  const a = await Deno.readTextFile("apps/web/src/App.tsx");
+  if (a.includes('if (isNative() || standalone || localStorage.getItem(A2HS_KEY) === "installed") return null;')) {
+    throw new Error("Download webapp pill is still hidden in standalone / after install");
+  }
+  if (!a.includes('if (isNative()) return null;')) throw new Error("native app should still hide the pill");
+  if (!a.includes('if (standalone) { setGuide("installed"); return; }')) throw new Error("standalone tap should open the already-installed sheet");
+  if (!a.includes("Rolff er allerede installeret på din hjemmeskærm.")) throw new Error("missing Danish already-installed copy");
+  if (!a.includes("Rolff is already installed on your home screen.")) throw new Error("missing English already-installed copy");
+});

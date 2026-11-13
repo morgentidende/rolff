@@ -1237,29 +1237,36 @@ if (typeof window !== "undefined") {
   window.addEventListener("appinstalled", () => { localStorage.setItem(A2HS_KEY, "installed"); deferredPrompt = null; a2hsListeners.forEach((f) => f()); });
 }
 /** Front-page "Download webapp" pill. Android/Chrome: the browser's own install prompt.
- *  iOS Safari and other browsers: a short in-app guide. Hidden once Rolff runs as an installed app. */
+ *  iOS Safari and other browsers: a short in-app guide. In the installed webapp the pill
+ *  stays visible and explains that Rolff is already on the home screen. Hidden in the native app. */
 function DownloadWebApp({ lang }: { lang: Lang }) {
-  const da = lang === "da"; const [, re] = useState(0); const [guide, setGuide] = useState<null | "ios" | "other">(null);
+  const da = lang === "da"; const [, re] = useState(0); const [guide, setGuide] = useState<null | "ios" | "other" | "installed">(null);
   useEffect(() => { const f = () => re((x) => x + 1); a2hsListeners.add(f); const mq = window.matchMedia?.("(display-mode: standalone)"); mq?.addEventListener?.("change", f); return () => { a2hsListeners.delete(f); mq?.removeEventListener?.("change", f); }; }, []);
   const standalone = window.matchMedia?.("(display-mode: standalone)").matches || (navigator as any).standalone === true;
-  if (isNative() || standalone || localStorage.getItem(A2HS_KEY) === "installed") return null;
+  if (isNative()) return null;
   const kind = a2hsPlatform(navigator.userAgent, false, !!deferredPrompt);
   const install = async () => {
+    if (standalone) { setGuide("installed"); return; }
     const p = deferredPrompt;
     if (!p) { setGuide(kind === "ios" ? "ios" : "other"); return; }
     p.prompt(); const r = await p.userChoice.catch(() => null); deferredPrompt = null;
     if (r?.outcome === "accepted") localStorage.setItem(A2HS_KEY, "installed");
     re((x) => x + 1);
   };
+  const title = da ? "Download webapp" : "Download web app";
   return <>
-    <button type="button" className="invite-btn webapp-btn" aria-haspopup={deferredPrompt ? undefined : "dialog"} aria-label={da ? "Download webapp – installér Rolff på hjemmeskærmen" : "Download web app – install Rolff on your home screen"} onClick={() => void install()}>
+    <button type="button" className="invite-btn webapp-btn" aria-haspopup={(standalone || !deferredPrompt) ? "dialog" : undefined} aria-label={standalone ? (da ? "Download webapp – Rolff er allerede installeret på din hjemmeskærm" : "Download web app – Rolff is already installed on your home screen") : (da ? "Download webapp – installér Rolff på hjemmeskærmen" : "Download web app – install Rolff on your home screen")} onClick={() => void install()}>
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>{da ? "Download webapp" : "Download web app"}</button>
-    {guide && <SheetView title={da ? "Download webapp" : "Download web app"} close={() => setGuide(null)} lang={lang}>
+    {guide === "installed" && <SheetView title={title} close={() => setGuide(null)} lang={lang}>
+      <p className="push-lead">{da ? "Rolff er allerede installeret på din hjemmeskærm." : "Rolff is already installed on your home screen."}</p>
+      <div className="sheet-actions"><button type="button" onClick={() => setGuide(null)}>OK</button></div>
+    </SheetView>}
+    {guide && guide !== "installed" && <SheetView title={title} close={() => setGuide(null)} lang={lang}>
       <p className="push-lead">{da ? "Læg Rolff på hjemmeskærmen, så den åbner som en app." : "Add Rolff to your home screen so it opens like an app."}</p>
       {guide === "ios"
         ? <ol className="install-steps"><li>{da ? "Tryk på Del-knappen (firkant med pil op) i Safari." : "Tap the Share button (square with an arrow) in Safari."}</li><li>{da ? "Vælg “Føj til hjemmeskærm”." : "Choose “Add to Home Screen”."}</li><li>{da ? "Tryk “Tilføj”." : "Tap “Add”."}</li></ol>
         : <ol className="install-steps"><li>{da ? "Åbn browserens menu (⋮ eller ⋯)." : "Open the browser menu (⋮ or ⋯)."}</li><li>{da ? "Vælg “Installér app” eller “Føj til startskærm”." : "Choose “Install app” or “Add to Home screen”."}</li><li>{da ? "Findes punktet ikke, så åbn Rolff i Chrome eller Safari." : "If it is missing, open Rolff in Chrome or Safari."}</li></ol>}
-      <div className="sheet-actions"><button type="button" onClick={() => setGuide(null)}>{da ? "OK" : "OK"}</button></div>
+      <div className="sheet-actions"><button type="button" onClick={() => setGuide(null)}>OK</button></div>
     </SheetView>}
   </>;
 }
