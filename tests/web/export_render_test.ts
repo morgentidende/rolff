@@ -81,3 +81,16 @@ Deno.test("PDF: emoji mappes til PUA-glyffer; uden emoji-font vises pladsholder"
   eq(needsEmojiFont(["ok 👍"]), true); eq(needsEmojiFont(["æøå"]), false);
   eq(segments("😀", { text: "helvetica", emoji: null, emojiMap: null }), [{ t: "\u25A1", emoji: false }]);
 });
+
+Deno.test("PDF: 👍-svar vises under beskeden; uden 👍 intet mærke", () => {
+  const a = msg("2026-11-06T08:00:00Z", false, "Hej", { thumb_count: 2 });
+  const b = msg("2026-11-06T08:01:00Z", true, "Hej igen");
+  const model = buildModel([a, b], meta());
+  if (model.days[0].items[0].reaction !== "👍 ×2") throw new Error("expected count label");
+  if (model.days[0].items[1].reaction !== null) throw new Error("no thumb should be null");
+  const fonts = { text: "RolffSans", emoji: "RolffEmoji", emojiMap: emojiMapFrom([[0x1f44d, 1]]) };
+  const doc = fakeDoc();
+  renderExportPdf(doc, model, fonts);
+  const all = doc.texts.map((t) => t.t).join("");
+  if (!all.includes("\ue000") || !all.includes(" ×2")) throw new Error("reaction missing from PDF text: " + all.slice(0, 200));
+});

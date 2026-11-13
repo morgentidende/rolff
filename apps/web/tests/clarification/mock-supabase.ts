@@ -54,8 +54,10 @@ function rpc(name: string, args: any) {
     if (name === 'set_my_plan_test') { currentPlan = args?.p_plan ?? currentPlan; data = [{ plan: currentPlan, pending_plan: null, period_end: '2026-12-09T00:00:00Z' }]; }
     if (name === 'get_my_send_limits')
         data = [{ next_at: null }];
-    if (name === 'get_messages_v2')
+    if (name === 'get_messages_v2' || name === 'get_messages_v3')
         data = messages.map(m => ({ ...m }));
+    if (name === 'toggle_message_thumb')
+        data = [{ message_id: args?.p_message, i_thumbed: true, thumb_count: 1 }];
     if (name === 'list_pending_invitations')
         data = pendingInvites.map(i => ({ ...i }));
     if (name === 'my_pending_count')

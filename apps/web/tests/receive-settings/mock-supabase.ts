@@ -42,8 +42,10 @@ function rpc(name: string, args: any) {
         data = [{ plan: 'text', price: 49 }];
     if (name === 'get_my_send_limits')
         data = [{ next_at: null }];
-    if (name === 'get_messages_v2')
+    if (name === 'get_messages_v2' || name === 'get_messages_v3')
         data = [{ id: '40000000-0000-4000-8000-000000000001', sender_id: uid, sender_email: 'tester@example.invalid', body: 'Kun en opdigtet testbesked.', created_at: '2026-11-07T08:00:00Z', mine: true }];
+    if (name === 'toggle_message_thumb')
+        data = [{ message_id: args?.p_message, i_thumbed: true, thumb_count: 1 }];
     if (name === 'my_pending_count')
         data = 0;
     if (name === 'list_conversation_members')
