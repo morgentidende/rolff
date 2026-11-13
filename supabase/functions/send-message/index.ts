@@ -27,11 +27,15 @@ Deno.serve(async (req) => {
   const conv = String(input?.conversation_id ?? "").toLowerCase(); const body = String(input?.body ?? ""); const key = String(input?.idempotency_key ?? "");
   if (!/^[0-9a-f-]{36}$/i.test(conv) || !/^[\w-]{8,80}$/.test(key)) return json({ error: "bad_request" }, 400);
   if (body.trim().length === 0) return json({ error: "length" }, 400);
+  const rawEdit = input?.edit_message_id;
+  const editId = rawEdit == null || rawEdit === "" ? null : String(rawEdit).toLowerCase();
+  if (editId !== null && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(editId)) return json({ error: "bad_request" }, 400);
 
-  const reply = normalizeReplyId(input?.reply_to_id);
+  const reply = editId ? null : normalizeReplyId(input?.reply_to_id);
   if (reply !== null && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reply)) return json({ error: "invalid_reply" }, 400);
 
   // Idempotent retry: if already stored, return the same result without re-moderating.
+  if (!editId) {
   const prev = await admin.from("messages").select("id,conversation_id,body").eq("sender_id", uid).eq("idempotency_key", key).maybeSingle();
   if (prev.error) return json({ status: "technical_error" }, 503);
   if (prev.data) {
@@ -43,18 +47,24 @@ Deno.serve(async (req) => {
     if (prev.data.conversation_id !== conv || (oldReply.data?.target_fingerprint ?? null) !== (reply ? await sha256Hex(reply) : null) || prev.data.body !== body) return json({ error: "idempotency_conflict" }, 409);
     return json({ status: "accepted", message_id: prev.data.id, duplicate: true });
   }
+  }
 
   const quota = await checkPlanLength(admin, uid, charCount(body));
   if (quota === "error") return json({ status: "technical_error" }, 503);
   if (quota) return json(quota, 200);
 
+  if (!editId) {
   const target = await admin.rpc("assert_reply_target", { p_sender: uid, conv, p_reply: reply });
   if (target.error) return json({ error: "invalid_reply" }, 400);
+  }
 
   // Person limits (frequency, then length) before rate limit and AI.
+  // An edit of a held message is not a new send, so frequency is not re-applied.
+  if (!editId) {
   const pl = await checkPersonLimits(admin, conv, uid, charCount(body));
   if (pl === "error") return json({ status: "technical_error" }, 503);
   if (pl) return json(pl, 200);
+  }
   const prep = await admin.rpc("prepare_send", { p_sender: uid, conv, p_body: body });
   if (prep.error) {
     const m = prep.error.message;
@@ -126,13 +136,16 @@ Deno.serve(async (req) => {
   await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "allow", p_reason: "none" });
   const appr = await admin.rpc("issue_reply_approval_v3", { p_revision: policy.revision, p_sender: uid, conv, p_hash: await sha256Hex(body), p_reply: reply, p_provider: provider.name, p_model: provider.model });
   if (appr.error) return json({ status: "technical_error" }, 503);
-  const c = await admin.rpc("commit_message_reply", { p_approval: appr.data, p_sender: uid, conv, p_body: body, p_key: key, p_reply: reply });
+  const c = editId
+    ? await admin.rpc("update_delayed_message", { p_approval: appr.data, p_sender: uid, p_id: editId, p_body: body })
+    : await admin.rpc("commit_message_reply", { p_approval: appr.data, p_sender: uid, conv, p_body: body, p_key: key, p_reply: reply });
   if (c.error) { const limit = planLengthError(c.error.message, charCount(body)); if (limit) return json(limit, 200); }
+  if (c.error && /no_longer_pending/.test(c.error.message)) return json({ error: "no_longer_pending" }, 409);
   if (c.error && /invalid_reply/.test(c.error.message)) return json({ error: "invalid_reply" }, 400);
   if (c.error && /idempotency_conflict/.test(c.error.message)) return json({ error: "idempotency_conflict" }, 409);
   if (c.error && /cannot_deliver/.test(c.error.message)) return json({ status: "cannot_deliver" }, 200);
   if (c.error && /person_frequency/.test(c.error.message)) { const again = await checkPersonLimits(admin, conv, uid, 0); return json(again && again !== "error" ? again : { status: "frequency_limit" }, 200); }
   if (c.error || !c.data?.[0]) return json({ status: "technical_error" }, 503);
   // Generic acceptance only: says nothing about recipient delivery/reading/windows.
-  return json({ status: "accepted", message_id: c.data[0].message_id, duplicate: c.data[0].duplicate });
+  return json({ status: "accepted", message_id: c.data[0].message_id, duplicate: editId ? false : c.data[0].duplicate });
 });
