@@ -11,7 +11,7 @@ import { checkPlanLength, planLengthError } from "../_shared/planLimits.ts";
 import { checkPersonLimits } from "../_shared/limits.ts";
 import { checkRules } from "../_shared/rules.ts";
 import { applySticky, stickyHash } from "../_shared/stickyBlock.ts";
-import { charCount, moderate, moderationContract, ModerationTechnicalError, providerFromEnv, resolveSenderLang, timeoutFromEnv } from "../_shared/moderation.ts";
+import { charCount, doubleCheckFromEnv, moderate, moderationContract, ModerationTechnicalError, providerFromEnv, resolveSenderLang, timeoutFromEnv } from "../_shared/moderation.ts";
 
 async function sha256Hex(s: string) {
   const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
@@ -95,7 +95,7 @@ Deno.serve(async (req) => {
   const remembered = await admin.rpc("recent_moderation_block", { p_sender: uid, conv, p_hash: textKey });
   if (remembered.error) return json({ status: "technical_error" }, 503);
   let res;
-  try { res = await moderate(provider, body, modCtx, timeoutFromEnv({ get: (k) => Deno.env.get(k) })); }
+  try { res = await moderate(provider, body, modCtx, timeoutFromEnv({ get: (k) => Deno.env.get(k) }), { doubleCheck: doubleCheckFromEnv({ get: (k) => Deno.env.get(k) }) }); }
   catch (e) {
     await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "error", p_reason: e instanceof ModerationTechnicalError ? e.message : "unknown" });
     // No message text in logs.
