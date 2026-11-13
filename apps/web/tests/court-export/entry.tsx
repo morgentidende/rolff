@@ -8,7 +8,7 @@ QA.response ??= { status: 200, data: { data: { status: "sent", recipient: "a@x.t
 const call = async (name: string, body: unknown) => { QA.calls.push({ name, body }); return QA.response; };
 const root = createRoot(document.getElementById("root")!);
 QA.mount = (mode: string, opt: any = {}) => {
-  if (mode === "export") root.render(<ConversationExport lang="da" conv="cccccccc-0000-4000-8000-000000000001" plan={opt.plan ?? "text_attachments"} ownEmail="a@x.test" openPlans={() => QA.plans++} call={call} />);
+  if (mode === "export") root.render(<ConversationExport lang={opt.lang ?? "da"} conv="cccccccc-0000-4000-8000-000000000001" plan={opt.plan ?? "text_attachments"} ownEmail="a@x.test" openPlans={() => QA.plans++} call={call} />);
   if (mode === "export-load") {
     // Plan not known yet (chat's own load never landed). Loader behaviour is scripted per test.
     QA.loads = 0; QA.onPlan = [];

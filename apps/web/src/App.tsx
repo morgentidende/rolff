@@ -567,6 +567,9 @@ const InviteIcon = () => <svg width="20" height="20" viewBox="0 0 24 24" aria-hi
 function Home({ lang, open, invite, rename, refreshKey }: { lang: Lang; open: (c: Conv) => void; invite: () => void; rename: (contacts: Other[]) => void; refreshKey: number }) {
   const t = strings[lang]; const da = lang === "da";
   const [convs, setConvs] = useState<ConvRow[] | null>(null);
+  // The press-and-hold tip is shown until it is dismissed or the gesture has been used once.
+  const [hintGone, setHintGone] = useState(() => { try { return localStorage.getItem(CONV_HINT_KEY) === "1"; } catch { return false; } });
+  const dropHint = () => { setHintGone(true); try { localStorage.setItem(CONV_HINT_KEY, "1"); } catch { /* private mode */ } };
   // v2 adds the latest visible message (server-filtered: own or released to me) and sorts by it.
   // Falls back to v1 while the v2 migration is not deployed.
   const load = useCallback(async () => {
@@ -583,24 +586,29 @@ function Home({ lang, open, invite, rename, refreshKey }: { lang: Lang; open: (c
       <h2 id="convlist-title" className="sr-only">{t.conversations}</h2>
       <div className="convlist-head"><DownloadWebApp lang={lang} />
         {!!convs?.length && <button type="button" className="invite-btn" aria-haspopup="dialog" onClick={invite}><InviteIcon />{da ? "Inviter person" : "Invite person"}</button>}</div>
-      {convs?.length === 0 && <div className="convempty"><p><strong>{da ? "Ingen samtaler endnu." : "No conversations yet."}</strong></p>
+      {convs?.length === 0 && <div className="convempty"><span className="convempty-icon" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" /></svg></span><p><strong>{da ? "Ingen samtaler endnu." : "No conversations yet."}</strong></p>
         <p className="meta">{da ? "Inviter den person, du vil skrive med – fx den anden forælder. I får en fælles samtale, så snart invitationen er taget imod." : "Invite the person you want to write with – e.g. the other parent. You get a shared conversation as soon as the invitation is accepted."}</p>
         <button type="button" className="invite-btn invite-btn-lg" aria-haspopup="dialog" onClick={invite}><InviteIcon />{da ? "Inviter person" : "Invite person"}</button></div>}
       {!!convs?.length && <ul className="convitems">
         {convs.map((c) => { const d = convDisplay(c, da); const prev = previewText(c, da); const time = listTime(c.last_at, lang, now); return (
           <li key={c.id} className="convrow">
             <ColorDot lang={lang} conv={c} label={d.title} initial={d.initial} changed={(col) => setConvs((convs ?? []).map((x) => x.id === c.id ? { ...x, color: col } : x))} />
-            <ContactButton open={() => open(c)} rename={() => rename(c.others)}>
+            <ContactButton open={() => open(c)} rename={() => { dropHint(); rename(c.others); }}>
               <span className="convtop"><span className="convname">{d.title}</span>{time && <span className="convtime">{time}</span>}</span>
               <span className={prev ? "convprev" : "convprev empty"}>{prev ?? d.status ?? (c.last_at === undefined ? "" : (da ? "Ingen beskeder endnu" : "No messages yet"))}</span>
             </ContactButton>
           </li>); })}
       </ul>}
-      {convs?.some((c) => c.others.length) && <p className="meta convhint">{da ? "Tip: Hold fingeren på en samtale for at give personen et privat kaldenavn, som kun du ser." : "Tip: Press and hold a conversation to give the person a private nickname only you see."}</p>}
+      {!hintGone && convs?.some((c) => c.others.length) && <div className="convhint" role="note">
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></svg>
+        <p>{da ? "Hold fingeren på en samtale for at give personen et privat kaldenavn, som kun du ser." : "Press and hold a conversation to give the person a private nickname only you see."}</p>
+        <button type="button" className="icon convhint-close" aria-label={da ? "Skjul tip" : "Hide tip"} onClick={dropHint}><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg></button>
+      </div>}
     </section>
   );
 }
 
+export const CONV_HINT_KEY = "convHintDismissed";
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 /** Shared input props for invite e-mail fields: mobile keyboard shows @ and a "send" key. */
 const inviteEmailProps = { name: "invitee-email", type: "email", inputMode: "email", enterKeyHint: "send", autoComplete: "off", autoCapitalize: "none", autoCorrect: "off", spellCheck: false, maxLength: 254 } as const;

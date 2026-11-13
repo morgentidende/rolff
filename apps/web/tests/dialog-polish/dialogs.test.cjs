@@ -98,3 +98,21 @@ test('Feedback and Slet konto: tapping an incomplete form explains why and moves
     await click(d.getElementById('delack')); assert.ok(!d.getElementById('delack-hint'), 'cleared when ticked');
   } finally { await fx.close(); }
 });
+
+test('Front page: pills row, dismissible press-and-hold tip remembered in localStorage, hidden after first use', { timeout: 8000 }, async () => {
+  let fx = await env(false); let { w, d } = fx;
+  try {
+    assert.ok(!d.querySelector('.convlist-head h2'));
+    const pills = [...d.querySelectorAll('.convlist-head button')].map(b => b.textContent.trim());
+    assert.equal(pills[pills.length - 1], 'Inviter person');
+    const hint = d.querySelector('.convhint'); assert.ok(hint); assert.match(hint.textContent, /Hold fingeren på en samtale/);
+    await click(hint.querySelector('button[aria-label="Skjul tip"]'));
+    assert.equal(d.querySelector('.convhint'), null); assert.equal(w.localStorage.getItem('convHintDismissed'), '1');
+  } finally { await fx.close(); }
+  fx = await env(false); ({ w, d } = fx);
+  try {
+    assert.ok(d.querySelector('.convhint'), 'fresh device shows the tip');
+    d.querySelector('.convbtn').dispatchEvent(new w.MouseEvent('contextmenu', { bubbles: true, cancelable: true })); await delay(30);
+    assert.equal(d.querySelector('.convhint'), null, 'gone after the gesture was used once'); assert.equal(w.localStorage.getItem('convHintDismissed'), '1');
+  } finally { await fx.close(); }
+});

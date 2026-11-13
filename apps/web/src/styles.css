@@ -437,3 +437,17 @@ button.compact-btn{flex:none;min-height:40px;padding:6px 14px;font-size:15px;whi
 .export-load-error .field-hint{margin:2px 0 14px;font-size:14.5px}
 .export-retry{display:grid;grid-template-columns:1fr;margin:0}
 .export-retry button{width:100%;min-height:48px;border-radius:10px;font-weight:600;margin:0;white-space:nowrap}
+
+/* Front page list polish: same 16px gutters as header/banner, subtle dividers, aligned time, dismissible tip, calm empty state */
+.convrow .convbtn{border-bottom-color:color-mix(in srgb,var(--border) 70%,transparent);min-height:76px}
+.convrow:last-child .convbtn{border-bottom:1px solid color-mix(in srgb,var(--border) 70%,transparent)}
+.convtop{align-items:center}
+.convtime{line-height:1;margin-left:auto;padding-left:4px}
+.convhint{display:flex;align-items:flex-start;gap:10px;margin:14px 16px 0;padding:10px 6px 10px 12px;border-radius:12px;background:color-mix(in srgb,var(--text) 4%,transparent);color:var(--muted);font-size:13.5px;line-height:1.45}
+.convhint > svg{flex:none;margin-top:1px;opacity:.8}
+.convhint p{margin:0;flex:1;min-width:0}
+.convhint .convhint-close{flex:none;width:32px;height:32px;min-width:32px;min-height:32px;margin:-6px 0 -6px 0;padding:0;border:0;background:transparent;color:var(--muted);display:inline-flex;align-items:center;justify-content:center;border-radius:50%;position:relative}
+.convhint .convhint-close::after{content:"";position:absolute;inset:-6px}
+.convempty{margin:24px 16px 0;padding:28px 20px;border:1px dashed var(--border);border-radius:16px}
+.convempty-icon{display:inline-flex;align-items:center;justify-content:center;width:56px;height:56px;border-radius:50%;margin:0 auto 12px;background:color-mix(in srgb,var(--accent) 12%,transparent);color:var(--accent)}
+.convempty p strong{color:var(--text);font-size:17px}

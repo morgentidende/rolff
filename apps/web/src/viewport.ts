@@ -30,7 +30,7 @@ export function installViewportVars(w: Window = window): () => void {
     if (open && !wasOpen) {
       const a = w.document.activeElement as HTMLElement | null;
       if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.closest("dialog, .overlay")) {
-        setTimeout(() => a.scrollIntoView?.({ block: "nearest" }), 60);
+        setTimeout(() => a.scrollIntoView?.({ block: "center" }), 60);
       }
     }
   };
