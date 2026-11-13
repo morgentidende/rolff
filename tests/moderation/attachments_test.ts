@@ -51,3 +51,30 @@ Deno.test("file result: empty when no practical core / meta advice", () => {
   const r = validateFileResult({ decision: "block", reason_code: "personal_attack", spans: ["klovn"], transcript: "du er en klovn", suggestion: "Lad os holde samtalen til det konkrete." }, "");
   assertEquals(r.suggestion, "");
 });
+
+import { attachmentKind, blockedAttachmentStatus, parseAttachmentBlocks } from "../../supabase/functions/_shared/attachments.ts";
+Deno.test("attachment kind is photos vs PDF files", () => {
+  assertEquals(attachmentKind("image/png"), "photos");
+  assertEquals(attachmentKind("image/jpeg"), "photos");
+  assertEquals(attachmentKind("image/webp"), "photos");
+  assertEquals(attachmentKind("image/gif"), "photos");
+  assertEquals(attachmentKind("application/pdf"), "files");
+  assertEquals(attachmentKind("text/plain"), null);
+});
+Deno.test("blocked attachment status is type-specific and off by default", () => {
+  const off = { block_photos: false, block_files: false };
+  assertEquals(blockedAttachmentStatus("photos", off), null);
+  assertEquals(blockedAttachmentStatus("files", off), null);
+  assertEquals(blockedAttachmentStatus("photos", { block_photos: true, block_files: false }), "blocked_photos");
+  assertEquals(blockedAttachmentStatus("files", { block_photos: true, block_files: false }), null);
+  assertEquals(blockedAttachmentStatus("files", { block_photos: false, block_files: true }), "blocked_files");
+  assertEquals(blockedAttachmentStatus("photos", { block_photos: false, block_files: true }), null);
+});
+Deno.test("parseAttachmentBlocks fails closed on missing or non-boolean flags", () => {
+  assertEquals(parseAttachmentBlocks({ block_photos: true, block_files: false }), { block_photos: true, block_files: false });
+  assertEquals(parseAttachmentBlocks('{"block_photos":false,"block_files":true}'), { block_photos: false, block_files: true });
+  assertThrows(() => parseAttachmentBlocks(null));
+  assertThrows(() => parseAttachmentBlocks({ block_photos: true }));
+  assertThrows(() => parseAttachmentBlocks({ block_photos: "true", block_files: false }));
+  assertThrows(() => parseAttachmentBlocks([]));
+});

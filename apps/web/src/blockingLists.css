@@ -28,3 +28,6 @@
 .blocking-foot{margin-top:10px;padding-top:6px;border-top:1px solid color-mix(in srgb,var(--border) 70%,transparent);display:flex;justify-content:flex-end}
 .blocking-dialog{width:min(480px,calc(100vw - 32px));max-height:min(85dvh,calc(var(--vv-h,100dvh) - 32px));overflow:auto;box-sizing:border-box;background:var(--card);color:var(--text);border:0;border-radius:18px;padding:24px;box-shadow:0 12px 50px #0004}.blocking-dialog::backdrop{background:#0009}.blocking-dialog h2{font-size:19px;margin:0 0 10px}.blocking-dialog p{overflow-wrap:anywhere;line-height:1.5}.blocking-dialog .row{flex-wrap:nowrap}.blocking-dialog .row button{flex:1 1 0}.blocking-dialog > button{width:100%}
 .blocking-lists input,.blocking-lists select{max-width:100%;box-sizing:border-box}
+
+.blocking-toggles{display:flex;flex-direction:column;gap:8px;margin:4px 0 2px}
+.blocking-toggles .setting-row{padding:10px 12px}

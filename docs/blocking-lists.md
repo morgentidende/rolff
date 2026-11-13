@@ -78,3 +78,25 @@ and replaces fetch with an in-memory handler. It rejects every non-synthetic URL
 built `/workspace/rolff-blocking-lists-preview.html` is self-contained, network-disabled and includes
 light/dark controls. Neither is production data. Visual320/390px/device verification remains to be
 performed by the coordinator; jsdom does not prove layout, native focus trapping or Android behavior.
+
+
+## Attachment type blocks
+
+A third card on the in-conversation Blocking lists sheet has two independent
+toggles, **Block photos** and **Block files (PDF)**. They are per user per
+conversation, off by default, and only the owner can read their own row
+(`conversation_attachment_blocks`). The other person's words/topics lists are
+never exposed.
+
+`send-attachment` asks `recipient_attachment_blocks` after the file type is
+known and **before** AI moderation. If any other active member has declined that
+type, the function returns `blocked_photos` or `blocked_files` and nothing is
+stored. A database trigger repeats the same check at insert time. The sender
+sees a neutral notice that the recipient does not accept photos or files in
+this conversation — never who declined, and never whether a message was read
+or delivered. The corresponding paperclip or camera control is hidden for the
+sender when the type is declined (the paperclip is narrowed to the remaining
+type if only one is blocked). Own sends are not affected by one's own toggles.
+
+The personal export includes `own_attachment_blocks`. Word-list reset does not
+clear these toggles. The migration file is not applied by this workstream.
