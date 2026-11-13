@@ -11,11 +11,14 @@ export function flaggedSnippet(text: string, spans: string[], before = 14, after
   return null;
 }
 
-type Props = { lang: Lang; explanation?: string; spans: string[]; blockedText: string; suggestion: string; onUse: () => void; onClose: () => void };
+type Props = { lang: Lang; reason?: string; explanation?: string; spans: string[]; blockedText: string; suggestion: string; onUse: () => void; onClose: () => void };
 
 /** Compact "Ikke sendt" box: header + close, Luna's reason clamped to 2 lines, one flagged line, quoted suggestion chip. */
-export function BlockedNotice({ lang, explanation, spans, blockedText, suggestion, onUse, onClose }: Props) {
+export function BlockedNotice({ lang, reason, explanation: given, spans, blockedText, suggestion, onUse, onClose }: Props) {
   const t = strings[lang], da = lang === "da";
+  // Borderline tone ("uncertain"): Rolff says briefly that the tone is uncertain and asks for a rephrase – fixed text, no extra retry line.
+  const uncertain = reason === "uncertain";
+  const explanation = uncertain ? t.uncertainExplanation : given;
   const [open, setOpen] = useState(false), [clamped, setClamped] = useState(false);
   const reasonRef = useRef<HTMLParagraphElement>(null);
   useLayoutEffect(() => {
@@ -36,7 +39,7 @@ export function BlockedNotice({ lang, explanation, spans, blockedText, suggestio
         </button>
       </div>
       <p ref={reasonRef} id="blockbox-reason" className={`blockbox-reason${explanation ? " block-explained" : ""}${open ? " open" : ""}`}>
-        {explanation ? <><span className="sr-only">{t.blockedLead} </span>{`${explanation} ${t.blockedRetry}`}</> : t.blocked}
+        {explanation ? <><span className="sr-only">{t.blockedLead} </span>{uncertain ? explanation : `${explanation} ${t.blockedRetry}`}</> : t.blocked}
       </p>
       {snip && <p className="blockbox-flag"><span className="blockbox-flag-k">{da ? "Markeret:" : "Flagged:"}</span> <span className="blockbox-flag-v">{snip.pre}<mark>{snip.hit}</mark>{snip.post}</span></p>}
       {suggestion ? (
@@ -48,7 +51,7 @@ export function BlockedNotice({ lang, explanation, spans, blockedText, suggestio
             <span className="blockbox-fine">{da ? "Du kan rette den – det tjekkes igen." : "You can edit it – it’s checked again."}</span>
           </div>
         </div>
-      ) : <p className="blockbox-guide"><strong>{t.guidanceLabel}:</strong> {t.blockGuidance}</p>}
+      ) : uncertain ? null : <p className="blockbox-guide"><strong>{t.guidanceLabel}:</strong> {t.blockGuidance}</p>}
       {open && suggestion && <p className="blockbox-fine blockbox-long">{da ? "Forslaget kopieres til skrivefeltet, og du skal selv trykke Send. Din egen tekst bliver stående, indtil du vælger forslaget." : "The suggestion is copied into the composer and you press Send yourself. Your own text stays until you use the suggestion."}</p>}
       {more && <button type="button" className="blockbox-more" aria-expanded={open} aria-controls="blockbox-reason" onClick={() => setOpen(!open)}>{open ? (da ? "Mindre" : "Less") : (da ? "Mere" : "More")}</button>}
     </div>

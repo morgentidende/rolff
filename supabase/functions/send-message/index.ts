@@ -11,7 +11,7 @@ import { checkPlanLength, planLengthError } from "../_shared/planLimits.ts";
 import { checkPersonLimits } from "../_shared/limits.ts";
 import { checkRules } from "../_shared/rules.ts";
 import { applySticky, stickyHash } from "../_shared/stickyBlock.ts";
-import { charCount, doubleCheckFromEnv, moderate, moderationContract, ModerationTechnicalError, providerFromEnv, resolveSenderLang, timeoutFromEnv } from "../_shared/moderation.ts";
+import { charCount, doubleCheckFromEnv, moderate, moderationContract, ModerationTechnicalError, providerFromEnv, resolveSenderLang, timeoutFromEnv, UNCERTAIN_EXPLANATION } from "../_shared/moderation.ts";
 
 async function sha256Hex(s: string) {
   const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
@@ -109,7 +109,9 @@ Deno.serve(async (req) => {
     if ("sticky" in res) console.log(JSON.stringify({ evt: "sticky_block_applied" }));
   }
   if (res.decision !== "allow") await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: res.decision, p_reason: "sticky" in res ? "sticky_" + res.reason_code : res.reason_code });
-  if (res.decision === "block") return json({ status: "blocked", reason_code: res.reason_code, spans: res.spans, suggestion: res.suggestion, ...(res.explanation ? { explanation: res.explanation } : {}) }, 200);
+  // "uncertain" (borderline tone): always the same short, friendly Rolff text in the sender's language.
+  const explanation = res.decision === "block" && res.reason_code === "uncertain" ? UNCERTAIN_EXPLANATION[lang] : res.explanation;
+  if (res.decision === "block") return json({ status: "blocked", reason_code: res.reason_code, spans: res.spans, suggestion: res.suggestion, ...(explanation ? { explanation } : {}) }, 200);
   if (res.decision === "clarify") return json({ status: "clarification_required" }, 200);
 
   // This stage can only deny or request clarification AFTER global safety allows.

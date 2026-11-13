@@ -11,7 +11,7 @@ import { replyModerationContext } from "../_shared/replyContext.ts";
 import { planLengthError } from "../_shared/planLimits.ts";
 import { checkPersonLimits } from "../_shared/limits.ts";
 import { checkRules, findBlockedWord } from "../_shared/rules.ts";
-import { charCount, ModerationTechnicalError, prefilter, resolveSenderLang, timeoutFromEnv } from "../_shared/moderation.ts";
+import { charCount, ModerationTechnicalError, prefilter, resolveSenderLang, timeoutFromEnv, UNCERTAIN_EXPLANATION } from "../_shared/moderation.ts";
 import { checkFile, cleanName, filePromptForLang, MAX_BYTES, openaiFileModerate, validateFileResult } from "../_shared/attachments.ts";
 
 const hex = (b: ArrayBuffer) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, "0")).join("");
@@ -117,7 +117,8 @@ Deno.serve(async (req) => {
 
   if (res.decision === "block") {
     await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "block", p_reason: res.reason_code });
-    return json({ status: "blocked", reason_code: res.reason_code, spans: res.spans, suggestion: res.suggestion, ...(res.explanation ? { explanation: res.explanation } : {}), meta }, 200);
+    const explanation = res.reason_code === "uncertain" ? UNCERTAIN_EXPLANATION[lang] : res.explanation;
+    return json({ status: "blocked", reason_code: res.reason_code, spans: res.spans, suggestion: res.suggestion, ...(explanation ? { explanation } : {}), meta }, 200);
   }
   // Same blocked words and hard prefilter as normal messages, on the text found in the file.
   const w = findBlockedWord(res.transcript + "\n" + name, words);
