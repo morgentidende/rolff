@@ -10,6 +10,7 @@ const da = {
   write: "Skriv en besked…", send: "Send", sending: "Tjekker…", accepted: "Rolff har accepteret beskeden.",
   blocked: "Beskeden blev ikke sendt, fordi tonen kan opfattes som sårende. Ret den og prøv igen.", flagged: "Markeret tekst",
   blockedLead: "Beskeden blev ikke sendt.", blockedRetry: "Ret den og prøv igen.",
+  uncertainExplanation: "Rolff er lidt i tvivl om, hvordan beskeden vil blive opfattet. Prøv at skrive den lidt anderledes.",
   suggestionLabel: "Forslag til omformulering", useSuggestion: "Brug forslaget",
   guidanceLabel: "Vejledning", blockGuidance: "Skriv, hvad der skete, og hvad du gerne vil have anderledes – uden at kritisere den anden.",
   techError: "Teknisk fejl – beskeden er ikke sendt. Din tekst er gemt; prøv igen.", readOnly: "Du har rollen “Kun læse”: Du kan læse beskederne, men ikke skrive her.", rateLimited: "For mange forsøg. Vent et øjeblik.",
@@ -18,7 +19,7 @@ const da = {
   days: ["Man", "Tir", "Ons", "Tor", "Fre", "Lør", "Søn"], from: "Fra", to: "Til", back: "Tilbage", empty: "Ingen beskeder endnu.", you: "Dig",
   settings: "Indstillinger", lang: "Sprog", theme: "Tema", system: "System", light: "Lys", dark: "Mørk", members: "Medlemmer",
   testNotice: "TESTVERSION – skriv ikke rigtige eller følsomme oplysninger.",
-  demoWarn: "Testversion: Skriv ikke rigtige eller følsomme oplysninger. Beskeder tjekkes i testen af OpenAI (gpt-6-luna; behandling i USA/globalt, ikke EU; ingen Zero Data Retention endnu; gemning slået fra med store:false). Kun korte uddrag sendes. Ingen garanti for drift. Data kan blive slettet.",
+  demoWarn: "Testversion: Skriv ikke rigtige eller følsomme oplysninger. Beskeder tjekkes i testen af OpenAI (behandling i USA/globalt, ikke EU; ingen Zero Data Retention endnu; gemning slået fra med store:false). Kun korte uddrag sendes. Ingen garanti for drift. Data kan blive slettet.",
   demoAccept: "Jeg forstår, at det er en testversion",
 };
 const en: typeof da = {
@@ -32,6 +33,7 @@ const en: typeof da = {
   write: "Write a message…", send: "Send", sending: "Checking…", accepted: "Rolff accepted the message.",
   blocked: "The message was not sent because its tone may come across as hurtful. Edit it and try again.", flagged: "Flagged text",
   blockedLead: "The message was not sent.", blockedRetry: "Edit it and try again.",
+  uncertainExplanation: "Rolff isn't quite sure how this will come across. Try rephrasing it.",
   suggestionLabel: "Suggested rephrase", useSuggestion: "Use suggestion",
   guidanceLabel: "Guidance", blockGuidance: "Write what happened and what you would like done differently – without criticizing the other person.",
   techError: "Technical error – the message was not sent. Your text is kept; please retry.", readOnly: "Your role is “Read only”: you can read the messages but not write here.", rateLimited: "Too many attempts. Please wait.",
@@ -40,7 +42,7 @@ const en: typeof da = {
   days: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], from: "From", to: "To", back: "Back", empty: "No messages yet.", you: "You",
   settings: "Settings", lang: "Language", theme: "Theme", system: "System", light: "Light", dark: "Dark", members: "Members",
   testNotice: "TEST VERSION – do not enter real or sensitive information.",
-  demoWarn: "Test version: Do not enter real or sensitive information. In the test, messages are checked by OpenAI (gpt-6-luna; processed in the US/globally, not the EU; no Zero Data Retention yet; storage turned off with store:false). Only short excerpts are sent. No uptime guarantee. Data may be deleted.",
+  demoWarn: "Test version: Do not enter real or sensitive information. In the test, messages are checked by OpenAI (processed in the US/globally, not the EU; no Zero Data Retention yet; storage turned off with store:false). Only short excerpts are sent. No uptime guarantee. Data may be deleted.",
   demoAccept: "I understand this is a test version",
 };
 export const strings = { da, en };
