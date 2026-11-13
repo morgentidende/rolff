@@ -453,11 +453,15 @@ button.compact-btn{flex:none;min-height:40px;padding:6px 14px;font-size:15px;whi
 .convempty p strong{color:var(--text);font-size:17px}
 
 /* Conversation view polish: day separators, calmer own bubbles (AA timestamps), tight groups (tail on the FIRST bubble), slim pending bar, clear send state */
-.day-sep{align-self:center;margin:12px 0 6px;position:sticky;top:4px;z-index:2}
-.day-sep span{display:inline-block;padding:3px 12px;border-radius:999px;font-size:12.5px;font-weight:600;line-height:1.4;color:var(--muted);background:color-mix(in srgb,var(--card) 92%,var(--text));box-shadow:0 1px 2px rgba(0,0,0,.08)}
-[data-theme=dark] .day-sep span{background:#263030;color:#b9c8c5}
-.msgs > .day-sep:first-child{margin-top:4px}
+/* Each day is its own section so the next sticky pill pushes the previous one away instead of stacking. */
+.day-group{display:flex;flex-direction:column;gap:inherit;align-items:stretch}
+.day-sep{align-self:center;margin:12px 0 6px;position:sticky;top:8px;z-index:2}
+.day-sep span{display:inline-block;padding:3px 12px;border-radius:999px;font-size:12.5px;font-weight:600;line-height:1.4;color:#3d4c4a;background:#e8eceb;box-shadow:0 1px 2px rgba(11,20,26,.16)}
+[data-theme=dark] .day-sep span{background:#1b2629;color:#a9bbb8}
+.day-group:first-child > .day-sep{margin-top:4px}
 .day-sep + .msg.tailed{margin-top:2px}
+/* Keep the pending-approval banner above date pills; it lives outside the scroll area. */
+.chat-wrap > .pendbar,.chat-wrap > .notice.row{position:relative;z-index:3}
 .msgs{gap:2px}
 .msg.tailed{margin-top:10px}
 :root{--mine:#c6ecdf;--mine-time:#36524d}
@@ -522,8 +526,8 @@ html[data-keyboard] .blockbox{max-height:calc(var(--vv-h,100dvh) * .34)}
 .msg-meta .message-time{display:inline;margin:0;font-size:11px;line-height:1}
 .msg.theirs .msg-meta .message-time{color:var(--theirs-time)}
 .msg-tick{flex:none;color:var(--mine-time)}
-/* Pill date separator, centred. */
-.day-sep span{background:color-mix(in srgb,var(--card) 94%,var(--text));box-shadow:0 1px .5px rgba(11,20,26,.13)}
+/* Pill date separator, centred, solid so it stays readable over bubbles. */
+.day-sep span{background:#e8eceb;box-shadow:0 1px 2px rgba(11,20,26,.16)}
 [data-theme=dark] .day-sep span{background:#1b2629;color:#a9bbb8}
 /* Signal-style list: 48px avatars, no hard dividers, ~72px rows, bold truncated name, 2-line grey preview. */
 .convlist .convrow button.dot{width:48px;height:48px;min-width:48px;min-height:48px;font-size:19px}
