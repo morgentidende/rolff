@@ -207,18 +207,35 @@ export function prefilter(msg: string): ModerationResult | null {
   return null;
 }
 
-export async function moderate(provider: ModerationProvider, msg: string, ctx: ContextMsg[], timeoutMs = 15000): Promise<ModerationResult & { source: "prefilter" | "ai" }> {
-  const pre = prefilter(msg);
-  if (pre) return { ...pre, source: "prefilter" };
+async function aiCheck(provider: ModerationProvider, msg: string, ctx: ContextMsg[], timeoutMs: number): Promise<ModerationResult> {
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), timeoutMs);
   try {
-    const raw = await provider.moderate(msg, ctx, ac.signal);
-    return { ...validateResult(raw, msg), source: "ai" };
+    return validateResult(await provider.moderate(msg, ctx, ac.signal), msg);
   } catch (e) {
     if (e instanceof ModerationTechnicalError) throw e;
     throw new ModerationTechnicalError(ac.signal.aborted ? "timeout" : "provider_error");
   } finally { clearTimeout(timer); }
+}
+
+export interface ModerateOptions {
+  /** Second independent AI check when the first says "allow"; the stricter verdict wins. Errors fail closed. */
+  doubleCheck?: boolean;
+}
+
+export async function moderate(provider: ModerationProvider, msg: string, ctx: ContextMsg[], timeoutMs = 15000, opts: ModerateOptions = {}): Promise<ModerationResult & { source: "prefilter" | "ai"; checks?: number }> {
+  const pre = prefilter(msg);
+  if (pre) return { ...pre, source: "prefilter" };
+  const first = await aiCheck(provider, msg, ctx, timeoutMs);
+  if (!opts.doubleCheck || first.decision !== "allow") return { ...first, source: "ai" };
+  // Only an "allow" is re-checked: block if either check blocks; clarify if the second asks for it.
+  const second = await aiCheck(provider, msg, ctx, timeoutMs);
+  return { ...(second.decision === "allow" ? first : second), source: "ai", checks: 2 };
+}
+
+/** MODERATION_DOUBLE_CHECK = on|true|1 enables the second check (default OFF). */
+export function doubleCheckFromEnv(env: ModerationEnv): boolean {
+  return /^(on|true|1)$/i.test((env.get("MODERATION_DOUBLE_CHECK") ?? "").trim());
 }
 
 export const RESPONSE_SCHEMA = {
@@ -266,15 +283,39 @@ export class GeminiProvider implements ModerationProvider {
   }
 }
 
+/** Fixed seed: identical input + identical parameters => provider makes a best effort to sample identically. */
+export const MODERATION_SEED = 20261113;
+export const REASONING_EFFORTS = ["none", "low", "medium", "high", "xhigh", "max"] as const;
+export type ReasoningEffort = typeof REASONING_EFFORTS[number];
+/**
+ * Request fields that make OpenAI output as repeatable as the model allows.
+ * - seed is always sent (accepted by all chat models; on gpt-6 reasoning models it may have no effect).
+ * - temperature 0 is ONLY sent with reasoning_effort "none": gpt-6 models reject temperature (HTTP 400)
+ *   at any other effort, and a 400 would fail every send closed.
+ * - No effort configured => model default (unchanged behaviour), seed only.
+ */
+export function openAISampling(effort?: ReasoningEffort): Record<string, unknown> {
+  if (effort === "none") return { seed: MODERATION_SEED, reasoning_effort: "none", temperature: 0 };
+  if (effort) return { seed: MODERATION_SEED, reasoning_effort: effort };
+  return { seed: MODERATION_SEED };
+}
+/** OPENAI_REASONING_EFFORT: one of REASONING_EFFORTS, or unset. Anything else is a config error (fail closed). */
+export function reasoningEffortFromEnv(env: ModerationEnv): ReasoningEffort | undefined {
+  const v = (env.get("OPENAI_REASONING_EFFORT") ?? "").trim().toLowerCase();
+  if (!v) return undefined;
+  if (!(REASONING_EFFORTS as readonly string[]).includes(v)) throw new ModerationTechnicalError("bad_reasoning_effort");
+  return v as ReasoningEffort;
+}
+
 export class OpenAIProvider implements ModerationProvider {
   name = "openai";
-  constructor(private apiKey: string, public model: string, public baseUrl = "https://eu.api.openai.com/v1", private contract: ProviderContract = { prompt: SYSTEM_PROMPT, schema: RESPONSE_SCHEMA }) {}
+  constructor(private apiKey: string, public model: string, public baseUrl = "https://eu.api.openai.com/v1", private contract: ProviderContract = { prompt: SYSTEM_PROMPT, schema: RESPONSE_SCHEMA }, private effort?: ReasoningEffort) {}
   async moderate(msg: string, ctx: ContextMsg[], signal: AbortSignal) {
     const r = await fetch(`${this.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
       method: "POST", signal,
       headers: { "content-type": "application/json", authorization: `Bearer ${this.apiKey}` },
       body: JSON.stringify({
-        model: this.model, store: false,
+        model: this.model, store: false, ...openAISampling(this.effort),
         messages: [{ role: "system", content: this.contract.prompt }, { role: "user", content: buildUserPayload(msg, ctx) }],
         response_format: { type: "json_schema", json_schema: { name: "moderation", strict: true, schema: { ...this.contract.schema, additionalProperties: false } } },
       }),
@@ -304,7 +345,7 @@ export function providerFromEnv(env: ModerationEnv, contract?: ProviderContract)
     const k = env.get("OPENAI_API_KEY"); if (!k) throw new ModerationTechnicalError("missing_key");
     const base = env.get("OPENAI_BASE_URL") ?? "https://eu.api.openai.com/v1";
     if (!/^https:\/\/([a-z0-9-]+\.)*openai\.com\/v1\/?$/.test(base)) throw new ModerationTechnicalError("bad_base_url");
-    return new OpenAIProvider(k, env.get("OPENAI_MODEL") ?? "gpt-6-luna", base, contract);
+    return new OpenAIProvider(k, env.get("OPENAI_MODEL") ?? "gpt-6-luna", base, contract, reasoningEffortFromEnv(env));
   }
   throw new ModerationTechnicalError("unknown_provider");
 }
