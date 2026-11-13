@@ -44,8 +44,11 @@ function rpc(name: string, args: any) {
         data = [{ plan: 'text', price: 49 }];
     if (name === 'get_my_send_limits')
         data = [{ next_at: null }];
+    const qa = (globalThis as any).__QA_FIXTURE as { messages?: any[]; invites?: any[] } | undefined;
     if (name === 'get_messages_v2')
-        data = [{ id: '40000000-0000-4000-8000-000000000001', sender_id: uid, sender_email: 'tester@example.invalid', body: 'Kun en opdigtet testbesked.', created_at: '2026-11-07T08:00:00Z', mine: true }];
+        data = qa?.messages ?? [{ id: '40000000-0000-4000-8000-000000000001', sender_id: uid, sender_email: 'tester@example.invalid', body: 'Kun en opdigtet testbesked.', created_at: '2026-11-07T08:00:00Z', mine: true }];
+    if (name === 'list_pending_invitations')
+        data = qa?.invites ?? [];
     if (name === 'my_pending_count')
         data = 0;
     if (name === 'list_conversation_members')
