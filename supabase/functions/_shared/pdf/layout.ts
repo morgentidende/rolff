@@ -4,7 +4,7 @@
 export type ExportMessage = {
   id: string; sender_label: string | null; sender_email: string | null; sender_deleted: boolean; mine: boolean; body: string; created_at: string;
   att_mime?: string | null; att_name?: string | null; att_size?: number | null; att_pages?: number | null; att_sha256?: string | null;
-  reply_to_id?: string | null; has_reply?: boolean; reply_visible?: boolean;
+  reply_to_id?: string | null; has_reply?: boolean; reply_visible?: boolean; thumb_count?: number | null;
 };
 export type ExportLang = "da" | "en";
 export type ExportMeta = {
@@ -48,7 +48,7 @@ export function attachmentText(m: ExportMessage): string | null {
   return `${m.att_name || "Vedhæftning"}${extra ? ` (${extra})` : ""}`;
 }
 
-export type ExportItem = { m: ExportMessage; sender: string; senderEmail: string | null; time: string; utc: string; showSender: boolean; reply: string | null; attachment: string | null };
+export type ExportItem = { m: ExportMessage; sender: string; senderEmail: string | null; time: string; utc: string; showSender: boolean; reply: string | null; attachment: string | null; reaction: string | null };
 export type ExportDay = { key: string; label: string; items: ExportItem[] };
 export type ExportModel = {
   title: string; meta: ExportMeta; partners: string; scope: string; partial: boolean; count: number; exportedAt: string; exportedAtUtc: string;
@@ -71,8 +71,10 @@ export function buildModel(rows: ExportMessage[], meta: ExportMeta): ExportModel
       else if (m.reply_to_id && m.reply_visible) reply = `Svar på besked ${m.reply_to_id} (uden for udsnittet)`;
       else reply = "Svar på en besked, der ikke er tilgængelig for dig (slettet eller fra før du kom med).";
     }
+    const thumbs = m.thumb_count ?? 0;
+    const reaction = thumbs > 0 ? (thumbs > 1 ? `👍 ×${thumbs}` : "👍") : null;
     d.items.push({ m, sender, senderEmail: m.sender_deleted ? null : m.sender_email, time: clock(m.created_at, tz), utc: utcStamp(m.created_at),
-      showSender: !prev || prev.sender !== sender || prev.m.mine !== m.mine, reply, attachment: attachmentText(m) });
+      showSender: !prev || prev.sender !== sender || prev.m.mine !== m.mine, reply, attachment: attachmentText(m), reaction });
   }
   const partial = !!(meta.periodFrom || meta.periodTo);
   const scope = partial
@@ -306,8 +308,9 @@ export function renderExportPdf(doc: PdfDoc, model: ExportModel, fonts: PdfFonts
     const hash = it.m.att_sha256 ? wrap(doc, fonts, `SHA-256: ${it.m.att_sha256}`, inner, T.hash) : [];
     const attNote = it.attachment ? wrap(doc, fonts, "Selve filen er ikke med i udskriften.", inner, T.quote) : [];
     const body = it.m.body ? wrap(doc, fonts, it.m.body, inner, bodySt) : [];
+    const react = it.reaction ? wrap(doc, fonts, it.reaction, inner, T.quote) : [];
     const lw = (ls: Seg[][], st: Style, extra = 0) => Math.max(0, ...ls.map((l) => width(doc, fonts, l, st) + extra));
-    const bw = Math.min(maxW, Math.max(lw(body, bodySt), lw(quote, T.quote, 10), lw(att, T.att), lw(hash, T.hash), lw(attNote, T.quote), 30) + 2 * PADX);
+    const bw = Math.min(maxW, Math.max(lw(body, bodySt), lw(quote, T.quote, 10), lw(att, T.att), lw(hash, T.hash), lw(attNote, T.quote), lw(react, T.quote), 30) + 2 * PADX);
     const bx = own ? W - M - bw : M;
     const metaLines = wrap(doc, fonts, `${it.time} (${it.utc}) · Besked-ID ${it.m.id}`, CW, T.meta);
     type Row = { h: number; draw: (y: number) => void };
@@ -323,6 +326,7 @@ export function renderExportPdf(doc: PdfDoc, model: ExportModel, fonts: PdfFonts
     for (const l of attNote) rows.push({ h: 11, draw: (yy) => draw(doc, fonts, l, bx + PADX, yy + 9, { ...T.quote, color: dim }) });
     if (att.length && body.length) rows.push({ h: 4, draw: () => {} });
     for (const l of body) rows.push({ h: LH, draw: (yy) => draw(doc, fonts, l, bx + PADX, yy + 10.5, bodySt) });
+    for (const l of react) rows.push({ h: 13, draw: (yy) => draw(doc, fonts, l, bx + PADX, yy + 10, { ...T.quote, color: dim }) });
     const labelH = it.showSender ? 14 : 0; const metaH = metaLines.length * 9 + 3;
     const maxChunk = bottom - (PAGE.top + 10) - labelH - 2 * PADY - metaH - 8;
     const chunks: Row[][] = [[]]; let acc = 0;
