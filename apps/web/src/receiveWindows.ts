@@ -1,7 +1,7 @@
 import type { ReceiveWindow } from "./receiveTimezone";
 /** Pure checks for the Modtagetider editor. The server accepts overnight windows (end before start,
- *  e.g. 22:00–02:00 continues into the next day) and rejects start = end; overlaps are stored as-is,
- *  so the editor points them out and offers to merge them before saving. */
+ *  e.g. 22:00–02:00 continues into the next day) and rejects start = end. Overlapping or adjacent
+ *  ranges on the same day are merged automatically on save. */
 const WEEK = 7 * 1440;
 type Span = { s: number; e: number; i: number };
 const span = (w: ReceiveWindow, i: number): Span => { const s = (w.weekday - 1) * 1440 + w.start_minute; return { s, e: s + (w.end_minute > w.start_minute ? w.end_minute - w.start_minute : w.end_minute + 1440 - w.start_minute), i }; };
@@ -17,12 +17,12 @@ export function windowIssues(ws: ReceiveWindow[]): WindowIssue[] {
   }
   return out;
 }
-/** Merges overlapping windows (same-week spans only). Returns null when a merged span would exceed
- *  24 hours or wrap past Sunday, so the user decides instead. */
+/** Merges overlapping or adjacent windows (same-week spans only). Returns null when a merged span
+ *  would exceed 24 hours or wrap past Sunday, so the user decides instead. */
 export function mergeWindows(ws: ReceiveWindow[]): ReceiveWindow[] | null {
   const sp = ws.filter(w => w.start_minute !== w.end_minute).map(span).sort((a, b) => a.s - b.s || a.e - b.e);
   const merged: { s: number; e: number }[] = [];
-  for (const x of sp) { const last = merged[merged.length - 1]; if (last && x.s < last.e) last.e = Math.max(last.e, x.e); else merged.push({ s: x.s, e: x.e }); }
+  for (const x of sp) { const last = merged[merged.length - 1]; if (last && x.s <= last.e) last.e = Math.max(last.e, x.e); else merged.push({ s: x.s, e: x.e }); }
   const out: ReceiveWindow[] = [];
   for (const m of merged) {
     if (m.e - m.s > 1440 || m.e > WEEK) return null;
@@ -31,4 +31,22 @@ export function mergeWindows(ws: ReceiveWindow[]): ReceiveWindow[] | null {
   }
   if (out.some(w => w.start_minute === w.end_minute)) return null;
   return out;
+}
+
+export type DayRange = { start_minute: number; end_minute: number };
+export type DayState = { weekday: number; on: boolean; ranges: DayRange[] };
+
+const defaultRange = (): DayRange => ({ start_minute: 18 * 60, end_minute: 19 * 60 });
+
+/** One row per weekday. Days with no windows are off and keep a 18–19 placeholder. */
+export function windowsToDays(ws: ReceiveWindow[]): DayState[] {
+  return Array.from({ length: 7 }, (_, i) => {
+    const weekday = i + 1;
+    const ranges = ws.filter(w => w.weekday === weekday).map(w => ({ start_minute: w.start_minute, end_minute: w.end_minute }));
+    return { weekday, on: ranges.length > 0, ranges: ranges.length ? ranges : [defaultRange()] };
+  });
+}
+
+export function daysToWindows(days: DayState[]): ReceiveWindow[] {
+  return days.filter(d => d.on).flatMap(d => d.ranges.map(r => ({ weekday: d.weekday, start_minute: r.start_minute, end_minute: r.end_minute })));
 }

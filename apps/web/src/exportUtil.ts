@@ -44,7 +44,7 @@ export function myDataFiles(d: any): { name: string; data: string }[] {
   const msgs = (d.conversations ?? []).flatMap((c: any) => (c.messages ?? []).map((m: any) => ({ conversation_id: c.conversation_id, created_at: m.created_at, from: m.from, text: m.text })));
   files.push({ name: "messages.csv", data: csvTable(msgs) });
   files.push({ name: "account.csv", data: csvTable([{ ...(d.account ?? {}), ...(d.profile ?? {}), ...(d.privacy_settings ?? {}) }]) });
-  for (const k of ["memberships", "own_private_aliases", "own_blocked_words", "own_blocked_topics", "own_conversation_blocks", "invitations_created", "consents_given", "feedback", "reports_metadata", "moderation_attempts_metadata", "receive_windows"])
+  for (const k of ["memberships", "own_private_aliases", "own_blocked_words", "own_blocked_topics", "own_conversation_blocks", "invitations_created", "consents_given", "feedback", "reports_metadata", "moderation_attempts_metadata", "receive_windows", "conversation_receive_windows"])
     files.push({ name: `${k}.csv`, data: csvTable(d[k] ?? []) });
   files.push({ name: "LÆS-MIG.txt", data: "Rolff – dine egne data (GDPR art. 15). Indeholder kun data om dig og beskeder, du selv kan se i appen. / Your own data only.\r\n" });
   return files;

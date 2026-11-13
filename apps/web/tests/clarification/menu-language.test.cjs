@@ -11,7 +11,7 @@ async function closeSheet(d) { const x = d.querySelector('.sheet [aria-label="Lu
 
 test('all front-page menu sheets open as a top card anchored to ⋮ (like "Tilføj person")', async () => {
   const f = await env(); const { d } = f; try {
-    for (const name of ['Sprog', 'Tema', 'Modtagetider', 'FAQ', 'Abonnement', 'Konto (e-mail og adgangskode)', 'Privatliv og sletning', 'Feedback', 'Inviter person']) {
+    for (const name of ['Sprog', 'Tema', 'FAQ', 'Abonnement', 'Konto (e-mail og adgangskode)', 'Privatliv og sletning', 'Feedback', 'Inviter person']) {
       await click(label(d, 'Menu')); const it = items(d).find(b => b.textContent.trim() === name);
       if (!it) { assert.fail(`missing ${name}: ${items(d).map(i => i.textContent).join(', ')}`); }
       await click(it); await delay(60);
