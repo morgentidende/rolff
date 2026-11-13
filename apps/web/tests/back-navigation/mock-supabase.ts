@@ -45,8 +45,19 @@ function rpc(name: string, args: any) {
     if (name === 'get_my_send_limits')
         data = [{ next_at: null }];
     const qa = (globalThis as any).__QA_FIXTURE as { messages?: any[]; invites?: any[] } | undefined;
-    if (name === 'get_messages_v2')
+    if (name === 'get_messages_v2' || name === 'get_messages_v3')
         data = qa?.messages ?? [{ id: '40000000-0000-4000-8000-000000000001', sender_id: uid, sender_email: 'tester@example.invalid', body: 'Kun en opdigtet testbesked.', created_at: '2026-11-07T08:00:00Z', mine: true }];
+    if (name === 'toggle_message_thumb') {
+        const msgs = qa?.messages;
+        const m = msgs?.find((x: any) => x.id === args?.p_message);
+        if (m) {
+            m.i_thumbed = !m.i_thumbed;
+            m.thumb_count = Math.max(0, (m.thumb_count ?? 0) + (m.i_thumbed ? 1 : -1));
+            data = [{ message_id: m.id, i_thumbed: m.i_thumbed, thumb_count: m.thumb_count }];
+        } else {
+            data = [{ message_id: args?.p_message, i_thumbed: true, thumb_count: 1 }];
+        }
+    }
     if (name === 'list_pending_invitations')
         data = qa?.invites ?? [];
     if (name === 'my_pending_count')

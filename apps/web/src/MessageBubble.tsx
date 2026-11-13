@@ -10,7 +10,7 @@ const icons = {
   info: <><circle cx="12" cy="12" r="9" /><path d="M12 11v6" /><path d="M12 7.5v.01" /></>,
 };
 
-export type Message = { id: string; sender_id: string | null; sender_name: string | null; sender_email?: string | null; body: string; created_at: string; mine: boolean; att_mime?: string | null; att_name?: string | null; att_alt?: string | null; att_pages?: number | null; reply_to_id?: string | null; reply_body?: string | null; has_reply?: boolean };
+export type Message = { id: string; sender_id: string | null; sender_name: string | null; sender_email?: string | null; body: string; created_at: string; mine: boolean; att_mime?: string | null; att_name?: string | null; att_alt?: string | null; att_pages?: number | null; reply_to_id?: string | null; reply_body?: string | null; has_reply?: boolean; thumb_count?: number; i_thumbed?: boolean };
 import { messageTime } from "./messageTime";
 export function ReplyPreview({ body, unavailable = false, lang }: { body?: string | null; unavailable?: boolean; lang: string }) {
   return <blockquote className="reply-quote">{unavailable ? (lang === "da" ? "Den oprindelige besked er ikke tilgængelig." : "The original message is unavailable.") : [...(body ?? "")].slice(0, 200).join("") + ([...(body ?? "")].length > 200 ? "…" : "")}</blockquote>;
@@ -34,7 +34,7 @@ export function ReplyComposer({ who, body, unavailable = false, lang, onCancel }
   );
 }
 const clearSelection = () => { try { window.getSelection()?.removeAllRanges(); } catch { /* ignore */ } };
-export function MessageBubble({ m, lang, children, onReply, canReply = true, hit = false, index, tailed = false, flash = false }: { m: Message; lang: string; children?: React.ReactNode; onReply: (m: Message) => void; canReply?: boolean; hit?: boolean; index?: number; tailed?: boolean; flash?: boolean }) {
+export function MessageBubble({ m, lang, children, onReply, canReply = true, onThumb, canReact = true, hit = false, index, tailed = false, flash = false }: { m: Message; lang: string; children?: React.ReactNode; onReply: (m: Message) => void; canReply?: boolean; onThumb?: (m: Message) => void; canReact?: boolean; hit?: boolean; index?: number; tailed?: boolean; flash?: boolean }) {
   const da = lang === "da";
   const [panel, setPanel] = useState<"actions" | "info" | null>(null);
   // After a long-press open, the finger is still down where the menu appears.
@@ -133,8 +133,23 @@ export function MessageBubble({ m, lang, children, onReply, canReply = true, hit
     if (armed) { e.preventDefault(); e.stopPropagation(); return; }
     fn();
   };
+  const thumbs = m.thumb_count ?? 0;
+  const iThumbed = !!m.i_thumbed;
+  const canToggleThumb = !!onThumb && (iThumbed || canReact);
+  const thumbLabel = iThumbed
+    ? (da ? "Fjern" : "Remove")
+    : (da ? "Svar med 👍" : "Reply with 👍");
+  const thumbAria = iThumbed
+    ? (da ? "Fjern dit 👍" : "Remove your 👍")
+    : (da ? "Svar på beskeden med 👍" : "Reply to the message with 👍");
+  const pillAria = iThumbed
+    ? (da ? "Dit 👍. Tryk for at fjerne." : "Your 👍. Tap to remove.")
+    : thumbs > 1
+      ? (da ? `${thumbs} × 👍 på beskeden` : `${thumbs} × 👍 on this message`)
+      : (da ? "👍 på beskeden" : "👍 on this message");
+  const doThumb = () => { if (canToggleThumb) onThumb?.(m); };
   return <>
-    <div ref={bubble} tabIndex={0} data-i={index} className={`msg ${m.mine ? "mine" : "theirs"}${tailed ? " tailed" : ""}${hit ? " hit" : ""}${flash ? " just-accepted" : ""}`} aria-label={da ? "Besked. Hold inde for handlinger, eller tryk Enter." : "Message. Hold for actions, or press Enter."} aria-haspopup="menu" aria-expanded={!!panel}
+    <div ref={bubble} tabIndex={0} data-i={index} className={`msg ${m.mine ? "mine" : "theirs"}${tailed ? " tailed" : ""}${hit ? " hit" : ""}${flash ? " just-accepted" : ""}${thumbs > 0 ? " has-thumb" : ""}`} aria-label={da ? "Besked. Hold inde for handlinger, eller tryk Enter." : "Message. Hold for actions, or press Enter."} aria-haspopup="menu" aria-expanded={!!panel}
       onPointerDown={e => { cancel(); if (e.button !== 0 || (e.target as HTMLElement).closest("button,a,input,textarea")) return; start.current = { x: e.clientX, y: e.clientY }; timer.current = setTimeout(() => openActions(true), 500); }}
       onPointerMove={e => { if (start.current && Math.hypot(e.clientX - start.current.x, e.clientY - start.current.y) > 10) cancel(); }} onPointerUp={cancel} onPointerCancel={cancel} onPointerLeave={cancel}
       onContextMenu={e => { if ((e.target as HTMLElement).closest("button,a")) return; e.preventDefault(); openActions(false); }}
@@ -144,6 +159,7 @@ export function MessageBubble({ m, lang, children, onReply, canReply = true, hit
           text line so it never overlaps the text. */}
       <div className="message-content">{children ?? m.body}<span className="msg-meta-spacer" aria-hidden="true" /></div>
       <span className="msg-meta"><time className="message-time" dateTime={m.created_at}>{messageTime(m.created_at, lang)}</time></span>
+      {thumbs > 0 && <button type="button" className={`msg-thumb${iThumbed ? " is-mine" : ""}`} aria-label={pillAria} disabled={!canToggleThumb} onClick={e => { e.stopPropagation(); doThumb(); }} onPointerDown={e => e.stopPropagation()}><span aria-hidden="true">👍</span>{thumbs > 1 && <span className="msg-thumb-n">{thumbs}</span>}</button>}
     </div>
     {panel && createPortal(<div className="message-overlay" onPointerDown={e => { if (armed) { e.preventDefault(); return; } if (e.target === e.currentTarget) close(); }} onContextMenu={e => e.preventDefault()}>
       <div className="message-lifted" ref={lifted} aria-hidden="true" />
@@ -153,6 +169,8 @@ export function MessageBubble({ m, lang, children, onReply, canReply = true, hit
         onContextMenu={e => e.preventDefault()}
         style={pos ? { top: pos.top, left: pos.left, maxHeight: pos.maxHeight, maxWidth: pos.maxWidth } : { top: 0, left: 0, visibility: "hidden" }}>
         {panel === "actions" ? <>
+          <button type="button" role="menuitem" className="message-thumb-item" aria-label={thumbAria} aria-pressed={iThumbed} disabled={!canToggleThumb} onClick={guarded(() => { close(); doThumb(); })}><span className="message-thumb-emoji" aria-hidden="true">👍</span><span>{thumbLabel}</span></button>
+          <div className="message-menu-sep" role="separator" />
           <button type="button" role="menuitem" disabled={!canReply} onClick={guarded(() => { close(); onReply(m); })}><ActionIcon d={icons.reply} /><span>{da ? "Besvar" : "Reply"}</span></button>
           <button type="button" role="menuitem" onClick={guarded(copy)}><ActionIcon d={icons.copy} /><span>{da ? "Kopiér" : "Copy"}</span></button>
           <button type="button" role="menuitem" onClick={guarded(() => setPanel("info"))}><ActionIcon d={icons.info} /><span>Information</span></button>

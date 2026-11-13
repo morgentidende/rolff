@@ -5,7 +5,7 @@ Status: bygget og testet, **ikke frigivet**. Intet her er anvendt i produktion.
 ## Sådan virker det
 - Kun planen *Tekst + vedhæftninger* (79 kr.). Håndhæves på serveren (`_effective_plan` i Edge-funktionen og igen i `begin_conversation_export`). 49-plan ser et opgraderingstilbud.
 - Appen sender kun en anmodning (samtale, periode, modtager, `confirm: true`). **Intet genereres eller downloades på enheden.**
-- `export-conversation` (Edge) henter beskeder med `get_export_messages` (samme synlighedsregler som `get_messages`: aktivt medlemskab, `joined_at`, opbevaringsperiode, egne eller frigivne leveringer). Vedhæftninger listes med navn og SHA-256, aldrig indhold.
+- `export-conversation` (Edge) henter beskeder med `get_export_messages` (samme synlighedsregler som `get_messages`: aktivt medlemskab, `joined_at`, opbevaringsperiode, egne eller frigivne leveringer). Vedhæftninger listes med navn og SHA-256, aldrig indhold. Antal 👍 på beskeden medtages (`thumb_count`).
 - PDF'en bygges med jsPDF + indlejrede Noto-fonte (`_shared/pdf`), signeres (PKCS#7/CMS detached, SHA-256, `adbe.pkcs7.detached`, ByteRange over hele filen), og **derefter** hashes de endelige bytes og registreres (`finish_conversation_export`) før e-mailen sendes via `mail.php` med PDF'en vedhæftet.
 - Mislykkes mailen, markeres eksporten `failed` (`mark_conversation_export_failed`): den kan ikke verificeres, og notitsen i samtalen fjernes.
 - Hver side har kode + QR til `tjek.html?k=KODE`. Den offentlige side hasher filen i browseren (filen sendes ikke) og kalder `verify-export`, der kun svarer `match` / `code_valid` / `mismatch` + tidspunkt, periode, antal beskeder og sider. Aldrig indhold, navne, e-mails eller id'er.

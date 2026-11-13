@@ -1,6 +1,9 @@
 # Beskedvisning og handlinger
 
-Beskedbobler viser kun lokalt klokkeslæt nederst til højre. Langt tryk (500 ms), højreklik eller Enter på en fokuseret boble åbner Besvar, Kopiér og Information. Information viser faktisk afsender-email, dato og tid. Slettet bruger eller manglende email vises som utilgængelig. Metadata bevares i den eksisterende eksport.
+
+Et 👍 er et fast svar på en besked, ikke en tekstbesked og ikke et leverings- eller læst-tegn. Kun denne ene emoji kan sættes. Den vises som en lille pille nederst til venstre på boblen (Rolffs farver). Tryk på 👍 igen, eller på pille, fjerner dit eget 👍. Begge parter ser det. Det modereres ikke og kan ikke bære tekst. Læsere og blokerede samtaler (når en anden aktiv deltager har blokeret) kan ikke sætte et nyt 👍; eget 👍 kan stadig fjernes. Ingen notifikation sendes. get_messages_v3 og toggle_message_thumb er den eneste klientadgang; get_messages_v2 er uændret. Udskrift (PDF) medtager antal 👍; den personlige data-ZIP gør det ikke.
+
+Beskedbobler viser kun lokalt klokkeslæt nederst til højre. Langt tryk (500 ms), højreklik eller Enter på en fokuseret boble åbner 👍 øverst, derefter Besvar, Kopiér og Information. Information viser faktisk afsender-email, dato og tid. Slettet bruger eller manglende email vises som utilgængelig. Metadata bevares i den eksisterende eksport.
 
 Besvar vælger et citat over skrivefeltet, som kan annulleres. Intet sendes automatisk. Tekst og svarvalg bevares ved afvisning eller teknisk fejl. Afsendelse gennemgår uændret moderation og øvrige grænser. Kopiér kopierer kun teksten.
 
