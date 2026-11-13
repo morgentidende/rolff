@@ -6,6 +6,7 @@ import { resetBackNavigation, useBackLayer, useBackNavigationRoot, usePanelState
 import { ReceiveSettings } from "./ReceiveSettings";
 import { setReceiveTimezoneUser, syncReceiveTimezone } from "./receiveTimezone";
 import { ContactAliasDialog, ContactButton } from "./ContactAlias";
+import { focusField } from "./formHint";
 import { ComposerInput } from "./ComposerInput";
 import { effectiveCharLimit, textRetryKey } from "./composerLimits";
 import { MessageBubble, ReplyComposer, type Message } from "./MessageBubble";
@@ -151,7 +152,6 @@ export function App() {
       </header>}
       <div className="notice" role="note">{t.testNotice}</div>
       {inviteMsg && <div className="notice" role="status">{inviteMsg}</div>}
-      {session && !conv && <InstallPrompt lang={lang} />}
       {session && !conv && !sheet && <PushSettings key={`push-offer:${session.user.id}`} uid={session.user.id} lang={lang} onboarding />}
       {!session ? <Auth lang={lang} peek={inviteToken ? peek : undefined} />
         : conv ? <Chat session={session} key={session.user.id} lang={lang} conv={conv} rename={setRenameContacts} back={() => setConv(null)} openPlans={() => setSheet("plans")} planKey={sheet} menuButtonRef={menuButtonRef} />
@@ -218,7 +218,7 @@ function SheetView({ title, close, lang, children, anchor }: { title: string; cl
   const style: React.CSSProperties | undefined = !anchor ? undefined : pos ? { top: pos.top, left: pos.left, maxHeight: pos.maxHeight, maxWidth: pos.maxWidth } : { top: 0, left: 0, visibility: "hidden" };
   return (
     <div className={anchor ? "overlay anchored-overlay" : "overlay"} onPointerDown={(e) => { if (e.target === e.currentTarget) close(); }}>
-      <div className={anchor ? "sheet anchored-card" : "sheet"} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} ref={ref} style={style}>
+      <div className={anchor ? "sheet anchored-card" : "sheet"} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} ref={ref} style={style} onScroll={(e) => { const el = e.currentTarget; if (el.scrollTop > 2) el.dataset.scrolled = ""; else delete el.dataset.scrolled; }}>
         <div className="sheethead"><h2>{title}</h2><button type="button" className="icon" aria-label={lang === "da" ? "Luk" : "Close"} onClick={close}>✕</button></div>
         {children}
       </div>
@@ -242,7 +242,7 @@ function Faq({ lang }: { lang: Lang }) {
     ["Hvad bliver blokeret?", "Rolff stopper beskeder, der kan opfattes som sårende eller unødigt kan provokere til vrede (tjekket af AI), beskeder med emojis (de misforstås let – skriv det med ord), beskeder skrevet med store bogstaver (opleves som råb) og den samme besked sendt igen. Ved AI-/tone-afvisning kan du få et valgfrit forslag, hvis beskeden indeholder et konkret, legitimt praktisk ønske («Brug forslaget» kopierer det til skrivefeltet; du redigerer og sender selv, og det tjekkes igen). Ren kritik, trusler uden praktisk kerne eller lignende kan ikke omformuleres — så får du kun vejledning (ikke en sendbar tekst). Forslag erstatter ikke ordblokliste, længde- eller frekvensgrænser. Stavefejl og ukendte egenavne er ikke i sig selv et problem. Hvis AI er usikker på beskedens afgørende mening, bliver du bedt om at præcisere den, før den kan sendes. Store begyndelsesbogstaver gør ikke krænkende ord til tilladte navne."],
     ["Hvordan blokerer jeg en samtale?", "Tryk ⋮ i samtalen → “Blokér samtale”. Så kan de andre ikke længere sende beskeder i samtalen; de får kun at vide, at beskeden ikke kan sendes – ikke hvem eller hvornår. Blokeringen udløber aldrig af sig selv. Den ophører kun, når du selv trykker “Afblokér”."],
     ["Hvad er “Blokerede ord”?", "Et valgfrit filter (slået fra som standard): Under ⋮ → “Blokerede ord” kan du tilføje enkeltord, udtryk på flere ord eller hele sætninger (op til 120 tegn), som ikke må nå frem til dig. Store/små bogstaver og accenter er ligegyldige (fx matcher “dårlig far” også “DÅRLIG FAR” og “darlig far”), og ordene skal stå i samme rækkefølge. Afslutter du med * (fx “pis*”), rammes også ord, der begynder sådan. Listen gælder den samtale, du står i, og er privat. Rammer en besked noget på listen, bliver den ikke leveret – afsenderen får at vide præcis hvilket ord eller udtryk, og at modtageren har blokeret det, og kan omformulere. Derfor skal du bekræfte det for hvert ord. Du kan fjerne ord igen når som helst."],
-    ["Kan jeg begrænse hvor tit en person skriver?", "Ja. Åbn “Deltagere og roller” og derefter “Indstillinger for denne person”. Vælg højst 1 besked pr. minut, pr. 5 minutter, pr. time eller et brugerdefineret antal minutter (1 til 1.440 = 24 timer). Standard er ingen grænse. Det regnes fra personens seneste leverede besked til dig i alle jeres samtaler; afviste beskeder tæller ikke, vedhæftninger tæller som en besked. For tidlige beskeder gemmes ikke, og afsenderen får at vide, hvornår der kan sendes igen. Er I flere, gælder den strengeste grænse."],
+    ["Kan jeg begrænse hvor tit en person skriver?", "Ja. Åbn “Deltagere og roller” og tryk “Indstillinger” ud for personen. Vælg højst 1 besked pr. minut, pr. 5 minutter, pr. time eller et brugerdefineret antal minutter (1 til 1.440 = 24 timer). Standard er ingen grænse. Det regnes fra personens seneste leverede besked til dig i alle jeres samtaler; afviste beskeder tæller ikke, vedhæftninger tæller som en besked. For tidlige beskeder gemmes ikke, og afsenderen får at vide, hvornår der kan sendes igen. Er I flere, gælder den strengeste grænse."],
     ["Hvem kan tilføje en ekstra person til en samtale?", "At invitere den anden forælder, når du opretter en samtale, kan alle. At tilføje en ekstra person (fx advokat eller bedsteforælder) kræver, at DU som inviterer har planen “Tekst + vedhæftninger” (79 kr./md.). De andre deltagere og den inviterede må gerne have 49-planen. Nedgraderer du senere, bliver de nuværende deltagere."],
     ["Hvad kan de andre se om mig?", "Du logger ind med din e-mail. Din e-mail er også det navn, de andre i samtalen ser – du kan ikke selv vælge et andet navn. Hver person kan give dig et privat kaldenavn, som kun de selv ser (hold fingeren på samtalen). Glemt adgangskode: brug linket på login-siden. Skift e-mail eller adgangskode: ⋮ → Konto. Sletning af konto: ⋮ → Privatliv og sletning."],
     ["Hvordan rapporterer jeg noget?", "Tryk ⋮ i samtalen → “Rapportér”. Du vælger kategori, skriver selv hvad der er sket og kan markere de beskeder, du vil vedhæfte. Du ser en forhåndsvisning, og intet sendes før du bekræfter. Rapporten mailes til Rolffs udvikler (kontakt: nicolaipetersen108@gmail.com) med dit bruger-id. Rolff gemmer kun kategori, tidspunkt og antal vedhæftede beskeder (til at begrænse misbrug) – ikke teksten. Der er ingen døgnvagt og ingen garanti for svar eller handling. Ved akut fare: ring 112."],
@@ -260,7 +260,7 @@ function Faq({ lang }: { lang: Lang }) {
     ["What gets blocked?", "Rolff stops messages that may come across as hurtful or needlessly provoke anger (checked by AI), messages with emojis (easily misread – use words), messages in all caps (reads as shouting) and the same message sent twice. On AI/tone blocks you may get an optional rephrase only if the message contains a concrete legitimate practical wish (“Use suggestion” copies it into the composer; you edit and send yourself, and it is checked again). Pure criticism, threats without a practical core, and similar cannot be rewritten — you then get guidance only (not sendable text). Suggestions do not override blocked words, length or frequency limits. Spelling errors and unfamiliar proper names alone are not a problem. If AI cannot understand the core meaning sufficiently, you are asked to clarify before sending. Capitalizing offensive words does not exempt them as names."],
     ["How do I block a conversation?", "Tap ⋮ in the conversation → “Block conversation”. The others can then no longer send messages there; they are only told the message cannot be sent – not who or when. A block never expires by itself. It only ends when you tap “Unblock”."],
     ["What are “Blocked words”?", "An optional filter (off by default): under ⋮ → “Blocked words” you can add single words, multi-word expressions or whole sentences (up to 120 characters) that must not reach you. Case and accents are ignored, and words must appear in the same order. Ending with * (e.g. “pis*”) also matches words starting that way. The list applies to the current conversation and is private. If a message hits it, it is not delivered – the sender is told exactly which word or phrase and that the recipient blocked it, and can rephrase. That is why you confirm each word. You can remove words at any time."],
-    ["Can I limit how often a person writes?", "Yes. Open “Participants and roles”, then “Settings for this person”. Choose at most 1 message per minute, per 5 minutes, per hour, or a custom number of minutes (1 to 1,440 = 24 hours). Default: no limit. It counts from the person's latest delivered message to you in any of your conversations; rejected messages do not count; attachments count as a message. Early messages are not stored and the sender is told when they can send again. With several recipients the strictest applies."],
+    ["Can I limit how often a person writes?", "Yes. Open “Participants and roles”, then tap “Settings” next to the person. Choose at most 1 message per minute, per 5 minutes, per hour, or a custom number of minutes (1 to 1,440 = 24 hours). Default: no limit. It counts from the person's latest delivered message to you in any of your conversations; rejected messages do not count; attachments count as a message. Early messages are not stored and the sender is told when they can send again. With several recipients the strictest applies."],
     ["Who can add an extra person to a conversation?", "Anyone can invite the other parent when creating a conversation. Adding an extra person (e.g. a lawyer) requires that YOU, the inviter, are on “Text + attachments” (79 DKK/month). Other members and the invitee may be on 49. If you downgrade later, existing members stay."],
     ["What can others see about me?", "You log in with your e-mail. Your e-mail is also the name others in the conversation see – you cannot choose a different name yourself. Each person can give you a private nickname that only they see (press and hold the conversation). Forgot password: use the link on the login page. Change e-mail or password: ⋮ → Account. Account deletion: ⋮ → Privacy and deletion."],
     ["How do I report something?", "Tap ⋮ in the conversation → “Report”. You choose a category, write what happened and can tick the messages you want to attach. You see a preview and nothing is sent until you confirm. The report is e-mailed to Rolff's developer (contact: nicolaipetersen108@gmail.com) with your user id. Rolff stores only category, time and number of attached messages (to limit abuse) – not the text. There is no 24/7 staff and no guarantee of a reply or action. In an emergency: call 112."],
@@ -278,9 +278,11 @@ export const evidenceNote = (lang: Lang) => lang === "da"
 
 function MyDataExport({ lang }: { lang: Lang }) {
   const da = lang === "da";
-  const [pw, setPw] = useState(""); const [st, setSt] = useState<"" | "busy" | "ok" | "wrong" | "limit" | "err">("");
+  const [pw, setPw] = useState(""); const [st, setSt] = useState<"" | "busy" | "ok" | "wrong" | "limit" | "err" | "nopw">("");
   const go = async (e: React.FormEvent) => {
-    e.preventDefault(); setSt("busy");
+    e.preventDefault(); if (st === "busy") return;
+    if (!pw) { setSt("nopw"); focusField(document.getElementById("xpw")); return; }
+    setSt("busy");
     let r; try { r = await callFn("export-data", { password: pw }); } catch { r = { status: 0, data: null as any }; }
     setPw("");
     if (r.status !== 200) { setSt(r.status === 403 ? "wrong" : r.status === 429 ? "limit" : "err"); return; }
@@ -290,12 +292,13 @@ function MyDataExport({ lang }: { lang: Lang }) {
     setTimeout(() => URL.revokeObjectURL(url), 5000); setSt("ok");
   };
   return (
-    <form onSubmit={go}>
+    <form noValidate onSubmit={go}>
       <h3 id="export" className="psec-h">{da ? "Download mine data" : "Download my data"}</h3>
       <p className="meta">{da ? "Hent en kopi af dine data: konto, indstillinger, dine samtaler (det, du selv kan se), kaldenavne, blokerede ord, invitationer, samtykker, feedback og metadata. Filen (ZIP) laves på din enhed. Højst 3 gange i døgnet." : "Get a copy of your data: account, settings, your conversations (what you can see yourself), nicknames, blocked words, invitations, consents, feedback and metadata. The file (ZIP) is made on your device. At most 3 times a day."}</p>
       <label htmlFor="xpw">{da ? "Bekræft med din adgangskode" : "Confirm with your password"}</label>
-      <input id="xpw" type="password" autoComplete="current-password" value={pw} onChange={(e) => setPw(e.target.value)} required />
-      <div className="row end"><button type="submit" disabled={st === "busy" || !pw}>{da ? "Download" : "Download"}</button></div>
+      <input id="xpw" name="password" type="password" autoComplete="current-password" value={pw} aria-invalid={st === "nopw" || undefined} aria-describedby={st === "nopw" ? "xpw-hint" : undefined} onChange={(e) => { setPw(e.target.value); if (st === "nopw") setSt(""); }} required />
+      {st === "nopw" && <p id="xpw-hint" className="field-hint" role="alert">{da ? "Skriv din adgangskode for at downloade." : "Enter your password to download."}</p>}
+      <div className="row end"><button type="submit" disabled={st === "busy"} aria-disabled={!pw || undefined}>{da ? "Download" : "Download"}</button></div>
       {st === "ok" && <p className="meta" role="status">{da ? "Downloadet." : "Downloaded."}</p>}
       {st === "wrong" && <p className="err" role="alert">{da ? "Forkert adgangskode." : "Wrong password."}</p>}
       {st === "limit" && <p className="err" role="alert">{da ? "Højst 3 gange i døgnet." : "At most 3 times a day."}</p>}
@@ -306,12 +309,15 @@ function MyDataExport({ lang }: { lang: Lang }) {
 function PrivacyPanel({ lang }: { lang: Lang }) {
   const da = lang === "da";
   const [p, setP] = useState<{ inactivity_delete: boolean; inactivity_days: number; cloud_sync: boolean; retention: string } | null>(null);
-  const [pw, setPw] = useState(""); const [ok, setOk] = useState(false); const [state, setState] = useState<"" | "busy" | "wrong" | "err">("");
+  const [pw, setPw] = useState(""); const [ok, setOk] = useState(false); const [state, setState] = useState<"" | "busy" | "wrong" | "err" | "nopw" | "noack">("");
   useEffect(() => { supabase.rpc("get_my_privacy").then(({ data }) => setP(((data as any[]) ?? [])[0] ?? null)); }, []);
   const saveData = async (n: NonNullable<typeof p>) => { setP(n); await supabase.rpc("set_my_data_prefs", { p_cloud_sync: n.cloud_sync, p_retention: n.retention }); };
   const save = async (n: NonNullable<typeof p>) => { setP(n); await supabase.rpc("set_my_privacy", { p_inactivity_delete: n.inactivity_delete, p_inactivity_days: n.inactivity_days }); };
   const del = async (e: React.FormEvent) => {
-    e.preventDefault(); setState("busy");
+    e.preventDefault(); if (state === "busy") return;
+    if (!pw) { setState("nopw"); focusField(document.getElementById("delpw")); return; }
+    if (!ok) { setState("noack"); focusField(document.getElementById("delack")); return; }
+    setState("busy");
     let r; try { r = await callFn("delete-account", { password: pw }); } catch { r = { status: 0, data: null as any }; }
     if (r.status !== 200) { setState(r.status === 403 ? "wrong" : "err"); return; }
     try { localStorage.clear(); sessionStorage.clear(); if ("caches" in window) for (const k of await caches.keys()) await caches.delete(k);
@@ -343,11 +349,13 @@ function PrivacyPanel({ lang }: { lang: Lang }) {
       <h3 id="delete" className="psec-h">{da ? "Slet min konto" : "Delete my account"}</h3>
       <p className="meta">{da ? "Sletter din konto, dine indstillinger, kaldenavne, farver og feedback på serveren samt alt, Rolff har gemt på denne enhed. Det kan ikke fortrydes." : "Deletes your account, settings, aliases, colours and feedback on the server, plus everything Rolff stored on this device. This cannot be undone."}</p>
       <p className="notice">{evidenceNote(lang)}</p>
-      <form onSubmit={del}>
+      <form noValidate onSubmit={del}>
         <label htmlFor="delpw">{da ? "Bekræft med din adgangskode" : "Confirm with your password"}</label>
-        <PasswordInput id="delpw" lang={lang} value={pw} onChange={(v) => { setPw(v); setState(""); }} minLength={1} autoComplete="current-password" />
-        <CheckRow checked={ok} onChange={setOk} label={da ? "Jeg forstår, at sletningen er endelig." : "I understand that deletion is final."} />
-        <div className="row end"><button type="submit" className="danger" disabled={!ok || !pw || state === "busy"}>{da ? "Slet min konto permanent" : "Delete my account permanently"}</button></div>
+        <PasswordInput id="delpw" lang={lang} value={pw} onChange={(v) => { setPw(v); if (state !== "busy" && state !== "noack") setState(""); }} minLength={1} autoComplete="current-password" invalid={state === "nopw"} describedBy="delpw-hint" />
+        {state === "nopw" && <p id="delpw-hint" className="field-hint" role="alert">{da ? "Skriv din adgangskode for at slette kontoen." : "Enter your password to delete your account."}</p>}
+        <CheckRow id="delack" checked={ok} onChange={(v) => { setOk(v); if (v && state === "noack") setState(""); }} label={da ? "Jeg forstår, at sletningen er endelig." : "I understand that deletion is final."} attention={state === "noack"} describedBy={state === "noack" ? "delack-hint" : undefined} />
+        {state === "noack" && <p id="delack-hint" className="field-hint" role="alert">{da ? "Sæt flueben i ”Jeg forstår …” for at slette." : "Tick “I understand …” to delete."}</p>}
+        <div className="row end"><button type="submit" className="danger" disabled={state === "busy"} aria-disabled={!ok || !pw || undefined}>{da ? "Slet min konto permanent" : "Delete my account permanently"}</button></div>
         {state === "wrong" && <p className="err" role="alert">{da ? "Forkert adgangskode." : "Wrong password."}</p>}
         {state === "err" && <p className="err" role="alert">{da ? "Sletningen mislykkedes. Prøv igen." : "Deletion failed. Please try again."}</p>}
       </form>
@@ -356,8 +364,8 @@ function PrivacyPanel({ lang }: { lang: Lang }) {
   );
 }
 /** Checkbox in Rolff's theme colours with a full-row tap target (native input kept for a11y). */
-function CheckRow({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
-  return <label className="check-row"><input type="checkbox" className="check" checked={checked} onChange={(e) => onChange(e.target.checked)} /><span>{label}</span></label>;
+function CheckRow({ checked, onChange, label, id, attention, describedBy }: { checked: boolean; onChange: (v: boolean) => void; label: string; id?: string; attention?: boolean; describedBy?: string }) {
+  return <label className={attention ? "check-row needs-attention" : "check-row"}><input id={id} type="checkbox" className="check" checked={checked} aria-invalid={attention || undefined} aria-describedby={describedBy} onChange={(e) => onChange(e.target.checked)} /><span>{label}</span></label>;
 }
 
 export const emailVisibleNote = (lang: Lang) => lang === "da"
@@ -379,7 +387,7 @@ function ReportForm({ lang, conv, msgs, who, onStep, done }: { lang: Lang; conv:
   const da = lang === "da";
   const [cat, setCat] = useState("harassment"); const [body, setBody] = useState(""); const [sel, setSel] = useState<string[]>([]);
   const [step, setStepRaw] = useState<"edit" | "preview">("edit");
-  const [busy, setBusy] = useState(false); const [err, setErr] = useState<"" | "err" | "limit">("");
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState<"" | "err" | "limit">(""); const [nudge, setNudge] = useState(false);
   const busyRef = useRef(false); const rootRef = useRef<HTMLDivElement>(null);
   const setStep = (s: "edit" | "preview") => { setStepRaw(s); onStep(s); setErr(""); requestAnimationFrame(() => { const c = rootRef.current?.closest(".sheet"); if (c) c.scrollTop = 0; }); };
   // Newest first; only the last 50 are offered.
@@ -414,12 +422,12 @@ function ReportForm({ lang, conv, msgs, who, onStep, done }: { lang: Lang; conv:
       </div>
     </div>);
   return (
-    <div className="report" ref={rootRef}><form onSubmit={(e) => { e.preventDefault(); if (ready) setStep("preview"); }}>
+    <div className="report" ref={rootRef}><form noValidate onSubmit={(e) => { e.preventDefault(); if (ready) setStep("preview"); else { setNudge(true); focusField(document.getElementById("rb")); } }}>
       <p className="notice compact" role="note">{reportHonesty(da)}</p>
       <label htmlFor="rc">{da ? "Kategori" : "Category"}</label>
       <select id="rc" value={cat} onChange={(e) => setCat(e.target.value)}>{REPORT_CATS.map(([k, d, en]) => <option key={k} value={k}>{da ? d : en}</option>)}</select>
       <label htmlFor="rb">{da ? "Beskriv hvad der er sket" : "Describe what happened"}</label>
-      <textarea id="rb" className="fixed-text" maxLength={REPORT_MAX} rows={5} aria-describedby="rb-count" value={body} onChange={(e) => setBody(e.target.value.slice(0, REPORT_MAX))} />
+      <textarea id="rb" name="report-description" autoComplete="off" className="fixed-text" maxLength={REPORT_MAX} rows={5} aria-describedby={nudge && !ready ? "rb-count report-hint" : "rb-count"} aria-invalid={nudge && !ready || undefined} value={body} onChange={(e) => setBody(e.target.value.slice(0, REPORT_MAX))} />
       <p id="rb-count" className="meta char-count" aria-live="polite">{body.length}/{REPORT_MAX}</p>
       <div className="rm-head"><span className="rm-title">{da ? "Vedhæft beskeder (valgfrit)" : "Attach messages (optional)"}</span><span className="meta" aria-live="polite">{da ? `Valgt ${sel.length} af højst ${REPORT_MAX_MSGS}` : `Selected ${sel.length} of max ${REPORT_MAX_MSGS}`}</span></div>
       <p className="meta rm-sub">{da ? "Nyeste øverst. Kun dem, du markerer, sendes." : "Newest first. Only those you tick are sent."}</p>
@@ -428,8 +436,8 @@ function ReportForm({ lang, conv, msgs, who, onStep, done }: { lang: Lang; conv:
           <span className="rm-text">{meta(m)}<span className="rm-body clamp2">{text(m)}</span></span></label></li>; })}</ul>
         : <p className="meta">{da ? "Ingen beskeder i samtalen endnu." : "No messages in this conversation yet."}</p>}
       <div className="sheet-actions">
-        <button type="submit" className="wide" disabled={!ready}>{da ? "Se forhåndsvisning" : "Preview"}</button>
-        {!ready && <p className="meta sa-hint">{da ? "Skriv hvad der er sket, eller vælg mindst én besked." : "Describe what happened, or pick at least one message."}</p>}
+        <button type="submit" className="wide" aria-disabled={!ready || undefined}>{da ? "Se forhåndsvisning" : "Preview"}</button>
+        {!ready && <p id="report-hint" className={nudge ? "field-hint sa-hint" : "meta sa-hint"} role={nudge ? "alert" : undefined}>{da ? "Skriv hvad der er sket, eller vælg mindst én besked." : "Describe what happened, or pick at least one message."}</p>}
       </div>
     </form></div>);
 }
@@ -437,21 +445,24 @@ function ReportForm({ lang, conv, msgs, who, onStep, done }: { lang: Lang; conv:
 const FEEDBACK_MAX = 2000; // also enforced by the feedback Edge function and a DB check
 function FeedbackForm({ lang }: { lang: Lang }) {
   const da = lang === "da";
-  const [cat, setCat] = useState("suggestion"); const [body, setBody] = useState(""); const [state, setState] = useState<"" | "busy" | "ok" | "err" | "limit">("");
+  const [cat, setCat] = useState("suggestion"); const [body, setBody] = useState(""); const [state, setState] = useState<"" | "busy" | "ok" | "err" | "limit" | "empty">("");
   const submit = async (e: React.FormEvent) => {
-    e.preventDefault(); setState("busy");
+    e.preventDefault(); if (state === "busy") return;
+    if (!body.trim()) { setState("empty"); focusField(document.getElementById("fb")); return; }
+    setState("busy");
     let r; try { r = await callFn("feedback", { category: cat, body: body.trim() }); } catch { r = { status: 0, data: null as any }; }
     if (r.status === 200) { setState("ok"); setBody(""); } else setState(r.status === 429 ? "limit" : "err");
   };
   return (
-    <form onSubmit={submit}>
+    <form noValidate onSubmit={submit}>
       <p className="meta">{da ? "Skriv ikke samtaleindhold eller personoplysninger, du ikke vil dele. Feedback sendes til Rolff sammen med dit bruger-id – ikke dine samtaler." : "Do not write conversation content or personal data you do not want to share. Feedback is sent to Rolff with your user id – not your conversations."}</p>
       <label htmlFor="fc">{da ? "Kategori" : "Category"}</label>
       <select id="fc" value={cat} onChange={(e) => setCat(e.target.value)}><option value="suggestion">{da ? "Forslag" : "Suggestion"}</option><option value="complaint">{da ? "Klage" : "Complaint"}</option></select>
       <label htmlFor="fb">{da ? "Din feedback" : "Your feedback"}</label>
-      <textarea id="fb" className="feedback-text" rows={6} maxLength={FEEDBACK_MAX} required aria-describedby="fb-count" value={body} onChange={(e) => { setBody(e.target.value); setState(""); }} />
+      <textarea id="fb" name="feedback" autoComplete="off" className="feedback-text" rows={6} maxLength={FEEDBACK_MAX} required aria-invalid={state === "empty" || undefined} aria-describedby={state === "empty" ? "fb-count fb-hint" : "fb-count"} value={body} onChange={(e) => { setBody(e.target.value); setState(""); }} />
       <p id="fb-count" className="meta char-count" aria-live="off">{[...body].length}/{FEEDBACK_MAX}</p>
-      <div className="row end"><button type="submit" disabled={state === "busy" || !body.trim()}>{da ? "Send feedback" : "Send feedback"}</button></div>
+      {state === "empty" && <p id="fb-hint" className="field-hint" role="alert">{da ? "Skriv din feedback for at sende." : "Write your feedback to send it."}</p>}
+      <div className="row end"><button type="submit" disabled={state === "busy"} aria-disabled={!body.trim() || undefined}>{da ? "Send feedback" : "Send feedback"}</button></div>
       {state === "ok" && <p className="meta" role="status">{da ? "Tak! Din feedback er sendt." : "Thanks! Your feedback was sent."}</p>}
       {state === "limit" && <p className="err" role="alert">{da ? "Du har sendt meget feedback i dag. Prøv igen i morgen." : "Too much feedback today. Try again tomorrow."}</p>}
       {state === "err" && <p className="err" role="alert">{da ? "Feedback kunne ikke gemmes." : "Could not save feedback."}</p>}
@@ -517,7 +528,7 @@ function PasswordInput(p: { id: string; lang: Lang; value: string; onChange: (v:
   const label = toggleLabel(p.lang, show);
   return (
     <div className="pw">
-      <input id={p.id} name={p.id === "p" ? "password" : "password-repeat"} type={show ? "text" : "password"} required minLength={p.minLength} autoComplete={p.autoComplete}
+      <input id={p.id} name={p.id === "p" || p.autoComplete === "current-password" ? "password" : "new-password"} type={show ? "text" : "password"} required minLength={p.minLength} autoComplete={p.autoComplete}
         autoCapitalize="none" autoCorrect="off" spellCheck={false} value={p.value} onChange={(e) => p.onChange(e.target.value)}
         aria-invalid={p.invalid || undefined} aria-describedby={p.invalid ? p.describedBy : undefined} />
       <button type="button" className="eye" aria-label={label} title={label} aria-pressed={show} aria-controls={p.id} onClick={() => setShow(!show)}>
@@ -568,7 +579,9 @@ function Home({ lang, open, invite, rename, refreshKey }: { lang: Lang; open: (c
   const now = new Date();
   return (
     <section className="convlist" aria-labelledby="convlist-title">
-      <div className="convlist-head"><h2 id="convlist-title">{t.conversations}</h2>
+      {/* The list keeps an accessible name; the visible row holds the two pills instead of a "Samtaler" heading. */}
+      <h2 id="convlist-title" className="sr-only">{t.conversations}</h2>
+      <div className="convlist-head"><DownloadWebApp lang={lang} />
         {!!convs?.length && <button type="button" className="invite-btn" aria-haspopup="dialog" onClick={invite}><InviteIcon />{da ? "Inviter person" : "Invite person"}</button>}</div>
       {convs?.length === 0 && <div className="convempty"><p><strong>{da ? "Ingen samtaler endnu." : "No conversations yet."}</strong></p>
         <p className="meta">{da ? "Inviter den person, du vil skrive med – fx den anden forælder. I får en fælles samtale, så snart invitationen er taget imod." : "Invite the person you want to write with – e.g. the other parent. You get a shared conversation as soon as the invitation is accepted."}</p>
@@ -590,7 +603,7 @@ function Home({ lang, open, invite, rename, refreshKey }: { lang: Lang; open: (c
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 /** Shared input props for invite e-mail fields: mobile keyboard shows @ and a "send" key. */
-const inviteEmailProps = { type: "email", inputMode: "email", enterKeyHint: "send", autoComplete: "off", autoCapitalize: "none", autoCorrect: "off", spellCheck: false, maxLength: 254 } as const;
+const inviteEmailProps = { name: "invitee-email", type: "email", inputMode: "email", enterKeyHint: "send", autoComplete: "off", autoCapitalize: "none", autoCorrect: "off", spellCheck: false, maxLength: 254 } as const;
 function blurActive() { const a = document.activeElement; if (a instanceof HTMLElement) a.blur(); }
 
 function InviteByEmail({ lang, done }: { lang: Lang; done: (toast: string) => void }) {
@@ -830,7 +843,7 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
           blocked ? { label: da ? "Afblokér samtale" : "Unblock conversation", run: () => { void askBlock(false); } } : { label: da ? "Blokér samtale" : "Block conversation", run: () => { void askBlock(true); }, danger: true }]} />
         {/* Search overlays the header row (no layout shift: the invite card and messages stay put). */}
           {q !== null && <div className="searchbar" role="search">
-          <input type="search" ref={searchRef} aria-label={da ? "Søg i viste beskeder" : "Search visible messages"} placeholder={da ? "Søg i viste beskeder" : "Search visible messages"} value={q} onChange={(e) => { setQ(e.target.value); setCur(0); }}
+          <input type="search" name="conversation-search" autoComplete="off" enterKeyHint="search" ref={searchRef} aria-label={da ? "Søg i viste beskeder" : "Search visible messages"} placeholder={da ? "Søg i viste beskeder" : "Search visible messages"} value={q} onChange={(e) => { setQ(e.target.value); setCur(0); }}
             onKeyDown={(e) => { if (e.key === "Enter" && hits.length) setCur((cur + (e.shiftKey ? hits.length - 1 : 1)) % hits.length); }} />
           <span className="meta count" aria-live="polite">{q.trim() ? (hits.length ? `${Math.min(cur, hits.length - 1) + 1}/${hits.length}` : "0/0") : ""}</span>
           <button className="icon" aria-label={da ? "Forrige" : "Previous"} disabled={!hits.length} onClick={() => setCur((cur + hits.length - 1) % hits.length)}><Icon d={<path d="M6 15l6-6 6 6" />} /></button>
@@ -888,17 +901,19 @@ function Members({ lang, conv, isParent, left, openWords }: { lang: Lang; conv: 
   const me = ms.find((m) => m.me);
   return (
     <div>
-      <ul className="words">{ms.map((m) => <li key={m.user_id}>
-        <span>{m.me ? (da ? "Dig" : "You") : m.label} · <strong>{roleName(m.role, da)}</strong></span>
-        {isParent && !m.me && m.role !== "parent" && <span className="row">
+      <ul className="member-list">{ms.map((m) => { const name = m.me ? (da ? "Dig" : "You") : m.label; return <li key={m.user_id}>
+        <div className="member-main">
+          <span className="member-text"><span className="member-name" title={m.me ? undefined : m.label}>{name}</span><span className="member-role">{roleName(m.role, da)}</span></span>
+          {!m.me && <button type="button" className="ghost member-settings" aria-expanded={open === m.user_id} aria-label={da ? `Indstillinger for ${m.label}` : `Settings for ${m.label}`} onClick={() => setOpen(open === m.user_id ? null : m.user_id)}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" /></svg>{da ? "Indstillinger" : "Settings"}</button>}
+        </div>
+        {isParent && !m.me && m.role !== "parent" && <div className="member-actions">
           {m.role === "writer" && <button type="button" className="ghost" onClick={() => act("set_member_role", { p_user: m.user_id, p_role: "reader" }, { title: da ? `Gør ${m.label} til "Kun læse"?` : `Make ${m.label} read only?`, body: da ? "Personen kan stadig læse med, men ikke skrive. Skriveadgang kræver en ny invitation." : "They can still read but not write. Write access needs a new invitation.", confirm: da ? "Gør til kun læse" : "Make read only", done: da ? "Rollen er ændret" : "Role changed" })}>{da ? "Gør til kun læse" : "Make read only"}</button>}
           <button type="button" className="ghost danger" onClick={() => act("remove_member", { p_user: m.user_id }, { title: da ? `Fjern ${m.label} fra samtalen?` : `Remove ${m.label}?`, body: da ? "Personen kan ikke længere se nye eller gamle beskeder her." : "They can no longer see new or old messages here.", confirm: da ? "Fjern" : "Remove", danger: true, done: da ? "Personen er fjernet" : "Person removed" })}>{da ? "Fjern" : "Remove"}</button>
-        </span>}
-        {!m.me && <button type="button" className="ghost" aria-expanded={open === m.user_id} onClick={() => setOpen(open === m.user_id ? null : m.user_id)}>{da ? "Indstillinger for denne person" : "Settings for this person"}</button>}
+        </div>}
         {open === m.user_id && <PersonSettings lang={lang} sender={m.user_id} label={m.label} openWords={openWords} />}
-      </li>)}</ul>
-      <p className="meta">{da ? "Parterne kan fjerne ekstra deltagere eller gøre en skrivende deltager til kun læse. At give skriveadgang kræver en ny invitation, som alle parter skal godkende." : "Parties can remove extra participants or make a writer read only. Granting write access needs a new invitation that all parties approve."}</p>
-      {me && <div className="row end"><button type="button" className="danger" onClick={() => act("leave_conversation", {}, { title: da ? "Forlad samtalen?" : "Leave the conversation?", body: da ? "Du kan kun komme ind igen via en ny invitation. Det, du har skrevet, bliver hos de andre." : "You can only return with a new invitation. What you wrote stays with the others.", confirm: da ? "Forlad" : "Leave", danger: true, done: da ? "Du har forladt samtalen" : "You left the conversation" })}>{da ? "Forlad samtalen" : "Leave conversation"}</button></div>}
+      </li>; })}</ul>
+      <p className="meta member-note">{da ? "Parterne kan fjerne ekstra deltagere eller gøre en skrivende deltager til kun læse. At give skriveadgang kræver en ny invitation, som alle parter skal godkende." : "Parties can remove extra participants or make a writer read only. Granting write access needs a new invitation that all parties approve."}</p>
+      {me && <div className="member-leave"><button type="button" className="danger-outline" onClick={() => act("leave_conversation", {}, { title: da ? "Forlad samtalen?" : "Leave the conversation?", body: da ? "Du kan kun komme ind igen via en ny invitation. Det, du har skrevet, bliver hos de andre." : "You can only return with a new invitation. What you wrote stays with the others.", confirm: da ? "Forlad" : "Leave", danger: true, done: da ? "Du har forladt samtalen" : "You left the conversation" })}>{da ? "Forlad samtalen" : "Leave conversation"}</button></div>}
       {err && <p className="err" role="alert">{err}</p>}
     </div>);
 }
@@ -1179,7 +1194,7 @@ function PersonSettings({ lang, sender, label, openWords }: { lang: Lang; sender
     {cur && <p role="status"><strong>{da ? "Nu: " : "Now: "}</strong>{desc(cur)}</p>}
     <fieldset><legend>{da ? "Hvor ofte må der komme en besked" : "How often messages may arrive"}</legend>
       <Choice name={`fr-${id}`} value={fr} set={setFr} opts={[["none", da ? "Ingen grænse (standard)" : "No limit (default)"], ["1", da ? "1 pr. minut" : "1 per minute"], ["5", da ? "1 pr. 5 minutter" : "1 per 5 minutes"], ["60", da ? "1 pr. time" : "1 per hour"], ["custom", da ? "Brugerdefineret" : "Custom"]]} />
-      {fr === "custom" && <><label htmlFor={`frc-${id}`}>{da ? `Minutter mellem beskeder (1–${FREQ_MAX})` : `Minutes between messages (1–${FREQ_MAX})`}</label><input id={`frc-${id}`} type="number" inputMode="numeric" min={1} max={FREQ_MAX} step={1} required value={frC} onChange={(e) => setFrC(e.target.value)} /></>}
+      {fr === "custom" && <><label htmlFor={`frc-${id}`}>{da ? `Minutter mellem beskeder (1–${FREQ_MAX})` : `Minutes between messages (1–${FREQ_MAX})`}</label><input id={`frc-${id}`} name="minutes-between" autoComplete="off" type="number" inputMode="numeric" min={1} max={FREQ_MAX} step={1} required value={frC} onChange={(e) => setFrC(e.target.value)} /></>}
     </fieldset>
     <p className="meta">{da ? "Er I flere i samtalen, gælder den længste ventetid blandt modtagerne for afsenderen. Vedhæftninger tæller som en besked. Ændringer gælder kun nye beskeder." : "With several recipients, the longest waiting time applies to the sender. Attachments count as one message. Changes apply to new messages only."}</p>
     <p className="meta">{da ? "Blokerede ord og sætninger gælder for hele denne samtale: " : "Blocked words and phrases apply to this whole conversation: "}<button type="button" className="linkish" onClick={openWords}>{da ? "Blokerede ord" : "Blocked words"}</button></p>
@@ -1194,24 +1209,30 @@ if (typeof window !== "undefined") {
   window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); deferredPrompt = e; a2hsListeners.forEach((f) => f()); });
   window.addEventListener("appinstalled", () => { localStorage.setItem(A2HS_KEY, "installed"); deferredPrompt = null; a2hsListeners.forEach((f) => f()); });
 }
-function InstallPrompt({ lang }: { lang: Lang }) {
-  const da = lang === "da"; const [, re] = useState(0); const [hide, setHide] = useState(false);
-  useEffect(() => { const f = () => re((x) => x + 1); a2hsListeners.add(f); return () => { a2hsListeners.delete(f); }; }, []);
+/** Front-page "Download webapp" pill. Android/Chrome: the browser's own install prompt.
+ *  iOS Safari and other browsers: a short in-app guide. Hidden once Rolff runs as an installed app. */
+function DownloadWebApp({ lang }: { lang: Lang }) {
+  const da = lang === "da"; const [, re] = useState(0); const [guide, setGuide] = useState<null | "ios" | "other">(null);
+  useEffect(() => { const f = () => re((x) => x + 1); a2hsListeners.add(f); const mq = window.matchMedia?.("(display-mode: standalone)"); mq?.addEventListener?.("change", f); return () => { a2hsListeners.delete(f); mq?.removeEventListener?.("change", f); }; }, []);
   const standalone = window.matchMedia?.("(display-mode: standalone)").matches || (navigator as any).standalone === true;
-  const kind = isNative() ? "none" : a2hsPlatform(navigator.userAgent, standalone, !!deferredPrompt);
-  if (hide || kind === "none" || !shouldAsk(localStorage.getItem(A2HS_KEY), Date.now())) return null;
-  const later = () => { localStorage.setItem(A2HS_KEY, `later:${Date.now()}`); setHide(true); };
-  const never = () => { localStorage.setItem(A2HS_KEY, "never"); setHide(true); };
-  const install = async () => { const p = deferredPrompt; if (!p) return; p.prompt(); const r = await p.userChoice.catch(() => null); deferredPrompt = null; if (r?.outcome === "accepted") localStorage.setItem(A2HS_KEY, "installed"); setHide(true); };
-  return (<section className="card a2hs" aria-labelledby="a2hs-h">
-    <div className="row" style={{ alignItems: "center", gap: 12 }}><img src="./icons/rolff-192.png" alt="" width={48} height={48} style={{ borderRadius: 12 }} />
-      <h2 id="a2hs-h" style={{ margin: 0, fontSize: 18 }}>{da ? "Vil du tilføje Rolff som ikon på hjemmeskærmen?" : "Add Rolff to your home screen?"}</h2></div>
-    {kind === "ios" ? <p>{da ? "Tryk på Del-knappen (firkant med pil op) nederst i Safari, og vælg “Føj til hjemmeskærm”." : "Tap the Share button (square with arrow) in Safari, then “Add to Home Screen”."}</p>
-      : <p>{da ? "Så åbner Rolff som en app – uden adresselinje." : "Rolff then opens like an app."}</p>}
-    <div className="row end">
-      <button type="button" className="ghost" onClick={never}>{da ? "Spørg ikke igen" : "Don't ask again"}</button>
-      <button type="button" className="ghost" onClick={later}>{da ? "Ikke nu" : "Not now"}</button>
-      {kind === "prompt" && <button type="button" onClick={install}>{da ? "Installér" : "Install"}</button>}
-    </div>
-  </section>);
+  if (isNative() || standalone || localStorage.getItem(A2HS_KEY) === "installed") return null;
+  const kind = a2hsPlatform(navigator.userAgent, false, !!deferredPrompt);
+  const install = async () => {
+    const p = deferredPrompt;
+    if (!p) { setGuide(kind === "ios" ? "ios" : "other"); return; }
+    p.prompt(); const r = await p.userChoice.catch(() => null); deferredPrompt = null;
+    if (r?.outcome === "accepted") localStorage.setItem(A2HS_KEY, "installed");
+    re((x) => x + 1);
+  };
+  return <>
+    <button type="button" className="invite-btn webapp-btn" aria-haspopup={deferredPrompt ? undefined : "dialog"} aria-label={da ? "Download webapp – installér Rolff på hjemmeskærmen" : "Download web app – install Rolff on your home screen"} onClick={() => void install()}>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14" /></svg>{da ? "Download webapp" : "Download web app"}</button>
+    {guide && <SheetView title={da ? "Download webapp" : "Download web app"} close={() => setGuide(null)} lang={lang}>
+      <p className="push-lead">{da ? "Læg Rolff på hjemmeskærmen, så den åbner som en app." : "Add Rolff to your home screen so it opens like an app."}</p>
+      {guide === "ios"
+        ? <ol className="install-steps"><li>{da ? "Tryk på Del-knappen (firkant med pil op) i Safari." : "Tap the Share button (square with an arrow) in Safari."}</li><li>{da ? "Vælg “Føj til hjemmeskærm”." : "Choose “Add to Home Screen”."}</li><li>{da ? "Tryk “Tilføj”." : "Tap “Add”."}</li></ol>
+        : <ol className="install-steps"><li>{da ? "Åbn browserens menu (⋮ eller ⋯)." : "Open the browser menu (⋮ or ⋯)."}</li><li>{da ? "Vælg “Installér app” eller “Føj til startskærm”." : "Choose “Install app” or “Add to Home screen”."}</li><li>{da ? "Findes punktet ikke, så åbn Rolff i Chrome eller Safari." : "If it is missing, open Rolff in Chrome or Safari."}</li></ol>}
+      <div className="sheet-actions"><button type="button" onClick={() => setGuide(null)}>{da ? "OK" : "OK"}</button></div>
+    </SheetView>}
+  </>;
 }

@@ -209,7 +209,6 @@ button.danger{background:#c0392b;color:#fff;border-color:#c0392b}button.danger:d
 
 .receive-fields{border:0;padding:0;margin:0;min-width:0}.timezone-summary{justify-content:space-between;margin:8px 0}.timezone-current{flex:1;min-width:0;overflow-wrap:anywhere}.timezone-current strong{display:block;font-size:16px}.timezone-choices{border:1px solid var(--border);border-radius:10px;padding:8px 12px;margin:8px 0;min-width:0}.timezone-choices legend{font-size:14px}.timezone-choices select{font:inherit;max-width:100%}.timezone-choices .notice p{margin:0 0 8px}
 
-@media(max-width:380px){.times .wrow{grid-template-columns:minmax(68px,.9fr) minmax(0,1.2fr) 8px minmax(0,1.2fr) 40px;gap:4px}}
 
 /* Chat = fixed-height column (WhatsApp-like): only .msgs scrolls, composer stays pinned at the bottom. */
 .wrap.chat-wrap{height:100vh;height:100dvh;height:var(--app-h,100dvh);min-height:0;overflow:hidden;padding-bottom:calc(8px + env(safe-area-inset-bottom))}
@@ -328,3 +327,108 @@ textarea.fixed-text{font:inherit;font-size:16px;line-height:1.4;resize:none;heig
 .rs-quotes{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
 .rs-quotes li{display:flex;flex-direction:column;gap:2px;border-left:3px solid var(--border);padding:2px 0 2px 10px}
 .rs-foot{font-size:12px;margin:8px 0 0}
+
+/* ===== Dialog & sheet polish (keyboard, stacking, hierarchy, explained buttons) ===== */
+/* While any modal/sheet is open the chat composer is hidden (it must never show above or around a dialog).
+   visibility keeps the layout stable; dialogs rendered inside the composer stay visible. */
+:root:has(dialog[open]) .chat-wrap .card.composer,:root:has(.overlay) .chat-wrap .card.composer{visibility:hidden}
+.chat-wrap .card.composer dialog[open]{visibility:visible}
+/* Keyboard: bottom sheets/dialogs end at the top of the keyboard and never grow taller than the visible area. */
+.overlay{bottom:var(--kbd-inset,0px)}
+.overlay:not(.anchored-overlay) .sheet{max-height:min(88dvh,calc(var(--vv-h,100dvh) - 16px - env(safe-area-inset-top)))}
+:root[data-keyboard] .overlay:not(.anchored-overlay) .sheet{padding-bottom:12px}
+.contact-alias-dialog{bottom:var(--kbd-inset,0px);max-height:min(88dvh,calc(var(--vv-h,100dvh) - 16px - env(safe-area-inset-top)))}
+:root[data-keyboard] .contact-alias-dialog{padding-bottom:12px}
+dialog.composer-upgrade,dialog.blocking-dialog{bottom:var(--kbd-inset,0px);max-height:min(85dvh,calc(var(--vv-h,100dvh) - 32px));overflow:auto}
+.contact-alias-dialog::backdrop,.composer-upgrade::backdrop{background:#000b}
+.overlay{background:rgba(0,0,0,.55)}
+/* Sticky sheet header with a clear title; a hairline appears once the content scrolls under it. */
+.sheethead{padding-bottom:6px;margin-bottom:6px;border-bottom:1px solid transparent;transition:border-color .15s}
+.sheethead h2{font-size:20px;font-weight:700;line-height:1.25;min-width:0;overflow-wrap:anywhere}
+.sheet[data-scrolled] .sheethead,.contact-alias-dialog[data-scrolled] .sheethead{border-bottom-color:var(--border)}
+.sheet-subhead{font-size:15px;font-weight:650;margin:18px 0 6px;color:var(--text)}
+/* Buttons that are "not ready yet" stay tappable and explain why (aria-disabled instead of disabled). */
+button[aria-disabled=true]{opacity:.55}
+.sheet-actions button[aria-disabled=true]{opacity:1;background:color-mix(in srgb,var(--muted) 22%,var(--card));border-color:transparent;color:var(--muted)}
+.field-hint{margin:6px 0 0;font-size:13.5px;line-height:1.4;color:#b42318;display:flex;gap:6px;align-items:flex-start}
+.field-hint::before{content:"!";flex:none;display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:#b42318;color:#fff;font-size:12px;font-weight:700;margin-top:1px}
+[data-theme=dark] .field-hint{color:#ffb4ab}[data-theme=dark] .field-hint::before{background:#ffb4ab;color:#3a0b06}
+.needs-attention{background:color-mix(in srgb,#b42318 10%,transparent);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,#b42318 60%,transparent)}
+[data-theme=dark] .needs-attention{background:color-mix(in srgb,#ffb4ab 10%,transparent);box-shadow:inset 0 0 0 1.5px color-mix(in srgb,#ffb4ab 55%,transparent)}
+input[aria-invalid=true],textarea[aria-invalid=true]{border-color:#b42318}[data-theme=dark] input[aria-invalid=true],[data-theme=dark] textarea[aria-invalid=true]{border-color:#ffb4ab}
+/* Quiet text actions. */
+button.text-link,button.text-danger{background:transparent;border:0;min-height:44px;padding:8px 6px;font-weight:600;font-size:15px;border-radius:8px}
+button.text-link{color:var(--accent)}
+button.text-danger{color:#c0392b}[data-theme=dark] button.text-danger{color:#ff8a80}
+button.text-link:hover{background:color-mix(in srgb,var(--accent) 10%,transparent)}button.text-danger:hover{background:color-mix(in srgb,#c0392b 10%,transparent)}
+button.danger-outline{background:transparent;color:#c0392b;border:1.5px solid color-mix(in srgb,#c0392b 70%,transparent);width:100%;font-weight:600}
+[data-theme=dark] button.danger-outline{color:#ff8a80;border-color:color-mix(in srgb,#ff8a80 60%,transparent)}
+button.danger-outline:hover{background:color-mix(in srgb,#c0392b 8%,transparent)}
+.sheet-danger-zone{margin-top:22px;padding-top:14px;border-top:1px solid var(--border);display:flex;justify-content:center}
+/* Two-button action rows that never wrap at 360px (da + en). */
+.dialog-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
+.dialog-actions button{width:100%;min-height:48px;white-space:nowrap;font-weight:600;padding:8px 10px}
+.contact-alias-dialog .dialog-actions button.ghost{border-color:var(--border);color:var(--text)}
+.alias-reset{margin:4px 0 0 -6px}
+.contact-alias-dialog input{width:100%;box-sizing:border-box}
+/* Participants and roles */
+.member-list{list-style:none;margin:4px 0 0;padding:0}
+.member-list > li{padding:10px 0;border-bottom:1px solid color-mix(in srgb,var(--border) 80%,transparent)}
+.member-main{display:flex;align-items:center;gap:8px;min-width:0}
+.member-text{flex:1;min-width:0;display:flex;flex-direction:column}
+.member-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:16px;line-height:1.3}
+.member-role{font-size:13px;color:var(--muted);line-height:1.35}
+.member-settings{flex:none;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;min-height:40px;padding:6px 12px;font-size:14px;border-radius:999px;border-color:var(--border);color:var(--text)}
+.member-settings[aria-expanded=true]{border-color:var(--accent);color:var(--accent)}
+.member-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.member-actions button{min-height:36px;padding:4px 12px;font-size:14px}
+.member-note{margin:14px 0 0;font-size:13px;line-height:1.45}
+.member-leave{margin-top:22px;padding-top:16px;border-top:1px solid var(--border)}
+/* Settings rows with a switch (Notifikationer) */
+.push-lead{margin:2px 0 14px;font-size:15px;line-height:1.45;color:var(--text)}
+.setting-row{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--border);border-radius:14px;background:color-mix(in srgb,var(--bg) 45%,var(--card))}
+.setting-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.setting-title{font-size:16px;font-weight:600;line-height:1.3}
+.setting-status{font-size:13.5px;color:var(--muted)}.setting-status.is-on{color:var(--accent);font-weight:600}.setting-status.is-blocked{color:#b42318}[data-theme=dark] .setting-status.is-blocked{color:#ffb4ab}
+button.toggle-switch{flex:none;position:relative;width:52px;min-width:52px;height:32px;min-height:32px;padding:0;border-radius:999px;border:0;background:color-mix(in srgb,var(--muted) 45%,var(--card));transition:background .15s}
+button.toggle-switch::after{content:"";position:absolute;inset:-6px}
+button.toggle-switch .switch-knob{position:absolute;top:3px;left:3px;width:26px;height:26px;border-radius:50%;background:#fff;box-shadow:0 1px 3px #0005;transition:transform .15s}
+button.toggle-switch[aria-checked=true]{background:var(--accent)}button.toggle-switch[aria-checked=true] .switch-knob{transform:translateX(20px)}
+button.toggle-switch:disabled{opacity:.45}
+@media (prefers-reduced-motion:reduce){button.toggle-switch,button.toggle-switch .switch-knob{transition:none}}
+.push-renew{margin:4px 0 0 -6px;font-size:14px}
+.push-help{margin-top:12px}
+.device-list{list-style:none;margin:0;padding:0}
+.device-list li{display:flex;align-items:center;gap:10px;min-height:52px;border-bottom:1px solid color-mix(in srgb,var(--border) 80%,transparent)}
+.device-text{flex:1;min-width:0;display:flex;flex-direction:column}
+.device-name{display:flex;align-items:center;gap:8px;font-size:15px;flex-wrap:wrap}
+.tag{font-size:12px;font-weight:600;padding:1px 8px;border-radius:999px;background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent)}
+details.more{margin-top:16px;border:1px solid var(--border);border-radius:12px;padding:0 12px}
+details.more summary{min-height:44px;display:flex;align-items:center;cursor:pointer;font-size:14.5px;font-weight:600;color:var(--accent);list-style:none}
+details.more summary::-webkit-details-marker{display:none}
+details.more summary::after{content:"";margin-left:auto;margin-right:4px;width:8px;height:8px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);transition:transform .15s}
+details.more[open] summary::after{transform:rotate(-135deg)}
+details.more p{font-size:13.5px;line-height:1.5;color:var(--muted);margin:0 0 10px}
+/* Modtagetider */
+.timezone-summary{display:flex;align-items:center;gap:10px;margin:10px 0 4px;padding:10px 12px;border:1px solid var(--border);border-radius:12px}
+.timezone-current{display:flex;flex-direction:column;gap:1px;min-width:0;flex:1}
+.timezone-current strong{font-size:15.5px;line-height:1.3}
+.timezone-note{font-size:12.5px;line-height:1.35;color:var(--muted)}
+button.compact-btn{flex:none;min-height:40px;padding:6px 14px;font-size:15px;white-space:nowrap}
+.times .wrow{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 12px minmax(0,1fr) 44px;gap:6px;border-radius:10px}
+.times .wrow{padding:3px}
+.times .wrow.needs-attention{padding:3px;margin:0}
+.wrow button.rm{width:44px;min-width:44px;min-height:44px;border-radius:50%}
+.wnote{margin:0 0 8px}
+.field-hint-block{margin:4px 0 10px;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.field-hint-block .field-hint{margin:0}
+.times-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px}
+.times-actions button{min-height:48px;width:100%;white-space:nowrap;font-weight:600}
+.times-saved{text-align:right;margin:6px 0 0}
+/* Front page: two pills on one row (Download webapp = outlined secondary, Inviter person = primary). */
+.convlist-head{justify-content:flex-end;flex-wrap:nowrap;gap:8px;padding:2px 16px 6px}
+.convlist-head .invite-btn{white-space:nowrap;padding:8px 14px 8px 10px;gap:6px;font-size:15px}
+.invite-btn.webapp-btn{background:transparent;color:var(--accent);border:1.5px solid var(--accent);margin-right:auto}
+[data-theme=dark] .invite-btn.webapp-btn{color:var(--accent)}
+@media (max-width:370px){.convlist-head .invite-btn{font-size:14px;padding:8px 11px 8px 8px}}
+.install-steps{margin:0 0 8px;padding-left:22px;line-height:1.5}.install-steps li{margin:0 0 8px}

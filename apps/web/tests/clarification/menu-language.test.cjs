@@ -91,7 +91,10 @@ test('Privatliv og sletning: equal headings, themed checkboxes, delete last in a
 test('front page: visible "Inviter person" button above the list opens the same top invite sheet', async () => {
   const f = await env(); const { d } = f; try {
     const head = d.querySelector('.convlist-head'); assert.ok(head, 'list header');
-    const btn = head.querySelector('button.invite-btn'); assert.ok(btn); assert.equal(btn.textContent.trim(), 'Inviter person');
+    assert.ok(!head.querySelector('h2'), 'no visible Samtaler heading in the row'); assert.ok(d.querySelector('#convlist-title.sr-only'), 'list keeps an accessible name');
+    const web = head.querySelector('button.webapp-btn'); assert.ok(web, 'Download webapp pill'); assert.equal(web.textContent.trim(), 'Download webapp'); assert.ok(web.getAttribute('aria-label'));
+    assert.ok(web.compareDocumentPosition(head.querySelector('button.invite-btn:not(.webapp-btn)')) & 4, 'webapp pill left of Inviter person');
+    const btn = head.querySelector('button.invite-btn:not(.webapp-btn)'); assert.ok(btn); assert.equal(btn.textContent.trim(), 'Inviter person');
     assert.ok(btn.compareDocumentPosition(d.querySelector('.convitems')) & 4, 'button is before the list');
     assert.equal(btn.querySelector('svg').getAttribute('aria-hidden'), 'true');
     await click(btn); await delay(60);

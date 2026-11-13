@@ -25,10 +25,11 @@ export class PushController {
  }
  private snapshot(){if(!this.owner)throw Error("auth_changed");return {owner:{...this.owner},epoch:this.epoch};}
  private check(s:{owner:PushOwner;epoch:number}){if(s.epoch!==this.epoch || s.owner.id!==this.owner?.id)throw Error("auth_changed");}
- async state():Promise<{state:PushState;active:boolean}> {
+ async state():Promise<{state:PushState;active:boolean;binding:string|null}> {
    const s=this.snapshot();const state:PushState=await this.ports.rpc(s.owner,"my_push_state");this.check(s);
    await this.identityTask;const b=await this.ports.current();this.check(s);
-   return {state,active:!!(state.available && state.enabled && this.ports.permission()==="granted" && b?.owner===s.owner.id && b?.binding && state.devices.some(d=>d.id===b.binding && Date.parse(d.expires_at)>Date.now()))};
+   // `binding` only identifies "this device" in the settings list; it never grants anything.
+   return {state,binding:b?.owner===s.owner.id?b.binding??null:null,active:!!(state.available && state.enabled && this.ports.permission()==="granted" && b?.owner===s.owner.id && b?.binding && state.devices.some(d=>d.id===b.binding && Date.parse(d.expires_at)>Date.now()))};
  }
  async decline(){const s=this.snapshot();await this.ports.rpc(s.owner,"decline_my_push");this.check(s);}
  /** Called only by the explicit Ja / Enable click. Permission request occurs before any await. */

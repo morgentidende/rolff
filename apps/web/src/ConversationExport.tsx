@@ -62,7 +62,7 @@ export function ConversationExport({ lang, conv, plan, ownEmail, openPlans, call
     <fieldset className="export-fieldset"><legend>{da ? "Hvem skal have den?" : "Who should receive it?"}</legend>
       <label className="choice"><input type="radio" name="who" checked={who === "self"} onChange={() => setWho("self")} /> {da ? "Min e-mail" : "My email"} <span className="meta">({ownEmail})</span></label>
       <label className="choice"><input type="radio" name="who" checked={who === "other"} onChange={() => setWho("other")} /> {da ? "En anden e-mail (fx advokat)" : "Another email (e.g. lawyer)"}</label>
-      {who === "other" && <><label htmlFor="export-email" className="sr-only">{da ? "Modtagerens e-mail" : "Recipient email"}</label><input id="export-email" type="email" inputMode="email" maxLength={254} placeholder={da ? "navn@advokat.dk" : "name@example.com"} value={other} onChange={(e) => setOther(e.target.value)} />
+      {who === "other" && <><label htmlFor="export-email" className="sr-only">{da ? "Modtagerens e-mail" : "Recipient email"}</label><input id="export-email" name="recipient-email" type="email" inputMode="email" autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} maxLength={254} placeholder={da ? "navn@advokat.dk" : "name@example.com"} value={other} onChange={(e) => setOther(e.target.value)} />
         {other && !validRecipient(other) && <p className="err">{da ? "Tjek e-mailadressen." : "Check the email address."}</p>}</>}
     </fieldset>
     <div className="row end"><button type="submit" disabled={!canNext}>{da ? "Fortsæt" : "Continue"}</button></div>
