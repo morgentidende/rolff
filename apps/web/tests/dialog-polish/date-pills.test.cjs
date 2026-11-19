@@ -14,11 +14,13 @@ function iso(y, mo, d, h, mi) {
 
 function fakeMsgs() {
   // Several local calendar days so the conversation is long enough to scroll.
+  // Relative to today so the test does not depend on the calendar date it runs on.
+  const ago = (n) => { const t = new Date(); t.setDate(t.getDate() - n); return [t.getFullYear(), t.getMonth(), t.getDate()]; };
   const days = [
-    [2026, 10, 6, ['En opdigtet fredagsbesked.', 'En anden opdigtet fredagsbesked, lidt længere så der er noget at rulle forbi.']],
-    [2026, 10, 9, ['Mandagens første testbesked.', 'Ok', 'En kort test.', 'Endnu en opdigtet besked mandag eftermiddag.']],
-    [2026, 10, 12, ['En opdigtet besked fra i går.', 'Svar på den opdigtede besked.']],
-    [2026, 10, 13, ['En opdigtet besked fra i dag.']],
+    [...ago(3), ['En opdigtet fredagsbesked.', 'En anden opdigtet fredagsbesked, lidt længere så der er noget at rulle forbi.']],
+    [...ago(2), ['Mandagens første testbesked.', 'Ok', 'En kort test.', 'Endnu en opdigtet besked mandag eftermiddag.']],
+    [...ago(1), ['En opdigtet besked fra i går.', 'Svar på den opdigtede besked.']],
+    [...ago(0), ['En opdigtet besked fra i dag.']],
   ];
   const out = [];
   let n = 1;
@@ -55,7 +57,7 @@ test('Day groups wrap each sticky pill; pending banner stays outside the scroll 
     assert.ok(groups.every((g) => g.querySelectorAll(':scope > .day-sep').length === 1), 'one pill per day');
     assert.equal(msgs.querySelectorAll(':scope > .day-sep').length, 0, 'pills are not direct children of the scroller');
     const labels = groups.map((g) => g.querySelector('.day-sep').getAttribute('aria-label'));
-    assert.ok(labels.includes('I dag') && labels.includes('I går') && labels.includes('Mandag'), labels.join(','));
+    assert.ok(labels.includes('I dag') && labels.includes('I går') && labels.filter((l) => /dag$/.test(l) && l !== 'I dag').length === 2, labels.join(','));
     const pend = d.querySelector('.pendbar');
     assert.ok(pend, 'pending banner is shown');
     assert.match(pend.textContent, /2 afventer godkendelse/);

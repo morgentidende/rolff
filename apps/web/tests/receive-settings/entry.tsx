@@ -7,8 +7,11 @@ function storage() { const m = new Map<string, string>(); return { getItem: (k: 
 Object.defineProperty(window, 'localStorage', { value: storage(), configurable: true });
 Object.defineProperty(window, 'sessionStorage', { value: storage(), configurable: true });
 Object.defineProperty(window, 'indexedDB', { value: { open() { throw Error('Synthetic fixture: real cache disabled'); }, deleteDatabase() { const r: any = {}; queueMicrotask(() => r.onsuccess?.()); return r; } }, configurable: true });
-localStorage.setItem('lang', 'da');
+const params = new URLSearchParams(location.search);
+localStorage.setItem('lang', params.get('lang') === 'en' ? 'en' : 'da');
+if (params.get('theme') === 'dark' || params.get('theme') === 'light') localStorage.setItem('theme', params.get('theme'));
 localStorage.setItem('nameHintSeen', '1');
+localStorage.setItem('convHintDismissed', '1');
 let root = createRoot(document.getElementById('root')!);
 const strict = new URLSearchParams(location.search).has('strict');
 root.render(strict ? <React.StrictMode><App /></React.StrictMode> : <App />);

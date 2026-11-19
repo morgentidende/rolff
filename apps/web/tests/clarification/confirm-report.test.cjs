@@ -9,7 +9,7 @@ test('conversation ⋮ menu holds only conversation actions, Rapportér + Bloké
   const f = await env(); const { d } = f; try {
     await openChat(d);
     const items = await menu(d);
-    assert.deepEqual(items.map(b => b.textContent), ['Deltagere og roller', 'Kontaktens kaldenavn', 'Eksportér samtale', 'Blokeringer', 'Rapportér', 'Blokér samtale']);
+    assert.deepEqual(items.map(b => b.textContent), ['Modtagetider', 'Deltagere og roller', 'Kontaktens kaldenavn', 'Eksportér samtale', 'Blokeringer', 'Rapportér', 'Blokér samtale']);
     const sep = d.querySelector('.menu [role=separator]'); assert.ok(sep && sep.nextElementSibling.textContent === 'Rapportér');
     assert.ok(items.at(-1).classList.contains('danger'));
   } finally { await f.close(); }
@@ -18,7 +18,8 @@ test('conversation ⋮ menu holds only conversation actions, Rapportér + Bloké
 test('front-page ⋮ keeps every app-wide item', async () => {
   const f = await env(); const { d } = f; try {
     const labels = (await menu(d)).map(b => b.textContent);
-    for (const l of ['Sprog', 'Tema', 'Modtagetider', 'FAQ', 'Abonnement', 'Konto (e-mail og adgangskode)', 'Privatliv og sletning', 'Privatlivspolitik', 'Feedback', 'Inviter person', 'Log ud']) assert.ok(labels.includes(l), l);
+    for (const l of ['Sprog', 'Tema', 'FAQ', 'Abonnement', 'Konto (e-mail og adgangskode)', 'Privatliv og sletning', 'Privatlivspolitik', 'Feedback', 'Inviter person', 'Log ud']) assert.ok(labels.includes(l), l);
+    assert.ok(!labels.includes('Modtagetider'), 'Modtagetider moved to the conversation menu');
   } finally { await f.close(); }
 });
 
