@@ -1,3 +1,4 @@
+import { fixExclamations, houseCheck, HOUSE_EXPLANATION } from "../_shared/houseRules.ts";
 import { checkTopics, validateFilterSnapshot } from "../_shared/topics.ts";
 // POST {conversation_id, idempotency_key, file_b64, file_name, caption?, alt?}
 // Same pipeline as send-message, for one image/PDF: auth (sender must have plan 'text_attachments')
@@ -104,8 +105,15 @@ Deno.serve(async (req) => {
     }
   }
 
-  // Files need a provider that accepts images/PDF: OpenAI only. Anything else fails closed.
   const lang = await resolveSenderLang(input?.lang, async () => (await admin.rpc("locale_of", { p_uid: uid })).data);
+  // House rules (swear words, exclamation marks) on the caption: deterministic, before any model call.
+  const capHouse = caption ? houseCheck(caption) : null;
+  if (capHouse) {
+    await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "block", p_reason: "other_harmful" });
+    return json({ status: "blocked", reason_code: "other_harmful", spans: capHouse.spans, suggestion: capHouse.profanity.length ? "" : fixExclamations(caption), explanation: HOUSE_EXPLANATION[capHouse.kind][lang] }, 200);
+  }
+
+  // Files need a provider that accepts images/PDF: OpenAI only. Anything else fails closed.
   const apiKey = Deno.env.get("OPENAI_API_KEY"); const base = Deno.env.get("OPENAI_BASE_URL") ?? "https://eu.api.openai.com/v1";
   const model = Deno.env.get("OPENAI_MODEL") ?? "gpt-6-luna";
   if (Deno.env.get("MODERATION_PROVIDER") !== "openai" || !apiKey || !/^https:\/\/([a-z0-9-]+\.)*openai\.com\/v1\/?$/.test(base)) {
@@ -137,6 +145,12 @@ Deno.serve(async (req) => {
   if (w) { await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "block", p_reason: "rule" }); return json({ status: "blocked_word", word: w, where: "file", meta }, 200); }
   const pre = prefilter(res.transcript) ?? prefilter(res.transcript + "\n" + name);
   if (pre) { await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "block", p_reason: pre.reason_code }); return json({ status: "blocked", reason_code: pre.reason_code, spans: pre.spans, suggestion: pre.suggestion, meta }, 200); }
+  // Swear words in the text found in the file (and the file name): deterministic. Exclamation marks are only checked in the caption.
+  const fileHouse = houseCheck(res.transcript + "\n" + name, { exclamations: false });
+  if (fileHouse) {
+    await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "block", p_reason: "other_harmful" });
+    return json({ status: "blocked", reason_code: "other_harmful", spans: fileHouse.spans, suggestion: "", explanation: HOUSE_EXPLANATION.profanity[lang], meta }, 200);
+  }
   if (res.decision === "clarify") {
     await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "clarify", p_reason: "unclear_meaning" });
     return json({ status: "clarification_required", meta }, 200);
