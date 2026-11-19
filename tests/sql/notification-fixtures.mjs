@@ -15,7 +15,7 @@ export async function notificationFixture(db,sender,recipient){
  const issue=async(text,revision)=>(await service("select issue_reply_approval_v3($1,$2,$3,'synthetic','mock-no-model-call',$4,null) id",[sender,conv,await digest(text),revision]))[0].id;
  const commit=async(id,text,key)=>(await service('select * from commit_message_reply($1,$2,$3,$4,$5,null)',[id,sender,conv,text,key]))[0];
  let sequence=0;
- const message=async()=>{const text=`Synthetic notification message ${++sequence}`;await service('select * from prepare_send($1,$2,$3)',[sender,conv,text]);const p=await snapshot();return(await commit(await issue(text,p.revision),text,`synthetic-notification-${sequence}`)).message_id;};
+ const message=async()=>{const text=`Synthetic notification message ${++sequence}`;await service('select * from prepare_send($1,$2,$3)',[sender,conv,text]);const p=await snapshot();return(await commit(await issue(text,p.revision),text,`synthetic-notification-${conv}-${sequence}`)).message_id;};
  const window=async(enabled=true)=>{const s=(await owner(recipient,'select get_my_receive_settings(null) s'))[0].s;await owner(recipient,"select save_my_receive_settings($1,$3::jsonb,'fixed','UTC',null,$2)",[enabled,s.revision,enabled?closedWindows():'[]']);};
  return{conv,owner,service,message,window,snapshot,issue,commit,digest};
 }

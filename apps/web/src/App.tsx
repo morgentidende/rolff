@@ -15,6 +15,8 @@ import { isPendingSend, pendingSeconds, soonestPending } from "./delayedSend";
 import { Toast, showToast } from "./toast";
 import { ConfirmHost, confirmDialog } from "./confirmDialog";
 import { PolicyView } from "./PolicyView";
+import { MuteDialog } from "./MuteDialog";
+import { activeMute, muteMenuLabel, muteUntilText, unmuteLabel, type MuteDuration, type MuteRow } from "./muteModel";
 import { onDeepLink } from "./native/deepLinks";
 import { isNative } from "./native/platform";
 import { rectOf, useAnchoredPlacement, visibleViewport } from "./anchoredPosition";
@@ -571,12 +573,15 @@ const InviteIcon = () => <svg width="20" height="20" viewBox="0 0 24 24" aria-hi
 function Home({ lang, open, invite, rename, refreshKey }: { lang: Lang; open: (c: Conv) => void; invite: () => void; rename: (contacts: Other[]) => void; refreshKey: number }) {
   const t = strings[lang]; const da = lang === "da";
   const [convs, setConvs] = useState<ConvRow[] | null>(null);
+  // Own mutes only: shows a small muted icon on the row (nobody else can see it).
+  const [mutes, setMutes] = useState<MuteRow[]>([]);
   // The press-and-hold tip is shown until it is dismissed or the gesture has been used once.
   const [hintGone, setHintGone] = useState(() => { try { return localStorage.getItem(CONV_HINT_KEY) === "1"; } catch { return false; } });
   const dropHint = () => { setHintGone(true); try { localStorage.setItem(CONV_HINT_KEY, "1"); } catch { /* private mode */ } };
   // v2 adds the latest visible message (server-filtered: own or released to me) and sorts by it.
   // Falls back to v1 while the v2 migration is not deployed.
   const load = useCallback(async () => {
+    void supabase.rpc("my_conversation_mutes").then(({ data, error }: { data: unknown; error: unknown }) => { if (!error && Array.isArray(data)) setMutes(data as MuteRow[]); }, () => {});
     const v2 = await supabase.rpc("list_my_conversations_v2");
     if (!v2.error) { setConvs((v2.data as ConvRow[]) ?? []); return; }
     const { data } = await supabase.rpc("list_my_conversations"); setConvs((data as ConvRow[]) ?? []);
@@ -598,7 +603,7 @@ function Home({ lang, open, invite, rename, refreshKey }: { lang: Lang; open: (c
           <li key={c.id} className="convrow">
             <ColorDot lang={lang} conv={c} label={d.title} initial={d.initial} changed={(col) => setConvs((convs ?? []).map((x) => x.id === c.id ? { ...x, color: col } : x))} />
             <ContactButton open={() => open(c)} rename={() => { dropHint(); rename(c.others); }}>
-              <span className="convtop"><span className="convname">{d.title}</span>{time && <span className="convtime">{time}</span>}</span>
+              <span className="convtop"><span className="convname">{d.title}</span>{activeMute(mutes, c.id) && <span className="convmuted" role="img" aria-label={da ? "Lydløs" : "Muted"}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8.7 3A6 6 0 0 1 18 8c0 2.4.5 4.1 1.1 5.2M6.3 6.3C6.1 6.8 6 7.4 6 8c0 7-3 9-3 9h14M10.3 21a1.9 1.9 0 0 0 3.4 0M2 2l20 20" /></svg></span>}{time && <span className="convtime">{time}</span>}</span>
               <span className={prev ? "convprev" : "convprev empty"}>{prev ?? d.status ?? (c.last_at === undefined ? "" : (da ? "Ingen beskeder endnu" : "No messages yet"))}</span>
             </ContactButton>
           </li>); })}
@@ -722,6 +727,24 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
     return () => { live = false; window.removeEventListener("focus", onFocus); clearInterval(i); };
   }, [conv.id]);
   const [delayedOn, setDelayedOn] = useState(false);
+  // "Lydløs": the caller's own mute for this conversation (server-side, never visible to the others).
+  const [muteRows, setMuteRows] = useState<MuteRow[]>([]); const [muteOpen, setMuteOpen] = useState(false);
+  const loadMute = useCallback(async () => { const { data, error } = await supabase.rpc("my_conversation_mutes"); if (!error && Array.isArray(data)) setMuteRows(data as MuteRow[]); }, []);
+  useEffect(() => { void loadMute(); }, [loadMute, conv.id]);
+  const mute = activeMute(muteRows, conv.id);
+  const applyMute = async (d: MuteDuration) => {
+    const { data, error } = await supabase.rpc("set_my_conversation_mute", { conv: conv.id, p_duration: d });
+    if (error) { showToast(da ? "Kunne ikke gøre samtalen lydløs. Prøv igen." : "Could not mute the conversation. Try again.", { at: "top", ms: 3000 }); return; }
+    const r = (data ?? {}) as { mute_until?: string | null; always?: boolean };
+    setMuteRows((rows) => [...rows.filter((x) => x.conversation_id !== conv.id), { conversation_id: conv.id, mute_until: r.mute_until ?? null, always: r.always ?? d === "always" }]);
+    showToast(r.mute_until ? `${da ? "Lydløs til" : "Muted until"} ${muteUntilText(r.mute_until, da)}` : (da ? "Lydløs altid" : "Muted always"), { tone: "success", ms: 3000, at: "top" });
+  };
+  const unmute = async () => {
+    const { error } = await supabase.rpc("clear_my_conversation_mute", { conv: conv.id });
+    if (error) { showToast(da ? "Kunne ikke slå lyden til. Prøv igen." : "Could not unmute. Try again.", { at: "top", ms: 3000 }); return; }
+    setMuteRows((rows) => rows.filter((x) => x.conversation_id !== conv.id));
+    showToast(da ? "Lyden er slået til" : "Unmuted", { tone: "success", ms: 3000, at: "top" });
+  };
   const [editId, setEditId] = useState<string | null>(null);
   const [tickNow, setTickNow] = useState(() => Date.now());
   // Never auto-reload for a new app version mid-send or with an attachment picked (text drafts survive a reload).
@@ -941,6 +964,8 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
         {conv.role === "parent" && <button ref={addPersonRef} className="icon" aria-label={da ? "Tilføj person" : "Add person"} aria-haspopup="dialog" aria-expanded={sheet === "addMember"} onClick={() => setSheet("addMember")}><Icon d={<><circle cx="9" cy="8" r="4" /><path d="M2 21c0-4 3-6 7-6s7 2 7 6" /><path d="M19 8v6M16 11h6" /></>} /></button>}
         {/* Conversation-only actions; app-wide settings live on the front-page menu. */}
         <Menu lang={lang} buttonRef={menuButtonRef} items={[{ label: da ? "Forsinkede beskeder" : "Delayed messages", checked: delayedOn, run: () => { void (async () => { const next = !delayedOn; const { error } = await supabase.rpc("set_delayed_send", { conv: conv.id, p_enabled: next }); if (error) { showToast(da ? "Kunne ikke gemme indstillingen. Prøv igen." : "Could not save the setting. Try again.", { at: "top", ms: 3000 }); return; } setDelayedOn(next); showToast(next ? (da ? "Forsinkede beskeder er slået til" : "Delayed messages are on") : (da ? "Forsinkede beskeder er slået fra" : "Delayed messages are off"), { tone: "success", at: "top", ms: 2500 }); })(); } },
+          { label: muteMenuLabel(mute, da), run: () => setMuteOpen(true) },
+          ...(mute ? [{ label: unmuteLabel(da), run: () => { void unmute(); } }] : []),
           { label: t.windows, run: () => setSheet("times") },
           { label: da ? "Deltagere og roller" : "Participants and roles", run: () => setSheet("members") },
           ...(others.length ? [{ label: da ? "Kontaktens kaldenavn" : "Contact nickname", run: () => rename(others) }] : []),
@@ -987,6 +1012,7 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
       {sheet === "members" && <SheetView title={da ? "Deltagere og roller" : "Participants and roles"} close={() => setSheet(null)} lang={lang}><Members lang={lang} conv={conv.id} isParent={conv.role === "parent"} left={back} openWords={() => setSheet("words")} /></SheetView>}
       {sheet === "export" && <SheetView title={da ? "Udskrift af samtale" : "Conversation transcript"} close={() => setSheet(null)} lang={lang}><ConversationExport lang={lang} conv={conv.id} plan={plan} onPlan={setPlan} ownEmail={session.user.email ?? ""} openPlans={() => { setSheet(null); openPlans(); }} /></SheetView>}
       {sheet === "addMember" && <SheetView title={da ? "Tilføj person" : "Add person"} close={() => setSheet(null)} lang={lang} anchor={addPersonRef}><AddMember lang={lang} conv={conv.id} done={(toast) => { load(); setSheet(null); showToast(toast, { tone: "success", ms: 4000, at: "top" }); }} openPlans={openPlans} /></SheetView>}
+      {muteOpen && <MuteDialog lang={lang} current={mute} done={(d) => { setMuteOpen(false); if (d) void applyMute(d); }} onUnmute={() => { setMuteOpen(false); void unmute(); }} />}
       {sheet === "times" && <SheetView title={t.windows} close={() => setSheet(null)} lang={lang}><ReceiveSettings key={`${session.user.id}:${conv.id}`} lang={lang} conv={conv.id} onCancel={() => setSheet(null)} /></SheetView>}
     </>
   );

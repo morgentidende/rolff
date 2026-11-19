@@ -14,5 +14,26 @@ test('self-contained file HTML has inline assets, blocked networking and renders
  assert(dom.window.document.body.textContent.includes('Vil du have besked'));assert.equal(dom.window.document.querySelectorAll('script[src],link[href]').length,0);assert(html.includes("connect-src 'none'"));assert(html.includes("worker-src 'none'"));assert(!dom.window.QA.calls.includes('permission'));
  dom.window.QA.unmount();dom.window.close();assert.deepEqual(network,[]);assert.deepEqual(errors,[]);await fs.rm(dir,{recursive:true,force:true});
 });
-test('settings sheet content has no second "Notifikationer" heading (the sheet title is the only one)',async()=>{const e=await env();await e.click('settings');assert(![...e.d.querySelectorAll('h1,h2,h3')].some(h=>/^Notifi(kationer|cations)$/.test(h.textContent.trim())));assert(e.d.body.textContent.includes('Neutral besked uden afsender eller tekst. Slået fra som standard.'));assert(e.d.querySelector('details.more summary').textContent==='Mere om notifikationer');await e.close();});
+test('settings sheet content has no second "Notifikationer" heading (the sheet title is the only one)',async()=>{const e=await env();await e.click('settings');assert(![...e.d.querySelectorAll('h1,h2,h3')].some(h=>/^Notifi(kationer|cations)$/.test(h.textContent.trim())));assert(e.d.querySelector('details.more summary').textContent==='Mere');await e.close();});
 test('denied settings show how to turn notifications back on, without re-prompting',async()=>{const e=await env();e.w.Notification={permission:'denied'};await e.click('denied');assert(!e.w.QA.calls.includes('permission'));assert(e.d.querySelectorAll('.permission-steps li').length>=2);assert(e.d.body.textContent.includes('Adgang til notifikationer er slået fra'));await e.close();});
+
+// Simplified front-page sheet: title (sheet), one toggle and one short line on top; the rest is collapsed under "Mere".
+const outside=e=>{const c=e.d.querySelector('.push-settings').cloneNode(true);c.querySelector('details.more').remove();return c;};
+test('sheet shows one toggle and one short neutral line; everything else is collapsed under Mere',async()=>{const e=await env();await e.click('settings');
+ const top=outside(e),text=top.textContent;
+ assert.equal(top.querySelectorAll('button[role=switch]').length,1);assert(text.includes('Notifikationer på denne telefon'));
+ assert(text.includes('Notifikationerne er neutrale og viser hverken afsender eller tekst. Du kan gøre en enkelt samtale lydløs i samtalens menu.'));
+ assert.equal(top.querySelectorAll('p.push-lead').length,1);
+ const more=e.d.querySelector('details.more');assert(more&&!more.open,'Mere is collapsed by default');assert.equal(more.querySelector('summary').textContent,'Mere');
+ assert(!text.includes('Tilmeldte enheder'));assert(!text.includes('Forny'));assert(!text.includes('Slå fra på alle'));assert(!text.includes('90 dage'));assert(!text.includes('fornyes'));assert(!text.includes('Mere om notifikationer'));
+ await e.close();});
+test('after turning on, renewal status, renew now, devices, Fjern, 90-day note and turn-off-everywhere live inside Mere',async()=>{const e=await env();await e.click('settings');e.d.querySelector('button[role=switch]').click();await delay();
+ const top=outside(e).textContent;assert(/Aktiv/.test(top));assert(!top.includes('fornyes senest'));assert(!top.includes('Forny tilmelding nu'));assert(!top.includes('Enhed 1'));assert(!top.includes('Fjern'));assert(!top.includes('Slå fra på alle enheder'));
+ const more=e.d.querySelector('details.more'),mt=more.textContent;
+ assert(/Aktiv · fornyes senest/.test(more.querySelector('.push-renewal').textContent));assert(mt.includes('Forny tilmelding nu'));assert(mt.includes('Tilmeldte enheder'));assert(mt.includes('Enhed 1'));
+ assert(more.querySelector('[aria-label="Fjern Enhed 1"]'));assert(mt.includes('Tilmeldinger udløber efter 90 dage'));assert(mt.includes('Slå fra på alle enheder'));
+ assert(mt.includes('ROLFF — Du har nye beskeder klar'),'neutral-notice explanation kept');
+ await e.close();});
+test('renew now still renews silently from inside Mere',async()=>{const e=await env();await e.click('settings');e.d.querySelector('button[role=switch]').click();await delay();
+ const before=e.w.QA.calls.filter(c=>c==='save_my_push').length;[...e.d.querySelectorAll('details.more button')].find(b=>b.textContent==='Forny tilmelding nu').click();await delay();await delay();
+ assert(e.w.QA.calls.filter(c=>c==='save_my_push').length>before);assert.equal(e.d.querySelector('button[role=switch]').getAttribute('aria-checked'),'true');await e.close();});
