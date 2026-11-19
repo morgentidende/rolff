@@ -99,7 +99,7 @@ test('front page: visible "Inviter person" button above the list opens the same 
     assert.equal(btn.querySelector('svg').getAttribute('aria-hidden'), 'true');
     await click(btn); await delay(60);
     const s = d.querySelector('.sheet'); assert.equal(s.getAttribute('aria-label'), 'Inviter person'); assert.ok(s.classList.contains('anchored-card'));
-    assert.match(s.textContent, /De andre i samtalen ser din e-mail og kan give dig et privat kaldenavn, som kun de ser\. Du logger altid ind med din e-mail\./);
+    assert.match(s.textContent, /De andre i samtalen ser din e-mail\. Du logger altid ind med din e-mail\./);
     assert.equal(s.querySelectorAll('ul.invite-points li').length, 4); assert.ok(!/hun eller han/.test(s.textContent)); assert.match(s.textContent, /efter, vedkommende er kommet med/);
     assert.equal(s.querySelector('#ie').getAttribute('placeholder'), 'navn@eksempel.dk');
     assert.ok(!/Mit visningsnavn|indtil du vælger/.test(s.textContent));
