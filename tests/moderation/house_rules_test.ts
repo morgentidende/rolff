@@ -163,3 +163,19 @@ Deno.test("only lowercase standalone 'dick' is blocked, and the span is the word
   assertEquals(findProfanity("du er en dick"), ["dick"]);
   assertEquals(findProfanity("Dick er min onkel"), []);
 });
+
+Deno.test("fuck and ALL variants: contains-fuck words, spellings, obfuscations (da+en)", () => {
+  for (const m of ["fuck", "fucking", "fuckin", "fuckin'", "fucked", "fucker", "fuckers", "motherfucker", "mf'er", "mfer", "fuckface", "fuckup", "fuckhead", "fucks", "fucke", "fucket", "fuckede", "fuckeren", "fck", "fcking", "fcked", "fuk", "fukking", "fuked", "fuking", "phuck", "phucking", "f*cking", "f**king", "f*ck", "f**k", "fxck", "fxcking", "fu*k", "fu*king", "fu**ing", "FUCK", "Fuck!", "fuuuuck", "fuuucking", "fuckyou", "mofo", "Hvad fanden, fuck det!"]) {
+    assert(findProfanity(m).length > 0, m);
+  }
+  // spans are the whole variant as written
+  assertEquals(findProfanity("du er f*cking sen"), ["f*cking"]);
+  assertEquals(findProfanity("mf'er"), ["mf'er"]);
+  assertEquals(findProfanity("fuckin' late"), ["fuckin"]);
+});
+
+Deno.test("fuck variants: look-alikes still pass (Fukushima, initials F.K., fucus, Fuchs)", () => {
+  for (const m of ["Fukushima", "F.K. Hansen", "Fuchs og Fuchsia", "Fucus er en tang", "Fuji og Fuka", "Funk og fun", "Fakta om fakir", "Mfa og mfg"]) {
+    assertEquals(findProfanity(m), [], m);
+  }
+});
