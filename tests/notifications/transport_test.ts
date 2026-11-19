@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createECDH } from "node:crypto";
 import { Buffer } from "node:buffer";
 import { sendPush } from "../../supabase/functions/notification-dispatch/transport.ts";
-import { validEndpoint,outcome,handoffFresh,pushLang, type Prepared } from "../../supabase/functions/notification-dispatch/policy.ts";
+import { validEndpoint,outcome,handoffFresh,pushLang,pushWho,pushPayload,cleanName, type Prepared } from "../../supabase/functions/notification-dispatch/policy.ts";
 import { dispatch } from "../../supabase/functions/notification-dispatch/worker.ts";
 // Known, deterministic PUBLIC test scalars (not deployable secrets). Never generate production keys here.
 const raw=(n:number)=>{const e=createECDH("prime256v1");e.setPrivateKey(Buffer.alloc(32,n));return e.getPublicKey().toString("base64url");};
@@ -85,4 +85,28 @@ Deno.test("a transport adapter cannot report acceptance from a claim without a h
 });
 Deno.test("notification language: only explicit en is English, everything else Danish",()=>{
   if(pushLang({lang:"en"})!=="en" || pushLang({lang:"da"})!=="da" || pushLang({})!=="da" || pushLang({lang:"EN"})!=="da" || pushLang({lang:"xx"})!=="da")throw Error("pushLang");
+});
+
+Deno.test("payload carries only the recipient's nicknames and counts, never text, ids or addresses",()=>{
+ const base=prepared();
+ const none=JSON.parse(pushPayload(base));assert.deepEqual(Object.keys(none).sort(),["binding","expires","l","v"]);
+ const one=JSON.parse(pushPayload({...base,lang:"en",who:{s:["Dad"],k:1,n:1}}));assert.deepEqual(one,{v:1,binding:base.binding,l:"en",s:["Dad"],k:1,n:1,expires:one.expires});
+ const many=JSON.parse(pushPayload({...base,who:{s:["Far","Mor"],k:3,n:7}}));assert.deepEqual(many.s,["Far"],"two names only when exactly two senders");assert.equal(many.k,3);assert.equal(many.n,7);
+ const two=JSON.parse(pushPayload({...base,who:{s:["Far","Mor","Onkel"],k:2,n:2}}));assert.deepEqual(two.s,["Far","Mor"]);
+ for(const k of Object.keys(JSON.parse(pushPayload({...base,who:{s:["Far"],k:1,n:1,body:"SECRET",email:"a@b.c",sender:"x"} as never}))))assert(["v","binding","l","s","k","n","expires"].includes(k),k);
+});
+Deno.test("malformed or hostile name data falls back to the generic payload",()=>{
+ const base=prepared();
+ for(const who of [null,undefined,{},{s:"Far",k:1},{s:[],k:1},{s:[""],k:1},{s:["\u200b"],k:1},{s:[5],k:1},{s:["Far"]},{s:["Far"],k:0},{s:["Far"],k:1.5},{s:["Far"],k:"1"},{s:["Far"],k:1000},{s:["A","B"],k:1}] as never[])assert.equal(pushWho({who}),null,JSON.stringify(who));
+ assert.deepEqual(Object.keys(JSON.parse(pushPayload({...base,who:{s:[],k:1,n:1}}))).sort(),["binding","expires","l","v"]);
+});
+Deno.test("names are stripped of control/bidi characters and capped at 40 characters",()=>{
+ assert.equal(cleanName("\u202eFar\u200b\u0007 "),"Far");assert.equal(cleanName("x".repeat(100)).length,40);assert.equal(cleanName("😀".repeat(50)),"😀".repeat(40));assert.equal(cleanName(null),"");
+ assert.deepEqual(pushWho({who:{s:["A".repeat(100)],k:1,n:1}})!.s,["A".repeat(40)]);
+ assert.equal(pushWho({who:{s:["Far"],k:1,n:0}})!.n,1,"bad message count falls back to sender count");
+});
+Deno.test("worst-case payload (two 40-character emoji names, 99 messages) stays well under the 512-char worker limit and the 2048-byte push limit",async()=>{
+ const worst={...prepared(),who:{s:["😀".repeat(40),"\"\\".repeat(20)],k:2,n:99}};const text=pushPayload(worst);
+ assert(text.length<400,String(text.length));
+ let size=0;await sendPush(worst,vapid,allow,async(_u,o)=>{size=(o?.body as Uint8Array).byteLength;return new Response(null,{status:201});});assert(size>0&&size<2048,String(size));
 });

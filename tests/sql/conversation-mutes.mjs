@@ -103,9 +103,9 @@ await test('a release mixing muted and unmuted conversations still sends one neu
   await fresh();await clear();await mute(U,conv,'always');await f.message();await f2.message();await svc('select push_release_tick()');
   assert.equal(await jobs(),1);const w=await claim();assert.equal(w.length,1);assert(await prepare(w[0]));
 });
-await test('push payload stays neutral: no conversation, sender or mute data',async()=>{
+await test('push payload stays neutral: no conversation, sender id or mute data',async()=>{
   await fresh();await clear();await f.message();await svc('select push_release_tick()');const p=await prepare((await claim())[0]);
-  assert.deepEqual(Object.keys(p).sort(),['binding','endpoint','expires_at','keys','lang','prepared_at']);
+  assert.deepEqual(Object.keys(p).sort(),['binding','endpoint','expires_at','keys','lang','prepared_at','who']);
 });
 await test('clearing a mute removes it for the owner only; leaving/deleting cascades',async()=>{
   await mute(U,conv,'always');await mute(V,conv,'8h');await as(U,'select clear_my_conversation_mute($1)',[conv]);
