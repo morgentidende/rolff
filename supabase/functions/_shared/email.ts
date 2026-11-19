@@ -1,4 +1,5 @@
 import { appUrl } from "./links.ts";
+import { buildMime, type Connect, type SmtpConfig, smtpSend } from "./smtp.ts";
 // Invitation e-mail templates. Never include message content.
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 export type MailLang = "da" | "en";
@@ -168,13 +169,66 @@ export function feedbackMail(p: { category: string; body: string; senderName: st
 }
 
 export type MailAttachment = { filename: string; content_type: "application/pdf"; content_b64: string };
-export async function sendMail(to: string, m: { subject: string; html: string; text: string; reply_to?: string; attachments?: MailAttachment[] }): Promise<boolean> {
-  const url = Deno.env.get("MAILER_URL"), secret = Deno.env.get("MAILER_SECRET");
-  if (!url || !secret) return false;
+export type MailKind = "invite" | "invite_copy" | "member_invite" | "approval" | "resend" | "account" | "export" | "report" | "feedback" | "inactivity" | "test" | "other";
+export type MailResult = { ok: boolean; provider: "smtp" | "relay" | "none"; code: number | null; reason: string };
+type MailMsg = { subject: string; html: string; text: string; reply_to?: string; attachments?: MailAttachment[] };
+/** Env lookup that never throws (tests run with a narrow --allow-env). */
+const env = (k: string): string | undefined => { try { return Deno.env.get(k) || undefined; } catch { return undefined; } };
+let smtpConnect: Connect | undefined;
+/** Tests only: replace the TLS socket with a fake SMTP server. */
+export const _setSmtpConnect = (c: Connect | undefined) => { smtpConnect = c; };
+/** SMTP settings when configured (SMTP_USER + SMTP_PASS); otherwise the PHP relay is used.
+ *  Production: SMTP_USER=rolff-no-reply@nicolaipetersen.dk, so mail goes out as "Rolff" <rolff-no-reply@nicolaipetersen.dk>. */
+export function smtpConfig(): SmtpConfig | null {
+  const user = env("SMTP_USER"), pass = env("SMTP_PASS");
+  if (!user || !pass) return null;
+  return { host: env("SMTP_HOST") ?? "smtp.hostinger.com", port: Number(env("SMTP_PORT") ?? 465), user, pass, from: env("MAIL_FROM") ?? user, heloName: (env("MAIL_FROM") ?? user).split("@")[1] };
+}
+/** Keyed hash of the recipient for mail_log; the address itself is never stored. */
+export async function recipientHash(to: string): Promise<string> {
+  const key = env("MAIL_LOG_PEPPER") ?? env("MAILER_SECRET") ?? "rolff-mail-log";
+  const k = await crypto.subtle.importKey("raw", new TextEncoder().encode(key), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sig = new Uint8Array(await crypto.subtle.sign("HMAC", k, new TextEncoder().encode(to.trim().toLowerCase())));
+  return Array.from(sig.subarray(0, 16), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+/** Best effort: write one row to mail_log (server-only table). Never throws. */
+async function logMail(kind: MailKind, to: string, r: MailResult) {
+  console.log(`mail kind=${kind} status=${r.ok ? "sent" : "failed"} provider=${r.provider} code=${r.code ?? "-"} reason=${r.reason}`);
+  const url = env("SUPABASE_URL"), key = env("SUPABASE_SERVICE_ROLE_KEY") ?? firstSecretKey();
+  if (!url || !key) return;
   try {
-    const r = await fetch(url, { method: "POST", headers: { "content-type": "application/json", "x-rolff-secret": secret }, body: JSON.stringify({ to, ...m }), signal: AbortSignal.timeout(m.attachments?.length ? 30000 : 10000) });
-    return r.ok;
-  } catch { return false; }
+    const res = await fetch(`${url}/rest/v1/mail_log`, { method: "POST", headers: { apikey: key, authorization: `Bearer ${key}`, "content-type": "application/json", prefer: "return=minimal" },
+      body: JSON.stringify({ kind, status: r.ok ? "sent" : "failed", provider: r.provider, response_code: r.code, reason: r.reason.slice(0, 80), recipient_hash: await recipientHash(to) }), signal: AbortSignal.timeout(5000) });
+    await res.body?.cancel();
+  } catch { /* logging must never break sending */ }
+}
+const firstSecretKey = () => { try { const o = JSON.parse(env("SUPABASE_SECRET_KEYS") ?? ""); return (o?.default ?? Object.values(o ?? {})[0]) as string | undefined; } catch { return undefined; } };
+
+/** Send one mail and report why it failed. Authenticated SMTP when configured, else the PHP relay. */
+export async function sendMailResult(to: string, m: MailMsg, kind: MailKind = "other"): Promise<MailResult> {
+  let r: MailResult;
+  const smtp = smtpConfig();
+  if (smtp) {
+    let raw: string | null = null;
+    try { raw = buildMime({ from: smtp.from, fromName: "Rolff", to, subject: m.subject, html: m.html, text: m.text, replyTo: m.reply_to, attachments: m.attachments }); } catch { r = { ok: false, provider: "smtp", code: null, reason: "bad_request" }; }
+    if (raw !== null) { const x = await smtpSend(smtp, to, raw, smtpConnect, m.attachments?.length ? 45000 : 20000); r = { ok: x.ok, provider: "smtp", code: x.code, reason: x.reason }; }
+  } else {
+    const url = env("MAILER_URL"), secret = env("MAILER_SECRET");
+    if (!url || !secret) r = { ok: false, provider: "none", code: null, reason: "not_configured" };
+    else {
+      try {
+        const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json", "x-rolff-secret": secret }, body: JSON.stringify({ to, ...m }), signal: AbortSignal.timeout(m.attachments?.length ? 30000 : 10000) });
+        await res.body?.cancel();
+        r = { ok: res.ok, provider: "relay", code: res.status, reason: res.ok ? "ok" : `relay:${res.status}` };
+      } catch (e) { r = { ok: false, provider: "relay", code: null, reason: e instanceof DOMException && e.name === "TimeoutError" ? "timeout" : "connect" }; }
+    }
+  }
+  await logMail(kind, to, r!);
+  return r!;
+}
+/** Boolean wrapper kept for existing callers. */
+export async function sendMail(to: string, m: MailMsg, kind: MailKind = "other"): Promise<boolean> {
+  return (await sendMailResult(to, m, kind)).ok;
 }
 
 const btn = (link: string, label: string) => `<table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="#016C72" style="border-radius:10px;background:#016C72"><a href="${esc(link)}" style="display:inline-block;padding:14px 26px;color:#ffffff;text-decoration:none;font-weight:600;font-size:16px">${esc(label)}</a></td></tr></table>`;
