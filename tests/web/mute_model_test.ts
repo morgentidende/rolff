@@ -41,6 +41,6 @@ Deno.test("mute is wired server-side only, owner-only, and never into delivery o
   const app = await Deno.readTextFile("apps/web/src/App.tsx");
   for (const need of ["set_my_conversation_mute", "clear_my_conversation_mute", "my_conversation_mutes", "convmuted"]) if (!app.includes(need)) throw new Error("app lacks " + need);
   const push = await Deno.readTextFile("apps/web/src/PushSettings.tsx");
-  for (const need of ["Notifikationer på denne telefon", "Notifications on this phone", "Du kan gøre en enkelt samtale lydløs i samtalens menu", "You can mute a single conversation in the conversation’s menu", "Mere", "More"]) if (!push.includes(need)) throw new Error("push settings lacks " + need);
+  for (const need of ["Notifikationer på denne telefon", "Notifications on this phone", "Du kan gøre en enkelt samtale lydløs i samtalens menu", "You can mute a single conversation in its menu", "Mere", "More"]) if (!push.includes(need)) throw new Error("push settings lacks " + need);
   for (const model of ["ChatGPT", "GPT", "Gemini", "OpenAI"]) if ((await Deno.readTextFile("apps/web/src/MuteDialog.tsx")).includes(model)) throw new Error("model name in mute UI");
 });
