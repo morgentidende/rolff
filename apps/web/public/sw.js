@@ -68,7 +68,7 @@ self.addEventListener('push',event=>event.waitUntil(serial(async()=>{
   // Title = recipient's own nickname for the sender(s); body is fixed. Never message content.
   // No `icon` and no `image`: Android draws those as a large picture on the right, which duplicated the logo.
   // badge = white silhouette on transparent (Android status bar and notification header).
-  const badge=new URL('icons/rolff-badge-96.png',self.registration.scope).href;
+  const badge=new URL('icons/rolff-badge-96.png?v=3',self.registration.scope).href;
   if(p.t==='a'){
    // Invitation accepted: own tag (never replaces or is replaced by the message notice), conversation id only if a valid uuid.
    const c=typeof p.c==='string' && uuid.test(p.c)?p.c.toLowerCase():null;
