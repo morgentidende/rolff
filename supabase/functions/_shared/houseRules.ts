@@ -20,13 +20,22 @@ const WORD_PATTERNS: RegExp[] = [
   /^helvede\p{L}*$/u,                                  // helvede, helvedes
   /^fandens$/u, /^fanden$/u, /^fandeme$/u, /^fandme$/u, /^satans$/u,
   /^møg(?!spreder|dynge|fork|kælder|kran)\p{L}*$/u,    // møg, møgsvin, møgunge (not farm words)
-  /^røv(en)?$/u, /^røv(hul|dårlig|sur|syg|kedelig|irriteret|fuld|spark|slikker|pulver)\p{L}*$/u, // not røver/røvere
+  /^røv(en)?$/u, /^røv(hul|banan|dårlig|sur|syg|kedelig|irriteret|fuld|spark|slikker|pulver)\p{L}*$/u, // not røver/røvere
   /^pik(ken)?$/u, /^pik(hoved|fjæs|svin|slikker|slugger)\p{L}*$/u, // pik; not pikant/pikkolo/pikere/pikke (to peck)
   /^kusse\p{L}*$/u,                                    // kusse, kussen, kusser, kussefjæs
   /^sgu$/u, /^pokker\p{L}*$/u,                         // sgu, pokker(s), for pokker
   /^skidt\p{L}*$/u,                                    // skidt, skidtvejr
   /^skod(?!d|sborg)\p{L}*$/u,                          // skod, skodbil (not skodde/skodder = fog/shutters, Skodsborg)
-  /^pussy$/u, /^pussies$/u, /^cunts?$/u, /^fisse(n|fjæs|hår)?$/u,
+  // Insults / abusive words (approved list)
+  /^satan\p{L}*$/u, /^kraftedeme$/u, /^sateme$/u, /^satme$/u,
+  /^knald(e|er|et|ene|en|s)?$/u,                       // knald, knalde(r); not knaldrød/knaldhat/knaldert
+  /^tøs(en|er|erne|e|edreng\p{L}*|eagtig\p{L}*|ehoved\p{L}*)?$/u, // tøs, tøsedreng; not tøsne (slush)
+  /^idiot(isk\p{L}*|er|en|erne)?$/u, /^dumrian\p{L}*$/u, /^tåbe(r|n|rne|lig\p{L}*)?$/u, /^fjols(e|et|ede|er|en|erne)?$/u,
+  /^spasser\p{L}*$/u, /^mongol$/u,                     // exactly "mongol"; not Mongoliet/mongolsk/mongoler
+  /^evnesvag\p{L}*$/u, /^retarder(et|ede)$/u, /^retarded$/u, /^åndssvag\p{L}*$/u, /^hjernedød(e|t)?$/u,
+  /^fedeso\p{L}*$/u, /^tyksak\p{L}*$/u, /^tumpe(r|n|rne)?$/u, /^kvajhoved\p{L}*$/u,
+  /^moron(s|ic)?$/u, /^loser(s)?$/u, /^stupid$/u,
+  /^pussy$/u, /^pussies$/u, /^cunts?$/u, /^fisse(n|r|rne|hoved|fjæs|hår)?$/u,
   /^hore(n|r|rne|unge|søn|bukke|bukken)?$/u,
   /^knepp\p{L}*$/u,                                    // kneppe, knepper (not "knep" = trick)
   // English / international
@@ -43,6 +52,8 @@ const OBFUSCATED = /(?<![\p{L}\p{N}])(?:f[*@#.\-_]{1,3}(?:c?k)|f[u][*@#]k|sh[*@#
 const HELL_BEFORE = new Set(["what", "the", "to", "bloody", "holy", "like", "as", "in", "a", "go", "straight"]);
 const HELL_AFTER = new Set(["no", "yes", "yeah", "of"]);
 
+const MONGOL_HISTORY = new Set(["empire", "rige", "riget", "hær", "hæren", "imperiet", "imperium", "khan", "invasion", "invasionen"]);
+
 function tokenHit(raw: string): boolean {
   const t = norm(raw);
   for (const v of new Set([t, collapse(t, 2), collapse(t, 1)])) if (WORD_PATTERNS.some((re) => re.test(v))) return true;
@@ -56,7 +67,9 @@ export function findProfanity(text: string): string[] {
   for (let i = 0; i < toks.length; i++) {
     const t = norm(toks[i]);
     const hell = t === "hell" && ((i > 0 && HELL_BEFORE.has(norm(toks[i - 1]))) || (i + 1 < toks.length && HELL_AFTER.has(norm(toks[i + 1]))));
-    if (hell || tokenHit(toks[i])) out.push(toks[i]);
+    const mongolHistory = t === "mongol" && i + 1 < toks.length && MONGOL_HISTORY.has(norm(toks[i + 1]));
+    // "dick" only as a lowercase standalone word, so the name Dick / Dickens never match.
+    if (hell || toks[i] === "dick" || (!mongolHistory && tokenHit(toks[i]))) out.push(toks[i]);
   }
   for (const m of text.matchAll(OBFUSCATED)) out.push(m[0]);
   return [...new Set(out)].slice(0, 5);

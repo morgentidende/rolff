@@ -146,3 +146,20 @@ Deno.test("kusse and pik are blocked with variants; pikant/pikkolo/pikere/pikke 
     assertEquals(findProfanity(m), [], m);
   }
 });
+
+Deno.test("30 approved words: blocked with common inflections/compounds", () => {
+  for (const m of ["satan", "satans", "satanisk", "kraftedeme", "sateme", "satme", "knald", "knalder", "knaldet", "pikhoved", "pikfjæs", "fissehoved", "røvbanan", "lorteunge", "horeunge", "tøs", "tøsen", "tøser", "tøsedreng", "idiotisk", "idiotiske", "dumrian", "tåbe", "tåber", "tåbelig", "fjols", "fjolset", "spasser", "spassere", "mongol", "Mongol", "evnesvag", "evnesvagt", "retarderet", "retarderede", "åndssvag", "åndssvagt", "hjernedød", "hjernedøde", "fedeso", "tyksak", "tyksakke", "tumpe", "tumper", "kvajhoved", "dick", "moron", "morons", "loser", "stupid", "STUPID", "Hvad laver du, dumrian?"]) {
+    assert(findProfanity(m).length > 0, m);
+  }
+});
+
+Deno.test("30 approved words: innocent look-alikes pass (Mongoliet, mongolsk, Dick, Dickens, tøsne, knaldrød ...)", () => {
+  for (const m of ["Vi rejser til Mongoliet", "Han taler mongolsk", "Mongoler bor i Mongoliet", "Det mongolske rige", "Mongol Empire og Mongol hæren", "Dick", "Dick Cheney og Dickens", "Hej Dick, kan du hente?", "Dicks", "Der falder tøsne", "En knaldrød bil", "Knaldhat og knaldert", "Moroni og Morocco", "Loseren", "Stupa og stupaer", "Retardering af forløbet", "Hjernedøden blev konstateret", "Tumpet", "Sateliit"]) {
+    assertEquals(findProfanity(m), [], m);
+  }
+});
+
+Deno.test("only lowercase standalone 'dick' is blocked, and the span is the word", () => {
+  assertEquals(findProfanity("du er en dick"), ["dick"]);
+  assertEquals(findProfanity("Dick er min onkel"), []);
+});
