@@ -32,7 +32,7 @@ test('after turning on, renewal status, renew now, devices, Fjern, 90-day note a
  const more=e.d.querySelector('details.more'),mt=more.textContent;
  assert(/Aktiv · fornyes senest/.test(more.querySelector('.push-renewal').textContent));assert(mt.includes('Forny tilmelding nu'));assert(mt.includes('Tilmeldte enheder'));assert(mt.includes('Enhed 1'));
  assert(more.querySelector('[aria-label="Fjern Enhed 1"]'));assert(mt.includes('Tilmeldinger udløber efter 90 dage'));assert(mt.includes('Slå fra på alle enheder'));
- assert(mt.includes('ROLFF — Du har nye beskeder klar'),'neutral-notice explanation kept');
+ assert(mt.includes('Ny besked fra Far')&&mt.includes('e-mailadresse'),'sender-name notice and e-mail fallback explained');assert(!mt.includes('Afsender og beskedtekst vises aldrig'));
  await e.close();});
 test('renew now still renews silently from inside Mere',async()=>{const e=await env();await e.click('settings');e.d.querySelector('button[role=switch]').click();await delay();
  const before=e.w.QA.calls.filter(c=>c==='save_my_push').length;[...e.d.querySelectorAll('details.more button')].find(b=>b.textContent==='Forny tilmelding nu').click();await delay();await delay();
