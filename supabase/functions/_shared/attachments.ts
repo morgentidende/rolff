@@ -91,7 +91,7 @@ export function validateFileResult(raw: unknown, caption: string): FileResult {
   const suggestion = reason === "inappropriate_image"
     ? sanitizeSuggestion(o.suggestion, seed, "other_harmful")
     : sanitizeSuggestion(o.suggestion, seed, reason as any);
-  const explanation = sanitizeExplanation(o.explanation, spans, [caption, transcript].join("\n"));
+  const explanation = sanitizeExplanation(o.explanation, spans, [caption, transcript].join("\n"), { detail: true });
   return { decision: "block", reason_code: reason, spans, transcript, suggestion, explanation };
 }
 
