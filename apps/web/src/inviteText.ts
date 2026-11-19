@@ -62,3 +62,21 @@ const T = {
   },
 } as const;
 export const invText = (lang: InvLang) => T[lang === "en" ? "en" : "da"];
+
+/** Short, scannable info points on the "Invite person" sheet (most important first). Same facts as the sign-up notes, but split into bullets. */
+export type InvitePoint = { lead?: string; text: string };
+export function invitePoints(lang: InvLang): InvitePoint[] {
+  return lang === "en"
+    ? [
+      { lead: "Important:", text: "Rolff can be used as a record. What you write and receive stays with the others in the conversation – even if you later delete your account." },
+      { text: "You can delete your own copy, but you cannot require the others' copy to be deleted." },
+      { text: "A new conversation is created for the two of you. The invitee only sees messages from after joining." },
+      { text: "The others in the conversation see your email and can give you a private nickname that only they see. You always log in with your email." },
+    ]
+    : [
+      { lead: "Vigtigt:", text: "Rolff kan bruges som dokumentation. Det, du skriver og modtager, bliver hos de andre i samtalen – også hvis du senere sletter din konto." },
+      { text: "Du kan slette din egen kopi, men ikke kræve de andres slettet." },
+      { text: "Der oprettes en ny samtale mellem jer to. Den inviterede ser kun beskeder fra efter, vedkommende er kommet med." },
+      { text: "De andre i samtalen ser din e-mail og kan give dig et privat kaldenavn, som kun de ser. Du logger altid ind med din e-mail." },
+    ];
+}

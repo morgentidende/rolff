@@ -22,7 +22,7 @@
 .chip-btn.on{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--text)}
 .export-dates{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
 .export-dates label{display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--muted);min-width:0}
-.export-dates input[type=date]{width:100%;min-width:0;min-height:48px;padding:0 10px;font:inherit;font-size:16px;color:var(--text);background:var(--card);border:1px solid var(--border);border-radius:10px;box-sizing:border-box}
+.export-dates input[type=date]{width:100%;min-width:0;min-height:48px;padding:0 10px;font:inherit;font-size:16px;color:var(--text);background:var(--field-bg);border:1px solid var(--field-border);border-radius:10px;box-sizing:border-box}
 .export-email-wrap{margin:10px 0 0;display:flex;flex-direction:column;gap:4px}
 .export-email-wrap label{font-size:14px;color:var(--muted)}
 .export-email-wrap input{width:100%;box-sizing:border-box}
