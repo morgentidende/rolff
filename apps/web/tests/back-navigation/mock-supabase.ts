@@ -58,6 +58,27 @@ function rpc(name: string, args: any) {
             data = [{ message_id: args?.p_message, i_thumbed: true, thumb_count: 1 }];
         }
     }
+    // "Lydløs" (own mute only). Entirely fabricated; the real storage is server-side and owner-only.
+    const mutes: any[] = ((globalThis as any).__QA_MUTES ??= []);
+    if (name === 'my_conversation_mutes')
+        data = mutes.map(m => ({ ...m }));
+    if (name === 'set_my_conversation_mute' || name === 'clear_my_conversation_mute') {
+        const fail = (globalThis as any).__QA_MUTE_ERROR;
+        if (fail) {
+            const failed: any = Promise.resolve({ data: null, error: { message: 'synthetic failure' } });
+            failed.setHeader = () => failed;
+            return failed;
+        }
+        const i = mutes.findIndex(m => m.conversation_id === args.conv);
+        if (i >= 0) mutes.splice(i, 1);
+        if (name === 'set_my_conversation_mute') {
+            const hours: any = { '8h': 8, '24h': 24, '1w': 168 };
+            const until = args.p_duration === 'always' ? null : new Date(Date.now() + hours[args.p_duration] * 3600e3).toISOString();
+            const row = { conversation_id: args.conv, mute_until: until, always: until === null };
+            mutes.push(row);
+            data = { muted: true, mute_until: until, always: until === null };
+        } else data = null;
+    }
     if (name === 'list_pending_invitations')
         data = qa?.invites ?? [];
     if (name === 'my_pending_count')

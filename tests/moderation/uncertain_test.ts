@@ -5,8 +5,8 @@ import { moderate, ModerationTechnicalError, OpenAIProvider, REASON_CODES, RESPO
 import { applySticky } from "../../supabase/functions/_shared/stickyBlock.ts";
 import { FILE_REASON_CODES, filePromptForLang } from "../../supabase/functions/_shared/attachments.ts";
 
-const MSG = "Hvorfor tog du ikke de skodbøger med?";
-const UNC = { decision: "block", reason_code: "uncertain", spans: ["skodbøger"], suggestion: "Hvorfor tog du ikke bøgerne med?", explanation: "" };
+const MSG = "Hvorfor tog du ikke de laser med?";
+const UNC = { decision: "block", reason_code: "uncertain", spans: ["laser"], suggestion: "Hvorfor tog du ikke bøgerne med?", explanation: "" };
 const ALLOW = { decision: "allow", reason_code: "none", spans: [], suggestion: "", explanation: "" };
 const seq = (...outs: unknown[]): ModerationProvider & { calls: number } => {
   const p = { name: "fake", model: "fake", calls: 0, moderate: () => Promise.resolve(JSON.stringify(outs[Math.min(p.calls++, outs.length - 1)])) };
@@ -32,7 +32,7 @@ Deno.test("prompt: borderline tone must block as 'uncertain' with REQUIRED spans
 
 Deno.test("uncertain block keeps the flagged span and the rewrite suggestion", () => {
   const r = validateResult(UNC, MSG);
-  assertEquals([r.decision, r.reason_code, r.spans, r.suggestion], ["block", "uncertain", ["skodbøger"], "Hvorfor tog du ikke bøgerne med?"]);
+  assertEquals([r.decision, r.reason_code, r.spans, r.suggestion], ["block", "uncertain", ["laser"], "Hvorfor tog du ikke bøgerne med?"]);
 });
 
 Deno.test("uncertain without span/suggestion still blocks (UI falls back to the standard text)", () => {
@@ -49,7 +49,7 @@ Deno.test("'uncertain' is never valid with allow or clarify (fail closed)", () =
 
 Deno.test("double check: allow then uncertain => uncertain block with span + suggestion", async () => {
   const r = await moderate(seq(ALLOW, UNC), MSG, [], 15000, { doubleCheck: true });
-  assertEquals([r.decision, r.reason_code, r.spans, r.suggestion], ["block", "uncertain", ["skodbøger"], "Hvorfor tog du ikke bøgerne med?"]);
+  assertEquals([r.decision, r.reason_code, r.spans, r.suggestion], ["block", "uncertain", ["laser"], "Hvorfor tog du ikke bøgerne med?"]);
 });
 
 Deno.test("sticky: a remembered 'uncertain' block stays blocked", () => {
