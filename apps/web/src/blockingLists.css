@@ -1,4 +1,4 @@
-/* Blokeringer: two calm cards (words / topics). The sheet title stays primary; card headings are secondary. */
+/* Blokeringer: three calm cards (words, topics, attachments). The sheet title stays primary; card headings are secondary. */
 .blocking-lists{min-width:0;display:flex;flex-direction:column;gap:14px;margin-top:6px}
 .blocking-card{border:1px solid var(--border);border-radius:14px;padding:12px 14px 14px;background:color-mix(in srgb,var(--bg) 45%,var(--card));min-width:0}
 .blocking-heading{display:flex;align-items:center;gap:2px;min-height:44px}
@@ -7,8 +7,9 @@
 .blocking-info:hover{color:var(--text)}
 .blocking-sort{margin:0 0 0 auto;flex:none}
 .blocking-sort select{width:auto;min-height:36px;padding:4px 28px 4px 10px;font-size:14px;border-radius:999px;color:var(--muted)}
-.blocking-lead{margin:0 0 10px;font-size:13.5px;line-height:1.4}
-.blocking-empty{margin:4px 0 6px;font-size:14px;color:var(--muted);font-style:italic}
+.blocking-lead,.blocking-help,.blocking-empty{font-size:13.5px;line-height:1.4;color:var(--muted)}
+.blocking-lead{margin:0 0 10px}
+.blocking-empty{margin:4px 0 6px;font-style:italic}
 .blocking-entries{list-style:none;margin:0 0 4px;padding:0;display:flex;flex-wrap:wrap;gap:8px}
 .blocking-entries li{display:inline-flex;align-items:center;max-width:100%;min-height:36px;padding:0 0 0 12px;border-radius:999px;background:color-mix(in srgb,var(--accent) 13%,var(--card));border:1px solid color-mix(in srgb,var(--accent) 28%,transparent)}
 .blocking-entries span{min-width:0;overflow-wrap:anywhere;font-size:15px;line-height:1.3;padding:6px 0}
@@ -21,11 +22,21 @@
 .blocking-add > label{margin:0 0 4px}
 .blocking-add-row{display:flex;gap:8px;align-items:stretch;min-width:0}
 .blocking-add-row input{flex:1;min-width:0;width:auto}
-.blocking-add-row button{flex:none;white-space:nowrap;padding:8px 14px}
-.blocking-ack{margin:8px 0 0;font-size:14px;line-height:1.4;color:var(--text);border-radius:10px;padding:4px 6px;margin-left:-6px;margin-right:-6px}
+.blocking-add-row input,.blocking-add-row button{min-height:44px}
+.blocking-add-row button{flex:none;white-space:nowrap;padding:8px 16px}
+/* Add stays full primary colour even when the form is incomplete; a tap explains what is missing. */
+.blocking-add-row button[aria-disabled=true]{opacity:1;background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
+.blocking-ack{margin:8px 0 0;font-size:14px;line-height:1.4;color:var(--text);padding:4px 0}
 .blocking-ack span,.check-row.blocking-ack span{color:var(--muted);font-size:14px;line-height:1.4}
-.blocking-help{margin:6px 0 0;font-size:12.5px}
-.blocking-foot{margin-top:10px;padding-top:6px;border-top:1px solid color-mix(in srgb,var(--border) 70%,transparent);display:flex;justify-content:flex-end}
+/* Keep the short hint under the checkbox; only a subtle outline on the box itself, no filled red row. */
+.blocking-lists .blocking-ack.needs-attention,
+[data-theme=dark] .blocking-lists .blocking-ack.needs-attention{background:transparent;box-shadow:none}
+.blocking-ack.needs-attention input.check{border-color:#b42318;box-shadow:0 0 0 1px color-mix(in srgb,#b42318 45%,transparent)}
+[data-theme=dark] .blocking-ack.needs-attention input.check{border-color:#ffb4ab;box-shadow:0 0 0 1px color-mix(in srgb,#ffb4ab 50%,transparent)}
+.blocking-help{margin:6px 0 0}
+.blocking-foot{margin-top:4px;display:flex;justify-content:flex-start}
+button.blocking-reset{background:transparent;border:0;color:var(--muted);font-size:13px;font-weight:500;min-height:44px;padding:8px 2px;border-radius:8px}
+button.blocking-reset:hover{background:color-mix(in srgb,var(--text) 6%,transparent);color:var(--text)}
 .blocking-dialog{width:min(480px,calc(100vw - 32px));max-height:min(85dvh,calc(var(--vv-h,100dvh) - 32px));overflow:auto;box-sizing:border-box;background:var(--card);color:var(--text);border:0;border-radius:18px;padding:24px;box-shadow:0 12px 50px #0004}.blocking-dialog::backdrop{background:#0009}.blocking-dialog h2{font-size:19px;margin:0 0 10px}.blocking-dialog p{overflow-wrap:anywhere;line-height:1.5}.blocking-dialog .row{flex-wrap:nowrap}.blocking-dialog .row button{flex:1 1 0}.blocking-dialog > button{width:100%}
 .blocking-lists input,.blocking-lists select{max-width:100%;box-sizing:border-box}
 

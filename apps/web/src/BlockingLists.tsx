@@ -77,7 +77,7 @@ export function BlockingLists({ lang, conv, session }: { lang: Lang; conv: strin
  <label className={`check-row blocking-ack${wordHint==="ack"?" needs-attention":""}`}><input type="checkbox" className="check" ref={ackRef} checked={ack} disabled={busy} aria-invalid={wordHint==="ack"||undefined} aria-describedby={wordHint==="ack"?"blocked-ack-hint":undefined} onChange={e=>{setAck(e.target.checked);if(e.target.checked&&wordHint==="ack")setWordHint("");}}/><span>{ackText}</span></label>
  {wordHint==="ack"&&<p id="blocked-ack-hint" className="field-hint" role="alert">{da?"Sæt flueben i ”Jeg forstår …” for at tilføje.":"Tick “I understand …” to add."}</p>}
  </form>
- {loaded&&words.length>0&&<div className="blocking-foot"><button className="text-danger" type="button" disabled={busy} onClick={()=>setModal("reset")}>{da?"Nulstil blokeringsliste":"Reset blocked words"}</button></div>}
+ {loaded&&words.length>0&&<div className="blocking-foot"><button className="blocking-reset" type="button" disabled={busy} onClick={()=>setModal("reset")}>{da?"Nulstil blokeringsliste":"Reset blocked words"}</button></div>}
  </section>
  <section className="blocking-card" aria-labelledby="blocked-topics-title"><div className="blocking-heading"><h3 id="blocked-topics-title">{da?"Blokerede emner":"Blocked topics"}</h3><InfoButton label={da?"Om blokerede emner":"About blocked topics"} open={()=>setModal("topics")}/></div>
  <p className="meta blocking-lead">{da?"Blokér beskeder ud fra, hvad de handler om. Kun du ser listen.":"Block messages by what they are about. Only you see the list."}</p>

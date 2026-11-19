@@ -38,6 +38,23 @@ test('Tilføj without the "Jeg forstår" tick explains why, focuses the checkbox
  await click(box);assert.ok(!e.d.getElementById('blocked-ack-hint'),'message cleared when ticked');assert.ok(!box.hasAttribute('aria-describedby'));
  assert.equal(e.d.getElementById('blocked-word').value,'biler','typing kept');
 }finally{await e.close()}});
+test('Ack hint is a single line under the checkbox, not a filled red box around the row',async()=>{const e=await env();try{
+ input(e.w,'blocked-word','biler');await click(btn(e.d,'Tilføj'));
+ const label=e.d.querySelector('.blocking-ack');assert.ok(label.classList.contains('needs-attention'));
+ const hint=e.d.getElementById('blocked-ack-hint');assert.ok(hint.classList.contains('field-hint'));
+ assert.ok(label.compareDocumentPosition(hint)&4,'hint sits under the checkbox row');
+ assert.equal(e.d.querySelectorAll('.blocking-ack.needs-attention').length,1);
+}finally{await e.close()}});
+test('Sheet polish CSS: full-colour add buttons, no filled ack box, quiet grey reset, consistent helper type',()=>{
+ const fs=require('node:fs'),css=fs.readFileSync(require('node:path').join(__dirname,'../../src/blockingLists.css'),'utf8');
+ assert.match(css,/button\[aria-disabled=true\]\{opacity:1;background:var\(--accent\)/);
+ assert.match(css,/\.blocking-lists \.blocking-ack\.needs-attention,\s*\[data-theme=dark\] \.blocking-lists \.blocking-ack\.needs-attention\{background:transparent;box-shadow:none\}/);
+ assert.match(css,/\.blocking-ack\.needs-attention input\.check\{border-color:#b42318/);
+ assert.match(css,/button\.blocking-reset\{[^}]*color:var\(--muted\)/);
+ assert.match(css,/\.blocking-lead,\.blocking-help,\.blocking-empty\{font-size:13\.5px/);
+ assert.doesNotMatch(css,/\.blocking-help\{[^}]*font-size:12\.5px/);
+ assert.doesNotMatch(css,/blocking-foot\{[^}]*text-danger/);
+});
 test('Enter adds, input clears and keeps focus; too-short word and topic are explained',async()=>{const e=await env();try{
  input(e.w,'blocked-word','x');e.d.getElementById('blocked-word').form.requestSubmit();await delay(20);assert.equal(e.d.getElementById('blocked-word-hint').textContent,'Skriv mindst 2 tegn.');
  input(e.w,'blocked-word','biler');assert.ok(!e.d.getElementById('blocked-word-hint'));await click(e.d.querySelector('.blocking-ack input'));
@@ -47,7 +64,7 @@ test('Enter adds, input clears and keeps focus; too-short word and topic are exp
 test('Calm layout: sort only with 2+ words, small labelled remove buttons, reset is a quiet action at the bottom',async()=>{const e=await env();try{
  assert.ok(e.d.querySelector('.blocking-sort select'),'sort shown for 3 words');assert.equal(e.d.querySelectorAll('.blocking-card').length,3);assert.ok(e.d.querySelector('#blocked-attachments-title'));
  const trash=e.d.querySelector('[aria-label="Fjern æble"]');assert.ok(trash.classList.contains('blocking-trash'));
- const reset=btn(e.d,'Nulstil blokeringsliste');assert.ok(reset.classList.contains('text-danger'));assert.ok(reset.closest('.blocking-foot'));
+ const reset=btn(e.d,'Nulstil blokeringsliste');assert.ok(reset.classList.contains('blocking-reset'));assert.ok(!reset.classList.contains('text-danger'));assert.ok(reset.closest('.blocking-foot'));
  assert.ok(e.d.querySelector('.blocking-add').compareDocumentPosition(reset)&4,'reset sits below the add form');
  await click(e.d.querySelector('[aria-label="Fjern æble"]'));await click(e.d.querySelector('[aria-label="Fjern ønske"]'));assert.ok(!e.d.querySelector('.blocking-sort'),'no sort for a single word');
  assert.ok(e.d.getElementById('blocked-word').getAttribute('autocomplete')==='off');
