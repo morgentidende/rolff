@@ -11,7 +11,7 @@ const da = {
   blocked: "Beskeden blev ikke sendt, fordi tonen kan opfattes som sårende. Ret den og prøv igen.", flagged: "Markeret tekst",
   blockedLead: "Beskeden blev ikke sendt.", blockedRetry: "Ret den og prøv igen.",
   uncertainExplanation: "Rolff er lidt i tvivl om, hvordan beskeden vil blive opfattet. Prøv at skrive den lidt anderledes.",
-  suggestionLabel: "Forslag til omformulering", useSuggestion: "Brug forslaget",
+  suggestionLabel: "Forslag til omformulering", useSuggestion: "Brug forslag",
   guidanceLabel: "Vejledning", blockGuidance: "Skriv, hvad der skete, og hvad du gerne vil have anderledes – uden at kritisere den anden.",
   techError: "Teknisk fejl – beskeden er ikke sendt. Din tekst er gemt; prøv igen.", readOnly: "Du har rollen “Kun læse”: Du kan læse beskederne, men ikke skrive her.", rateLimited: "For mange forsøg. Vent et øjeblik.",
   pending: (n: number) => `${n} ny(e) besked(er) venter til din modtagetid.`, receiveNow: "Modtag beskeder nu",

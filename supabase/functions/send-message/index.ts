@@ -122,7 +122,7 @@ Deno.serve(async (req) => {
   if (res.decision !== "allow") await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: res.decision, p_reason: "sticky" in res ? "sticky_" + res.reason_code : res.reason_code });
   // "uncertain" (borderline tone): always the same short, friendly Rolff text in the sender's language.
   const explanation = res.decision === "block" && "house" in res && res.house ? HOUSE_EXPLANATION[res.house][lang] : res.decision === "block" && res.reason_code === "uncertain" ? UNCERTAIN_EXPLANATION[lang] : res.explanation;
-  if (res.decision === "block") return json({ status: "blocked", reason_code: res.reason_code, spans: res.spans, suggestion: res.suggestion, ...(explanation ? { explanation } : {}) }, 200);
+  if (res.decision === "block") return json({ status: "blocked", reason_code: res.reason_code, spans: res.spans, suggestion: res.suggestion, ...(explanation ? { explanation } : {}), ...("house" in res && res.house ? { house: res.house } : {}) }, 200);
   if (res.decision === "clarify") return json({ status: "clarification_required" }, 200);
 
   // This stage can only deny or request clarification AFTER global safety allows.
