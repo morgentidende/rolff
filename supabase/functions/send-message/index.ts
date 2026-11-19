@@ -11,7 +11,7 @@ import { checkPlanLength, planLengthError } from "../_shared/planLimits.ts";
 import { checkPersonLimits } from "../_shared/limits.ts";
 import { HOUSE_EXPLANATION } from "../_shared/houseRules.ts";
 import { checkRules } from "../_shared/rules.ts";
-import { applySticky, stickyHash } from "../_shared/stickyBlock.ts";
+import { applySticky, shouldRememberBlock, stickyHash } from "../_shared/stickyBlock.ts";
 import { charCount, doubleCheckFromEnv, moderate, moderationContract, ModerationTechnicalError, providerFromEnv, resolveSenderLang, timeoutFromEnv, UNCERTAIN_EXPLANATION } from "../_shared/moderation.ts";
 
 async function sha256Hex(s: string) {
@@ -114,7 +114,7 @@ Deno.serve(async (req) => {
     return json({ status: "technical_error" }, 503);
   }
   res = applySticky(res, remembered.data);
-  if (res.decision === "block") {
+  if (shouldRememberBlock(res)) {
     const mem = await admin.rpc("remember_moderation_block", { p_sender: uid, conv, p_hash: textKey, p_reason: res.reason_code });
     if (mem.error) console.log(JSON.stringify({ evt: "sticky_block_store_error" }));
     if ("sticky" in res) console.log(JSON.stringify({ evt: "sticky_block_applied" }));
