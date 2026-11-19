@@ -12,7 +12,7 @@ import { blockedAttachmentNotice, type RecipientAttachmentBlocks } from "./attac
 import { effectiveCharLimit, textRetryKey } from "./composerLimits";
 import { MessageBubble, ReplyComposer, type Message } from "./MessageBubble";
 import { isPendingSend, pendingSeconds, soonestPending } from "./delayedSend";
-import { invActions, invText, type PendingInv } from "./inviteText";
+import { invActions, invText, invitePoints, type PendingInv } from "./inviteText";
 import { Toast, showToast } from "./toast";
 import { ConfirmHost, confirmDialog } from "./confirmDialog";
 import { PolicyView } from "./PolicyView";
@@ -670,9 +670,9 @@ function InviteByEmail({ lang, done }: { lang: Lang; done: (toast: string, tone?
       : r.data?.error === "bad_input" ? (da ? "Tjek e-mailadressen." : "Check the email address.") : (da ? "Mailen kunne ikke sendes. Prøv igen senere." : "The email could not be sent. Try again later.") });
   };
   return (
-    <form onSubmit={submit} noValidate><p className="meta" role="note">{evidenceNote(lang)} {emailVisibleNote(lang)}</p>
-      <p className="meta">{da ? "Der oprettes en ny samtale mellem jer to. Den inviterede ser kun beskeder fra efter, hun eller han er kommet med." : "A new conversation is created for the two of you. The invitee only sees messages from after joining."}</p>
-      <label htmlFor="ie">{da ? "E-mail" : "Email"}</label><input id="ie" {...inviteEmailProps} required aria-invalid={msg && !msg.ok ? true : undefined} aria-describedby={msg && !msg.ok ? "ie-err" : undefined} value={email} onChange={(e) => { setEmail(e.target.value); if (msg && !msg.ok) setMsg(null); }} />
+    <form onSubmit={submit} noValidate>
+      <ul className="invite-points" role="note">{invitePoints(lang).map((p, i) => <li key={i}>{p.lead && <strong>{p.lead} </strong>}{p.text}</li>)}</ul>
+      <label htmlFor="ie">{da ? "E-mail" : "Email"}</label><input id="ie" {...inviteEmailProps} placeholder={da ? "navn@eksempel.dk" : "name@example.com"} required aria-invalid={msg && !msg.ok ? true : undefined} aria-describedby={msg && !msg.ok ? "ie-err" : undefined} value={email} onChange={(e) => { setEmail(e.target.value); if (msg && !msg.ok) setMsg(null); }} />
       {msg && <p id="ie-err" ref={(el) => el?.scrollIntoView?.({ block: "nearest" })} className={msg.ok ? "meta field-msg" : "err field-msg"} role={msg.ok ? "status" : "alert"}>{msg.text}</p>}
       <div className="row end"><button type="submit" disabled={busy}>{busy ? (da ? "Sender…" : "Sending…") : "Send invitation"}</button></div>
     </form>
