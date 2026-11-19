@@ -54,13 +54,14 @@ Deno.test("schema + prompts: explanation required in strict schema, prompt sets 
   assertEquals((RESPONSE_SCHEMA.required as string[]).includes("explanation"), true);
   assertEquals((FILE_RESPONSE_SCHEMA.required as string[]).includes("explanation"), true);
   assertEquals((FILE_RESPONSE_SCHEMA.properties as any).explanation.type, "string");
-  for (const s of ["\"explanation\"", "max 140 characters", "NEVER quote, repeat or paraphrase offensive", "When you ALLOW or CLARIFY, set \"explanation\" to \"\""]) if (!SYSTEM_PROMPT.includes(s)) throw new Error("prompt missing " + s);
+  for (const s of ["\"explanation\"", "max 320 characters", "NEVER repeat slurs, swear words or threats", "When you ALLOW or CLARIFY, set \"explanation\" to \"\""]) if (!SYSTEM_PROMPT.includes(s)) throw new Error("prompt missing " + s);
   if (!FILE_PROMPT.includes("\"explanation\"")) throw new Error("file prompt");
 });
 Deno.test("file result: explanation sanitized against caption/transcript; missing -> empty", () => {
   const base = { decision: "block", reason_code: "personal_attack", spans: ["Klovn"], suggestion: "", transcript: "Klovn!" };
   assertEquals(validateFileResult({ ...base, explanation: "Billedteksten kan virke nedgørende over for modtageren." }, "").explanation, "Billedteksten kan virke nedgørende over for modtageren.");
-  assertEquals(validateFileResult({ ...base, explanation: "Ordet Klovn kan såre." }, "").explanation, "");
+  assertEquals(validateFileResult({ ...base, explanation: "Ordet Klovn kan såre." }, "").explanation, "Ordet Klovn kan såre."); // sender's own flagged word may be named
+  assertEquals(validateFileResult({ ...base, spans: ["shit"], transcript: "shit", explanation: "Ordet shit kan såre." }, "").explanation, ""); // swear words never repeated
   assertEquals(validateFileResult(base, "").explanation, "");
   assertEquals(validateFileResult({ ...base, decision: "allow", reason_code: "none", spans: [], explanation: "x" }, "").explanation, "");
 });

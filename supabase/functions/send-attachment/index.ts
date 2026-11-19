@@ -137,7 +137,7 @@ Deno.serve(async (req) => {
 
   if (res.decision === "block") {
     await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "block", p_reason: res.reason_code });
-    const explanation = res.reason_code === "uncertain" ? UNCERTAIN_EXPLANATION[lang] : res.explanation;
+    const explanation = res.reason_code === "uncertain" ? (res.explanation || UNCERTAIN_EXPLANATION[lang]) : res.explanation;
     return json({ status: "blocked", reason_code: res.reason_code, spans: res.spans, suggestion: res.suggestion, ...(explanation ? { explanation } : {}), meta }, 200);
   }
   // Same blocked words and hard prefilter as normal messages, on the text found in the file.

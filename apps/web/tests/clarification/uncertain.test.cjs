@@ -34,8 +34,8 @@ test('da: uncertain shows the fixed Rolff text, highlights the span and offers B
   } finally { await f.close(); }
 });
 
-test('da: the client shows the Rolff text even if the server explanation is missing or different', async () => {
-  for (const explanation of [undefined, 'Noget andet fra modellen.']) {
+test('da: the client shows the fixed Rolff text when the server explanation is missing', async () => {
+  for (const explanation of [undefined]) {
     const f = await env(); try {
       const r = { ...RES }; if (explanation) r.explanation = explanation;
       const box = await send(f, r); assert.equal(box.querySelector('.blockbox-reason').textContent, `Beskeden blev ikke sendt. ${DA}`);
@@ -67,5 +67,13 @@ test('other reasons are unchanged (explanation + retry line)', async () => {
     const box = await send(f, { status: 'blocked', reason_code: 'personal_attack', spans: [], suggestion: '', explanation: 'Tonen kan virke hård.' });
     assert.equal(box.querySelector('.blockbox-reason').textContent, 'Beskeden blev ikke sendt. Tonen kan virke hård. Ret den og prøv igen.');
     assert.ok(box.querySelector('.blockbox-guide'));
+  } finally { await f.close(); }
+});
+
+test('da: a detailed uncertain explanation (words + role of the earlier conversation) is shown, with the retry line', async () => {
+  const f = await env(); try {
+    const DET = 'Rolff er i tvivl om „skodbøger“. Beskeden kan læses som et svar på en tidligere besked om bøger.';
+    const box = await send(f, { ...RES, explanation: DET });
+    assert.equal(box.querySelector('.blockbox-reason').textContent, `Beskeden blev ikke sendt. ${DET} Ret den og prøv igen.`);
   } finally { await f.close(); }
 });
