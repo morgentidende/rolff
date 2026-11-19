@@ -9,6 +9,7 @@ import { normalizeReplyId } from "../_shared/replies.ts";
 import { replyModerationContext } from "../_shared/replyContext.ts";
 import { checkPlanLength, planLengthError } from "../_shared/planLimits.ts";
 import { checkPersonLimits } from "../_shared/limits.ts";
+import { HOUSE_EXPLANATION } from "../_shared/houseRules.ts";
 import { checkRules } from "../_shared/rules.ts";
 import { applySticky, stickyHash } from "../_shared/stickyBlock.ts";
 import { charCount, doubleCheckFromEnv, moderate, moderationContract, ModerationTechnicalError, providerFromEnv, resolveSenderLang, timeoutFromEnv, UNCERTAIN_EXPLANATION } from "../_shared/moderation.ts";
@@ -120,7 +121,7 @@ Deno.serve(async (req) => {
   }
   if (res.decision !== "allow") await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: res.decision, p_reason: "sticky" in res ? "sticky_" + res.reason_code : res.reason_code });
   // "uncertain" (borderline tone): always the same short, friendly Rolff text in the sender's language.
-  const explanation = res.decision === "block" && res.reason_code === "uncertain" ? UNCERTAIN_EXPLANATION[lang] : res.explanation;
+  const explanation = res.decision === "block" && "house" in res && res.house ? HOUSE_EXPLANATION[res.house][lang] : res.decision === "block" && res.reason_code === "uncertain" ? UNCERTAIN_EXPLANATION[lang] : res.explanation;
   if (res.decision === "block") return json({ status: "blocked", reason_code: res.reason_code, spans: res.spans, suggestion: res.suggestion, ...(explanation ? { explanation } : {}) }, 200);
   if (res.decision === "clarify") return json({ status: "clarification_required" }, 200);
 

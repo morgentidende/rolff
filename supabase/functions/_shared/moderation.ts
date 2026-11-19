@@ -1,4 +1,5 @@
 // Provider-agnostic moderation. Pure module: no Supabase deps, runs in Deno & tests.
+import { fixExclamations, houseCheck, type HouseKind } from "./houseRules.ts";
 export const DECISIONS = ["allow", "block", "clarify"] as const;
 export type Decision = typeof DECISIONS[number];
 export const REASON_CODES = [
@@ -26,6 +27,7 @@ export const SYSTEM_PROMPT = `You are the pre-send safety filter for Rolff, a ch
 Decide if the NEW MESSAGE may be delivered. Judge meaning in context, not keywords or substrings alone.
 BLOCK the whole message if ANY part contains: personal attacks (direct or indirect), insults, humiliation, mockery, belittling, sarcasm or irony used to hurt or demean (e.g. "How impressive that you forgot your own child again"), false politeness wrapping a dig ("With all due respect, maybe try being a parent for once", "Typical of you to grab the inheritance before Mum was even buried"), passive-aggressive digs, slurs/discriminatory language, threats, intimidation, or emotional blackmail (e.g. using children, money, shared friends or secrets as leverage).
 BLOCK with reason_code "controlling_demand" when the sender dictates or commands what the recipient must do — ordering, issuing ultimatums, or asserting unilateral control (e.g. Danish "du skal", "du har bare at", "jeg bestemmer at du"; English "you must", "you will do as I say", "you have to do exactly what I tell you"). This takes priority over logistics: a command that also mentions times, pickup or money is still a controlling demand (e.g. "Du skal hente kl. 16, punktum").
+BLOCK profanity, swear words and ugly words in Danish and English (e.g. lort, pis/pisse, fuck, shit, skide-, for helvede, fanden) with reason_code "other_harmful", even when they are NOT aimed at anyone (e.g. "Lort glemte bøgerne", "Jeg kan godt skrive lort"): put the exact swear word in "spans"; if a concrete practical wish remains, "suggestion" is a polite rewrite without the swear word, otherwise "". Never use exclamation marks in "suggestion".
 Do NOT block as controlling_demand solely because those words appear when the meaning is different: a neutral documentation quote of someone else; protective wording like "du skal ikke finde dig i trusler" / "you must not accept threats"; a polite request or question ("Kan du …?", "Could you …?", "Vil du …?"); or the sender stating their own boundary without commanding the other ("Jeg kan ikke …", "I will not …", "Jeg vælger at …").
 ALLOW: practical logistics, polite or blunt factual disagreement, a clear "no", factual descriptions of problems (e.g. lateness), reasonable boundaries and requests (including questions and soft asks), concern for a child or another person, factual statements about money, property or legal steps (e.g. "my lawyer will contact you" stated neutrally), neutral quotes of something said for documentation. Do not judge who is right, do not diagnose anyone, do not infer guilt. Genuine thanks or praise is allowed.
 UNDERSTANDABILITY (not a spelling test): First assess any recognizable harmful meaning; if present, BLOCK under the existing harm reason, even when another part is unclear. Capitalization or presenting an abusive label as a name must NEVER exempt recognizable profanity, slurs or abuse from the harmful-language rules.
@@ -225,14 +227,33 @@ async function aiCheck(provider: ModerationProvider, msg: string, ctx: ContextMs
   } finally { clearTimeout(timer); }
 }
 
+/** Deterministic block for swear words / exclamation marks. Exclamation-only: no model call (suggestion = same text with a period).
+ *  Swear words: the model is asked only for a polite rewrite (best effort); whatever it says or if it fails, the block stands. */
+async function houseBlock(provider: ModerationProvider, msg: string, ctx: ContextMsg[], timeoutMs: number, house: ReturnType<typeof houseCheck> & object): Promise<ModerationResult> {
+  const base: ModerationResult = { decision: "block", reason_code: "other_harmful", spans: house.spans, suggestion: "", explanation: "" };
+  if (!house.profanity.length) return { ...base, suggestion: fixExclamations(msg) };
+  let ai: ModerationResult | null = null;
+  try { ai = await aiCheck(provider, msg, ctx, timeoutMs); } catch { ai = null; }
+  if (ai && ai.decision === "block") {
+    let sug = house.exclamations.length ? fixExclamations(ai.suggestion) || ai.suggestion : ai.suggestion;
+    sug = sug.replace(/[!！‼⁉]+/gu, ".").replace(/\.{2,}/g, ".");
+    const clean = houseCheck(sug) === null && sug !== msg.trim();
+    const spans = [...new Set([...house.spans, ...ai.spans.filter((x) => !house.spans.includes(x))])].slice(0, 5);
+    return { ...base, spans, suggestion: clean ? sug : "", reason_code: ai.reason_code === "uncertain" ? "other_harmful" : ai.reason_code };
+  }
+  return base;
+}
+
 export interface ModerateOptions {
   /** Second independent AI check when the first says "allow"; the stricter verdict wins. Errors fail closed. */
   doubleCheck?: boolean;
 }
 
-export async function moderate(provider: ModerationProvider, msg: string, ctx: ContextMsg[], timeoutMs = 15000, opts: ModerateOptions = {}): Promise<ModerationResult & { source: "prefilter" | "ai"; checks?: number }> {
+export async function moderate(provider: ModerationProvider, msg: string, ctx: ContextMsg[], timeoutMs = 15000, opts: ModerateOptions = {}): Promise<ModerationResult & { source: "prefilter" | "ai" | "house"; checks?: number; house?: HouseKind }> {
   const pre = prefilter(msg);
   if (pre) return { ...pre, source: "prefilter" };
+  const house = houseCheck(msg);
+  if (house) return { ...(await houseBlock(provider, msg, ctx, timeoutMs, house)), source: "house", house: house.kind };
   const first = await aiCheck(provider, msg, ctx, timeoutMs);
   if (!opts.doubleCheck || first.decision !== "allow") return { ...first, source: "ai" };
   // Only an "allow" is re-checked: block if either check blocks; clarify if the second asks for it.
