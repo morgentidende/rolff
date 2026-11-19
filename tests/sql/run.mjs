@@ -653,5 +653,7 @@ const {testBlockAttachments}=await import('./block-attachments.mjs');
 await testBlockAttachments({db,as,svc,hash,t,assert,rejects});
 const {testMailLogInvites}=await import('./mail-log-invites.mjs');
 await testMailLogInvites({db,as,svc,hash,t,assert,rejects});
+const {testPendingInvitationAlias}=await import('./pending-invitation-alias.mjs');
+await testPendingInvitationAlias({db,as,svc,hash,t,assert,rejects});
 console.log(`\n${pass} bestået, ${fail} fejlet`);
 process.exit(fail ? 1 : 0);

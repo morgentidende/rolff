@@ -33,7 +33,7 @@ Deno.test("preview: nothing visible gives null", () => {
 });
 Deno.test("Home uses v2 list with v1 fallback and keeps nickname + colour", async () => {
   const a = await Deno.readTextFile("apps/web/src/App.tsx");
-  for (const s of ['rpc("list_my_conversations_v2")', 'rpc("list_my_conversations")', "rename(c.others)", "<ColorDot", "previewText(", "listTime("]) if (!a.includes(s)) throw new Error("missing " + s);
+  for (const s of ['rpc("list_my_conversations_v2")', 'rpc("list_my_conversations")', "rename(renameTargets(c))", "<ColorDot", "previewText(", "listTime("]) if (!a.includes(s)) throw new Error("missing " + s);
 });
 Deno.test("Status bar and manifest are black", async () => {
   const h = await Deno.readTextFile("apps/web/index.html");

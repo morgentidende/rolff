@@ -41,9 +41,13 @@ import { labelOf, convDisplay } from "./convDisplay";
 import { listTime, previewText, type ConvPreview } from "./convList";
 import { cleanExplanation } from "./blockExplanation";
 
-type Other = { user_id: string; email: string; alias: string | null };
-type Conv = { id: string; role: string; members: number; others: Other[]; color: string | null; pending_invitee?: string | null };
+/** `pending` = a person who has not accepted yet: user_id then holds the INVITATION id (the nickname follows them once they accept). */
+type Other = { user_id: string; email: string; alias: string | null; pending?: boolean };
+type Conv = { id: string; role: string; members: number; others: Other[]; color: string | null; pending_invitee?: string | null; pending_invitation_id?: string | null; pending_alias?: string | null };
 const convLabel = (c: Conv, da: boolean) => convDisplay(c, da).title;
+/** Who can be given a private nickname in this conversation: the members, or - before anyone accepted - the invitation. */
+const renameTargets = (c: Conv): Other[] => c.others?.length ? c.others
+  : c.pending_invitation_id ? [{ user_id: c.pending_invitation_id, email: c.pending_invitee ?? "", alias: c.pending_alias ?? null, pending: true }] : [];
 type Msg = Message;
 const count = (s: string) => [...s].length;
 
@@ -69,6 +73,8 @@ export function App() {
   const [sheet, setSheet, resetSheet] = usePanelState<Sheet>(null);
   const [homeKey, setHomeKey] = useState(0);
   const [renameContacts, setRenameContacts] = useState<Other[] | null>(null);
+  // Nothing to nickname (e.g. an invitation that expired long ago): do not open an empty dialog.
+  const openRename = (c: Other[]) => { if (c.length) setRenameContacts(c); };
   useEffect(() => { setRenameContacts(null); }, [session?.user.id]);
   const t = strings[lang]; const da = lang === "da";
   useEffect(() => { localStorage.setItem("lang", lang); document.documentElement.lang = lang; }, [lang]);
@@ -160,15 +166,15 @@ export function App() {
       {inviteMsg && <div className="notice" role="status">{inviteMsg}</div>}
       {session && !conv && !sheet && <PushSettings key={`push-offer:${session.user.id}`} uid={session.user.id} lang={lang} onboarding />}
       {!session ? <Auth lang={lang} peek={inviteToken ? peek : undefined} />
-        : conv ? <Chat session={session} key={session.user.id} lang={lang} conv={conv} rename={setRenameContacts} back={() => setConv(null)} openPlans={() => setSheet("plans")} planKey={sheet} menuButtonRef={menuButtonRef} />
-        : <Home key={`home:${session.user.id}`} refreshKey={homeKey} lang={lang} open={setConv} rename={setRenameContacts} invite={() => setSheet("invite")} />}
+        : conv ? <Chat session={session} key={session.user.id} lang={lang} conv={conv} rename={openRename} back={() => setConv(null)} openPlans={() => setSheet("plans")} planKey={sheet} menuButtonRef={menuButtonRef} />
+        : <Home key={`home:${session.user.id}`} refreshKey={homeKey} lang={lang} open={setConv} rename={openRename} invite={() => setSheet("invite")} />}
       {sheet === "lang" && <SheetView title={t.lang} close={close} lang={lang} anchor={menuButtonRef}><Choice name="lang" value={lang} set={(v) => setLang(v as Lang)} opts={[["da", "Dansk"], ["en", "English"]]} /></SheetView>}
       {sheet === "theme" && <SheetView title={t.theme} close={close} lang={lang} anchor={menuButtonRef}><Choice name="theme" value={theme} set={setTheme} opts={[["dark", t.dark], ["light", t.light], ["system", t.system]]} /></SheetView>}
       {sheet === "notifications" && session && <SheetView title={da ? "Notifikationer" : "Notifications"} close={close} lang={lang} anchor={menuButtonRef}><PushSettings key={`push-settings:${session.user.id}`} uid={session.user.id} lang={lang} /></SheetView>}
       {sheet === "plans" && <SheetView title={da ? "Abonnement" : "Plan"} close={close} lang={lang} anchor={menuButtonRef}><Plans lang={lang} /></SheetView>}
       {sheet === "faq" && <SheetView title="FAQ" close={close} lang={lang} anchor={menuButtonRef}><Faq lang={lang} /></SheetView>}
       {session && renameContacts && <ContactAliasDialog key={`alias:${session.user.id}`} lang={lang} contacts={renameContacts}
-        close={() => setRenameContacts(null)} save={async (id, alias) => { const uid=session.user.id; const { error } = await supabase.rpc("set_contact_alias", { p_contact: id, p_alias: alias }).setHeader("Authorization", `Bearer ${session.access_token}`); if (error) throw error; if((await supabase.auth.getSession()).data.session?.user.id!==uid)return; const name=alias.trim()||null; setConv(c => c ? { ...c, others: c.others.map(o => o.user_id === id ? { ...o, alias:name } : o) } : c); setHomeKey(k => k + 1); }}
+        close={() => setRenameContacts(null)} save={async (id, alias, pending) => { const uid=session.user.id; const { error } = await (pending ? supabase.rpc("set_invitation_alias", { p_invitation: id, p_alias: alias }) : supabase.rpc("set_contact_alias", { p_contact: id, p_alias: alias })).setHeader("Authorization", `Bearer ${session.access_token}`); if (error) throw error; if((await supabase.auth.getSession()).data.session?.user.id!==uid)return; const name=alias.trim()||null; setConv(c => c ? (pending ? (c.pending_invitation_id === id ? { ...c, pending_alias: name } : c) : { ...c, others: c.others.map(o => o.user_id === id ? { ...o, alias:name } : o) }) : c); setHomeKey(k => k + 1); }}
         saved={() => setRenameContacts(null)} />}
       {sheet === "account" && <SheetView title={da ? "Konto" : "Account"} close={close} lang={lang} anchor={menuButtonRef}><AccountPanel lang={lang} /></SheetView>}
       {sheet === "newpw" && session && <SheetView title={da ? "Vælg ny adgangskode" : "Choose a new password"} close={close} lang={lang} anchor={menuButtonRef}><NewPassword lang={lang} done={close} /></SheetView>}
@@ -603,7 +609,7 @@ function Home({ lang, open, invite, rename, refreshKey }: { lang: Lang; open: (c
         {convs.map((c) => { const d = convDisplay(c, da); const prev = previewText(c, da); const time = listTime(c.last_at, lang, now); return (
           <li key={c.id} className="convrow">
             <ColorDot lang={lang} conv={c} label={d.title} initial={d.initial} changed={(col) => setConvs((convs ?? []).map((x) => x.id === c.id ? { ...x, color: col } : x))} />
-            <ContactButton open={() => open(c)} rename={() => { dropHint(); rename(c.others); }}>
+            <ContactButton open={() => open(c)} rename={() => { dropHint(); rename(renameTargets(c)); }}>
               <span className="convtop"><span className="convname">{d.title}</span>{activeMute(mutes, c.id) && <span className="convmuted" role="img" aria-label={da ? "Lydløs" : "Muted"}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8.7 3A6 6 0 0 1 18 8c0 2.4.5 4.1 1.1 5.2M6.3 6.3C6.1 6.8 6 7.4 6 8c0 7-3 9-3 9h14M10.3 21a1.9 1.9 0 0 0 3.4 0M2 2l20 20" /></svg></span>}{time && <span className="convtime">{time}</span>}</span>
               <span className={prev ? "convprev" : "convprev empty"}>{prev ?? d.status ?? (c.last_at === undefined ? "" : (da ? "Ingen beskeder endnu" : "No messages yet"))}</span>
             </ContactButton>
@@ -922,7 +928,7 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
     try { await navigator.clipboard.writeText(link); showToast(tx.copied, { tone: "success", at: "top", ms: 6000 }); return null; }
     catch { return link; }
   };
-  const d = convDisplay({ others, pending_invitee: conv.pending_invitee }, da); const label = d.title;
+  const d = convDisplay({ others, pending_invitee: conv.pending_invitee, pending_alias: conv.pending_alias }, da); const label = d.title;
   const roleTxt = (r: string) => r === "reader" ? (da ? "kun læse" : "read only") : (da ? "læse og skrive" : "read and write");
   const replyWho = (m: Pick<ReplyTarget, "mine" | "sender_id" | "sender_name" | "sender_email">) => {
     if (m.mine) return da ? "dig selv" : "yourself";
@@ -979,7 +985,7 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
       <header className="topbar chat">
         <button className="icon" onClick={back} aria-label={t.back}><Icon d={<path d="M15 18l-6-6 6-6" />} /></button>
         <ColorDot lang={lang} conv={{ ...conv, color }} label={label} initial={d.initial} changed={setColor} />
-        <div role="heading" aria-level={2} className="chattitle">{others.length ? others.map((o) => <button key={o.user_id} type="button" className="contact-heading" title={da ? "Privat kaldenavn" : "Private nickname"} onClick={() => rename([o])}>{labelOf(o)}</button>) : <><span className="convname">{d.title}</span>{d.status && <span className="meta convstatus"> · {d.status}</span>}</>}</div>
+        <div role="heading" aria-level={2} className="chattitle">{others.length ? others.map((o) => <button key={o.user_id} type="button" className="contact-heading" title={da ? "Privat kaldenavn" : "Private nickname"} onClick={() => rename([o])}>{labelOf(o)}</button>) : <>{conv.pending_invitation_id ? <button type="button" className="contact-heading" title={da ? "Privat kaldenavn" : "Private nickname"} onClick={() => rename(renameTargets(conv))}>{d.title}</button> : <span className="convname">{d.title}</span>}{d.status && <span className="meta convstatus"> · {d.status}</span>}</>}</div>
         <button ref={searchBtnRef} className="icon" aria-label={da ? "Søg i samtalen" : "Search conversation"} aria-pressed={q !== null} onClick={() => { setQ(q === null ? "" : null); setCur(0); }}><Icon d={<><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></>} /></button>
         {conv.role === "parent" && <button ref={addPersonRef} className="icon" aria-label={da ? "Tilføj person" : "Add person"} aria-haspopup="dialog" aria-expanded={sheet === "addMember"} onClick={() => setSheet("addMember")}><Icon d={<><circle cx="9" cy="8" r="4" /><path d="M2 21c0-4 3-6 7-6s7 2 7 6" /><path d="M19 8v6M16 11h6" /></>} /></button>}
         {/* Conversation-only actions; app-wide settings live on the front-page menu. */}
@@ -988,7 +994,7 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
           ...(mute ? [{ label: unmuteLabel(da), run: () => { void unmute(); } }] : []),
           { label: t.windows, run: () => setSheet("times") },
           { label: da ? "Deltagere og roller" : "Participants and roles", run: () => setSheet("members") },
-          ...(others.length ? [{ label: da ? "Kontaktens kaldenavn" : "Contact nickname", run: () => rename(others) }] : []),
+          ...(renameTargets({ ...conv, others }).length ? [{ label: da ? "Kontaktens kaldenavn" : "Contact nickname", run: () => rename(renameTargets({ ...conv, others })) }] : []),
           { label: da ? "Eksportér samtale" : "Export conversation", run: () => setSheet("export") },
           { label: da ? "Blokeringer" : "Blocking lists", run: () => setSheet("words") },
           { label: da ? "Rapportér" : "Report", run: () => setSheet("report"), divider: true },

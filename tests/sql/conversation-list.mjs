@@ -81,6 +81,6 @@ export async function testConversationList({ db, as, svc, t, assert }) {
   });
   await t('Samtaleliste: v1 er uændret (gamle klienter)', async () => {
     const r = await as(A, `select * from list_my_conversations()`);
-    assert.deepEqual(Object.keys(r[0]).sort(), ['color', 'id', 'members', 'others', 'pending_invitee', 'role']);
+    assert.deepEqual(Object.keys(r[0]).sort(), ['color', 'id', 'members', 'others', 'pending_alias', 'pending_invitation_id', 'pending_invitee', 'role']);
   });
 }
