@@ -2,7 +2,8 @@ import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import type { Lang } from "./i18n";
 
-export type AliasContact = { user_id: string; email: string; alias: string | null };
+/** `pending`: the person has not accepted yet; user_id is then the INVITATION id and the nickname follows them on acceptance. */
+export type AliasContact = { user_id: string; email: string; alias: string | null; pending?: boolean };
 
 /** A short tap opens the conversation; a cancelled gesture must never navigate. */
 export function ContactButton({ children, open, rename }: { children: React.ReactNode; open: () => void; rename: () => void }) {
@@ -28,7 +29,7 @@ export function ContactButton({ children, open, rename }: { children: React.Reac
 
 /** Only the existing owner-scoped contact-alias RPC is supplied by the caller. */
 export function ContactAliasDialog({ lang, contacts, save, saved, close }: {
-  lang: Lang; contacts: AliasContact[]; save: (id: string, alias: string) => Promise<void>;
+  lang: Lang; contacts: AliasContact[]; save: (id: string, alias: string, pending: boolean) => Promise<void>;
   saved: (id: string, alias: string | null) => void; close: () => void;
 }) {
   const da = lang === "da";
@@ -49,7 +50,7 @@ export function ContactAliasDialog({ lang, contacts, save, saved, close }: {
   const submit = async (alias: string) => {
     if (!id || inflight.current) return;
     inflight.current = true; setBusy(true); setErr("");
-    try { await save(id, alias); if (mounted.current) saved(id, alias.trim() || null); }
+    try { await save(id, alias, !!contacts.find(c => c.user_id === id)?.pending); if (mounted.current) saved(id, alias.trim() || null); }
     catch { if (mounted.current) setErr(da ? "Vi kunne ikke bekræfte, at kaldenavnet blev gemt. Prøv igen." : "We could not confirm that the nickname was saved. Please try again."); }
     finally { inflight.current = false; if (mounted.current) setBusy(false); }
   };
@@ -67,13 +68,14 @@ export function ContactAliasDialog({ lang, contacts, save, saved, close }: {
     }}>
     <div className="sheethead"><h2 id="contact-alias-title">{da ? "Kontaktens kaldenavn" : "Contact nickname"}</h2><button type="button" className="icon" aria-label={da ? "Luk" : "Close"} disabled={busy} onClick={dismiss}>✕</button></div>
     <p className="meta">{da ? "Kun du kan se dette navn. Personens profil og navn hos andre ændres ikke." : "Only you can see this name. Their profile and name for others are unchanged."}</p>
-    {!contacts.length ? <p>{da ? "Kaldenavnet kan ændres, når invitationen er accepteret." : "You can change the nickname after the invitation is accepted."}</p> : <>
+    {selected?.pending && <p className="meta" id="contact-alias-pending">{da ? "Personen har ikke accepteret endnu. Kaldenavnet følger med, når invitationen tages imod, og personen kan aldrig se det." : "They have not accepted yet. The nickname carries over once the invitation is accepted, and they can never see it."}</p>}
+    {!contacts.length ? null : <>
       {contacts.length > 1 && <label>{da ? "Vælg person" : "Choose person"}<select value={id} disabled={busy} onChange={e => { const c = contacts.find(c => c.user_id === e.target.value); setId(c?.user_id ?? ""); setValue(c?.alias ?? ""); setErr(""); }}><option value="">{da ? "Vælg person…" : "Choose person…"}</option>{contacts.map(c => <option key={c.user_id} value={c.user_id}>{c.alias || c.email}</option>)}</select></label>}
       {selected && <form onSubmit={e => { e.preventDefault(); void submit(value); }}>
         <label htmlFor="contact-alias-input">{da ? "Kaldenavn" : "Nickname"}</label>
         {/* A private display name for someone else: never the user's own name/email, so no autofill. */}
-        <input ref={input} id="contact-alias-input" name="contact-nickname" type="text" inputMode="text" autoComplete="off" autoCorrect="off" autoCapitalize="words" spellCheck={false} enterKeyHint="done" data-lpignore="true" data-1p-ignore="true" data-form-type="other" maxLength={40} value={value} placeholder={da ? "Skriv et kaldenavn" : "Enter a nickname"} aria-describedby="contact-alias-original" disabled={busy} onChange={e => { setValue(e.target.value); setErr(""); }} />
-        <p className="meta" id="contact-alias-original">{da ? "Oprindeligt navn: " : "Original name: "}<span className="alias-original">{selected.email}</span></p>
+        <input ref={input} id="contact-alias-input" name="contact-nickname" type="text" inputMode="text" autoComplete="off" autoCorrect="off" autoCapitalize="words" spellCheck={false} enterKeyHint="done" data-lpignore="true" data-1p-ignore="true" data-form-type="other" maxLength={40} value={value} placeholder={da ? "Skriv et kaldenavn" : "Enter a nickname"} aria-describedby={selected.email ? "contact-alias-original" : undefined} disabled={busy} onChange={e => { setValue(e.target.value); setErr(""); }} />
+        {selected.email && <p className="meta" id="contact-alias-original">{da ? "Oprindeligt navn: " : "Original name: "}<span className="alias-original">{selected.email}</span></p>}
         {selected.alias && <button type="button" className="text-link alias-reset" disabled={busy} onClick={() => void submit("")}>{da ? "Nulstil kaldenavn" : "Reset nickname"}</button>}
         <div className="dialog-actions"><button type="button" className="ghost" disabled={busy} onClick={dismiss}>{da ? "Annuller" : "Cancel"}</button><button type="submit" disabled={busy}>{busy ? (da ? "Gemmer…" : "Saving…") : (da ? "Gem" : "Save")}</button></div>
       </form>}

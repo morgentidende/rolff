@@ -15,7 +15,7 @@ async function appBundle() {
     }).then(r => r.outputFiles[0].text);
 }
 const delay = ms => new Promise(r => setTimeout(r, ms));
-async function env(strict = false, pauseAuth = false) {
+async function env(strict = false, pauseAuth = false, setup = null) {
     const errors = [], network = [], vc = new VirtualConsole();
     vc.on('jsdomError', e => errors.push(e.message));
     vc.on('error', (...args) => errors.push(args.map(String).join(' | ')));
@@ -26,6 +26,8 @@ async function env(strict = false, pauseAuth = false) {
         // No resources option: jsdom never loads subresources. Only bundled code runs.
         beforeParse(w) {
             w.__QA_PAUSE_AUTH = pauseAuth;
+            if (typeof setup === 'function')
+                setup(w);
             w.matchMedia = () => ({ matches: false, addEventListener() { }, removeEventListener() { } });
             w.HTMLElement.prototype.scrollIntoView = function () { };
             // Not an Android close-request emulator: tests explicitly dispatch cancel.
