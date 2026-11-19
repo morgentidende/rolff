@@ -12,6 +12,7 @@ import { blockedAttachmentNotice, type RecipientAttachmentBlocks } from "./attac
 import { effectiveCharLimit, textRetryKey } from "./composerLimits";
 import { MessageBubble, ReplyComposer, type Message } from "./MessageBubble";
 import { isPendingSend, pendingSeconds, soonestPending } from "./delayedSend";
+import { invActions, invText, type PendingInv } from "./inviteText";
 import { Toast, showToast } from "./toast";
 import { ConfirmHost, confirmDialog } from "./confirmDialog";
 import { PolicyView } from "./PolicyView";
@@ -171,7 +172,7 @@ export function App() {
       {sheet === "newpw" && session && <SheetView title={da ? "Vælg ny adgangskode" : "Choose a new password"} close={close} lang={lang} anchor={menuButtonRef}><NewPassword lang={lang} done={close} /></SheetView>}
       {sheet === "privacy" && <SheetView title={da ? "Privatliv og sletning" : "Privacy and deletion"} close={close} lang={lang} anchor={menuButtonRef}><PrivacyPanel lang={lang} /></SheetView>}
       {sheet === "feedback" && <SheetView title="Feedback" close={close} lang={lang} anchor={menuButtonRef}><FeedbackForm lang={lang} /></SheetView>}
-      {sheet === "invite" && <SheetView title={da ? "Inviter person" : "Invite person"} close={close} lang={lang} anchor={menuButtonRef}><InviteByEmail lang={lang} done={(toast) => { setHomeKey(homeKey + 1); close(); showToast(toast, { tone: "success", ms: 4000, at: "top" }); }} /></SheetView>}
+      {sheet === "invite" && <SheetView title={da ? "Inviter person" : "Invite person"} close={close} lang={lang} anchor={menuButtonRef}><InviteByEmail lang={lang} done={(toast, tone = "success") => { setHomeKey(homeKey + 1); close(); showToast(toast, { tone, ms: tone === "success" ? 4000 : 9000, at: "top" }); }} /></SheetView>}
       {policyOpen && <PolicyView lang={lang} close={() => setPolicyOpen(false)} />}
       {/* One app-wide toast ("Kopieret", "Planen er skiftet") that floats above chat and sheets. */}
       <Toast />
@@ -618,7 +619,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const inviteEmailProps = { name: "invitee-email", type: "email", inputMode: "email", enterKeyHint: "send", autoComplete: "off", autoCapitalize: "none", autoCorrect: "off", spellCheck: false, maxLength: 254 } as const;
 function blurActive() { const a = document.activeElement; if (a instanceof HTMLElement) a.blur(); }
 
-function InviteByEmail({ lang, done }: { lang: Lang; done: (toast: string) => void }) {
+function InviteByEmail({ lang, done }: { lang: Lang; done: (toast: string, tone?: "success" | "neutral") => void }) {
   const da = lang === "da";
   const [email, setEmail] = useState(""); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState<{ ok: boolean; text: string; plan?: boolean } | null>(null);
   const submit = async (e: React.FormEvent) => {
@@ -629,6 +630,7 @@ function InviteByEmail({ lang, done }: { lang: Lang; done: (toast: string) => vo
     let r; try { r = await callFn("invite-email", { email: addr, lang }); } catch { r = { status: 0, data: null as any }; }
     setBusy(false);
     if (r.status === 200) { blurActive(); done(da ? `Invitation sendt til ${addr}. Du får en kopi på mail.` : `Invitation sent to ${addr}. You will get a copy by email.`); }
+    else if (r.status === 502 && r.data?.data?.conversation_id) { blurActive(); done(invText(lang).createdMailFailed, "neutral"); }
     else setMsg({ ok: false, text: r.data?.error === "rate_limited" ? (da ? "Du har sendt mange invitationer i dag. Prøv igen i morgen." : "Too many invitations today.")
       : r.data?.error === "bad_input" ? (da ? "Tjek e-mailadressen." : "Check the email address.") : (da ? "Mailen kunne ikke sendes. Prøv igen senere." : "The email could not be sent. Try again later.") });
   };
@@ -642,7 +644,7 @@ function InviteByEmail({ lang, done }: { lang: Lang; done: (toast: string) => vo
   );
 }
 
-type Pending = { id: string; role: string; invitee_email: string | null; consents: number; required: number; i_consented: boolean; mine: boolean };
+type Pending = PendingInv;
 
 function markAll(text: string, q: string, current: boolean): (string | React.ReactElement)[] | string {
   const n = q.trim(); if (!n) return text;
@@ -875,9 +877,27 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
         : { title: da ? "Afvis invitationen?" : "Reject the invitation?", body: da ? `Ét afslag stopper invitationen af ${who}.` : `One rejection stops the invitation of ${who}.`, confirm: da ? "Afvis" : "Reject", cancel: da ? "Annuller" : "Cancel", danger: true });
       if (!ok) return;
     }
-    const r = await callFn("invite-email", { action, invitation_id: id, lang }).catch(() => ({ status: 0 }));
+    const r: { status: number; data?: any } = await callFn("invite-email", { action, invitation_id: id, lang }).catch(() => ({ status: 0 }));
     load();
+    if (action === "consent" && r.status === 502 && r.data?.data?.status === "mail_failed") { showToast(invText(lang).approvedMailFailed, { tone: "neutral", at: "top", ms: 9000 }); return; }
     showToast(r.status !== 200 ? (da ? "Det lykkedes ikke. Prøv igen." : "That didn't work. Try again.") : action === "consent" ? (da ? "Du har godkendt" : "You approved") : (da ? "Invitationen er stoppet" : "Invitation stopped"), { tone: r.status === 200 ? "success" : "neutral", at: "top", ms: 3000 });
+  };
+  /** Resend the mail, mint a link to copy, or remove an expired invitation. Returns a link when it could not be copied. */
+  const manageInv = async (id: string, kind: "resend" | "link" | "remove"): Promise<string | null> => {
+    const iv = invs.find((x) => x.id === id); const tx = invText(lang); const who = iv?.invitee_email ?? (da ? "personen" : "this person");
+    if (kind === "remove") {
+      if (!await confirmDialog({ title: tx.removeConfirmTitle, body: tx.removeConfirmBody(who), confirm: tx.remove, cancel: tx.cancel, danger: true })) return null;
+      const { error } = await supabase.rpc("revoke_invitation", { inv: id });
+      load(); showToast(error ? tx.failed : tx.removed, { tone: error ? "neutral" : "success", at: "top", ms: 3000 }); return null;
+    }
+    const r: { status: number; data?: any } = await callFn("invite-email", { action: kind, invitation_id: id, lang }).catch(() => ({ status: 0 }));
+    load();
+    if (r.data?.error === "rate_limited" || r.status === 429) { showToast(tx.rateLimited, { at: "top", ms: 4000 }); return null; }
+    if (kind === "resend") { showToast(r.status === 200 ? tx.resent(who) : tx.sendFailed, { tone: r.status === 200 ? "success" : "neutral", at: "top", ms: r.status === 200 ? 4000 : 9000 }); return null; }
+    const link = r.status === 200 ? String(r.data?.data?.link ?? "") : "";
+    if (!link) { showToast(tx.failed, { at: "top", ms: 3000 }); return null; }
+    try { await navigator.clipboard.writeText(link); showToast(tx.copied, { tone: "success", at: "top", ms: 6000 }); return null; }
+    catch { return link; }
   };
   const d = convDisplay({ others, pending_invitee: conv.pending_invitee }, da); const label = d.title;
   const roleTxt = (r: string) => r === "reader" ? (da ? "kun læse" : "read only") : (da ? "læse og skrive" : "read and write");
@@ -958,7 +978,7 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
           <button className="icon" aria-label={da ? "Luk søgning" : "Close search"} onClick={closeSearch}>✕</button>
         </div>}
       </header>
-      <PendingBar lang={lang} invs={invs} answer={answer} roleTxt={roleTxt} />
+      <PendingBar lang={lang} invs={invs} answer={answer} manage={manageInv} roleTxt={roleTxt} />
       {pending > 0 && <div className="notice row"><span>{t.pending(pending)}</span><span className="spacer" /><button onClick={receiveNow}>{t.receiveNow}</button></div>}
       <div className="msgs" aria-live="polite" ref={listRef}>
         {msgs.length === 0 && <p className="meta">{t.empty}</p>}
@@ -986,7 +1006,7 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
       {sheet === "words" && <SheetView title={da ? "Blokeringer" : "Blocking lists"} close={() => setSheet(null)} lang={lang}><BlockingLists key={`${session.user.id}:${conv.id}`} session={session} lang={lang} conv={conv.id} /></SheetView>}
       {sheet === "members" && <SheetView title={da ? "Deltagere og roller" : "Participants and roles"} close={() => setSheet(null)} lang={lang}><Members lang={lang} conv={conv.id} isParent={conv.role === "parent"} left={back} openWords={() => setSheet("words")} /></SheetView>}
       {sheet === "export" && <SheetView title={da ? "Udskrift af samtale" : "Conversation transcript"} close={() => setSheet(null)} lang={lang}><ConversationExport lang={lang} conv={conv.id} plan={plan} onPlan={setPlan} ownEmail={session.user.email ?? ""} openPlans={() => { setSheet(null); openPlans(); }} /></SheetView>}
-      {sheet === "addMember" && <SheetView title={da ? "Tilføj person" : "Add person"} close={() => setSheet(null)} lang={lang} anchor={addPersonRef}><AddMember lang={lang} conv={conv.id} done={(toast) => { load(); setSheet(null); showToast(toast, { tone: "success", ms: 4000, at: "top" }); }} openPlans={openPlans} /></SheetView>}
+      {sheet === "addMember" && <SheetView title={da ? "Tilføj person" : "Add person"} close={() => setSheet(null)} lang={lang} anchor={addPersonRef}><AddMember lang={lang} conv={conv.id} done={(toast, tone = "success") => { load(); setSheet(null); showToast(toast, { tone, ms: tone === "success" ? 4000 : 9000, at: "top" }); }} openPlans={openPlans} /></SheetView>}
       {sheet === "times" && <SheetView title={t.windows} close={() => setSheet(null)} lang={lang}><ReceiveSettings key={`${session.user.id}:${conv.id}`} lang={lang} conv={conv.id} onCancel={() => setSheet(null)} /></SheetView>}
     </>
   );
@@ -1030,16 +1050,24 @@ function Members({ lang, conv, isParent, left, openWords }: { lang: Lang; conv: 
 }
 
 /** Compact, collapsed-by-default bar for pending invitations (one thin line; tap to expand a short list). */
-function PendingBar({ lang, invs, answer, roleTxt }: { lang: Lang; invs: Pending[]; answer: (id: string, action: "consent" | "decline") => void; roleTxt: (r: string) => string }) {
-  const da = lang === "da";
+function PendingBar({ lang, invs, answer, manage, roleTxt }: { lang: Lang; invs: Pending[]; answer: (id: string, action: "consent" | "decline") => void; manage: (id: string, kind: "resend" | "link" | "remove") => Promise<string | null>; roleTxt: (r: string) => string }) {
+  const da = lang === "da"; const tx = invText(lang);
   const [open, setOpen] = useState(false);
+  const [shown, setShown] = useState<{ id: string; link: string } | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
   const listId = useId();
   if (!invs.length) return null;
   const mail = (iv: Pending) => iv.invitee_email ?? (da ? "(ukendt e-mail)" : "(unknown email)");
-  const needMe = invs.filter((iv) => !iv.i_consented).length;
+  const live = invs.filter((iv) => !iv.expired);
+  const needMe = live.filter((iv) => !iv.i_consented).length;
+  const one = invs[0];
   const summary = invs.length === 1
-    ? (needMe ? (da ? `Venter på din godkendelse: ${mail(invs[0])}` : `Needs your approval: ${mail(invs[0])}`) : (da ? `Afventer godkendelse: ${mail(invs[0])}` : `Awaiting approval: ${mail(invs[0])}`))
+    ? (one.expired ? tx.expiredSummary(mail(one)) : one.mail_failed ? tx.failedSummary(mail(one)) : needMe ? (da ? `Venter på din godkendelse: ${mail(one)}` : `Needs your approval: ${mail(one)}`) : (da ? `Afventer godkendelse: ${mail(one)}` : `Awaiting approval: ${mail(one)}`))
     : (da ? `${invs.length} afventer godkendelse` : `${invs.length} awaiting approval`) + (needMe ? (da ? ` · ${needMe} venter på dig` : ` · ${needMe} need you`) : "");
+  const run = async (id: string, kind: "resend" | "link" | "remove") => {
+    if (busyId) return; setBusyId(id);
+    try { const link = await manage(id, kind); setShown(link ? { id, link } : null); } finally { setBusyId(null); }
+  };
   return (
     <div className={`pendbar${open ? " is-open" : ""}${needMe ? " needs-me" : ""}`}>
       <button type="button" className="pendbar-head" aria-expanded={open} aria-controls={listId} onClick={() => setOpen(!open)}>
@@ -1049,22 +1077,30 @@ function PendingBar({ lang, invs, answer, roleTxt }: { lang: Lang; invs: Pending
       </button>
       <div className="pendbar-body" id={listId} inert={!open} aria-hidden={!open}><div className="pendbar-inner">
         <ul className="pendbar-list">
-          {invs.map((iv) => <li key={iv.id} className="pendrow">
+          {invs.map((iv) => { const can = invActions(iv); const busy = busyId === iv.id; return <li key={iv.id} className="pendrow">
             <div className="pendrow-main">
-              <div className="pendrow-who"><strong>{mail(iv)}</strong></div>
+              <div className="pendrow-who"><strong>{mail(iv)}</strong>{iv.expired && <span className="pend-tag">{tx.expired}</span>}</div>
               <div className="meta">{roleTxt(iv.role)} · {iv.consents >= iv.required ? (da ? "Alle har godkendt – venter på, at personen tager imod." : "Everyone approved – awaiting acceptance.") : (da ? `${iv.consents} af ${iv.required} har godkendt` : `${iv.consents} of ${iv.required} approved`)}</div>
+              {iv.mail_failed && !iv.expired && <div className="err pendrow-err" role="status">{tx.mailFailed}</div>}
             </div>
-            {!iv.i_consented ? <div className="pendrow-act"><button type="button" className="textbtn" onClick={() => answer(iv.id, "decline")}>{da ? "Afvis" : "Reject"}</button><button type="button" className="textbtn strong" onClick={() => answer(iv.id, "consent")}>{da ? "Godkend" : "Approve"}</button></div>
-              : iv.mine ? <div className="pendrow-act"><button type="button" className="textbtn" onClick={() => answer(iv.id, "decline")}>{da ? "Træk tilbage" : "Withdraw"}</button></div> : null}
-          </li>)}
+            {can.approve ? <div className="pendrow-act"><button type="button" className="textbtn" onClick={() => answer(iv.id, "decline")}>{da ? "Afvis" : "Reject"}</button><button type="button" className="textbtn strong" onClick={() => answer(iv.id, "consent")}>{da ? "Godkend" : "Approve"}</button></div>
+              : can.withdraw && !can.resend ? <div className="pendrow-act"><button type="button" className="textbtn" onClick={() => answer(iv.id, "decline")}>{da ? "Træk tilbage" : "Withdraw"}</button></div> : null}
+            {(can.resend || can.copyLink || can.remove) && <div className="pendrow-act pendrow-act-wide">
+              {can.remove && <button type="button" className="textbtn" disabled={busy} onClick={() => run(iv.id, "remove")}>{tx.remove}</button>}
+              {can.withdraw && can.resend && <button type="button" className="textbtn" disabled={busy} onClick={() => answer(iv.id, "decline")}>{da ? "Træk tilbage" : "Withdraw"}</button>}
+              {can.copyLink && <button type="button" className="textbtn" disabled={busy} onClick={() => run(iv.id, "link")}>{tx.copyLink}</button>}
+              {can.resend && <button type="button" className="textbtn strong" disabled={busy} onClick={() => run(iv.id, "resend")}>{tx.resend}</button>}
+            </div>}
+            {shown?.id === iv.id && <div className="pendrow-link"><label className="meta" htmlFor={`invlink-${iv.id}`}>{tx.copyFallback}</label><input id={`invlink-${iv.id}`} readOnly value={shown.link} aria-label={tx.linkLabel} onFocus={(e) => e.currentTarget.select()} ref={(el) => { el?.focus(); el?.select(); }} /></div>}
+          </li>; })}
         </ul>
-        {invs.some((iv) => !iv.i_consented) && <p className="meta pendbar-note">{da ? "Ét afslag stopper invitationen." : "One rejection stops the invitation."}</p>}
+        {live.some((iv) => !iv.i_consented) && <p className="meta pendbar-note">{da ? "Ét afslag stopper invitationen." : "One rejection stops the invitation."}</p>}
       </div></div>
     </div>
   );
 }
 
-function AddMember({ lang, conv, done, openPlans }: { lang: Lang; conv: string; done: (toast: string) => void; openPlans: () => void }) {
+function AddMember({ lang, conv, done, openPlans }: { lang: Lang; conv: string; done: (toast: string, tone?: "success" | "neutral") => void; openPlans: () => void }) {
   const da = lang === "da";
   const [email, setEmail] = useState(""); const [role, setRole] = useState("reader"); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState<{ ok: boolean; text: string; plan?: boolean } | null>(null);
   const submit = async (e: React.FormEvent) => {
@@ -1075,6 +1111,7 @@ function AddMember({ lang, conv, done, openPlans }: { lang: Lang; conv: string; 
     let r; try { r = await callFn("invite-email", { action: "member", conversation_id: conv, email: addr, role, lang }); } catch { r = { status: 0, data: null as any }; }
     setBusy(false);
     if (r.status === 200) { blurActive(); done(r.data?.data?.status === "sent" ? (da ? `Invitation sendt til ${addr}.` : `Invitation sent to ${addr}.`) : (da ? `Anmodning sendt for ${addr} – afventer godkendelse.` : `Request sent for ${addr} – awaiting approval.`)); }
+    else if (r.status === 502 && r.data?.data?.status === "mail_failed") { blurActive(); done(invText(lang).sendFailed, "neutral"); }
     else if (r.data?.error === "plan_required") setMsg({ ok: false, text: da ? "Kun brugere på planen Tekst + vedhæftninger (79 kr./md.) kan tilføje ekstra personer. Du kan skifte plan under Abonnement (testfunktion – ingen betaling)." : "Only users on Text + attachments (79 DKK/month) can add extra people. You can switch under Plan (test feature – no payment).", plan: true });
     else setMsg({ ok: false, text: r.data?.error === "rate_limited" ? (da ? "Du har sendt mange invitationer i dag." : "Too many invitations today.") : r.data?.error === "bad_input" ? (da ? "Tjek e-mailadressen. Personen må ikke allerede være med." : "Check the email. The person must not already be a member.") : (da ? "Invitationen kunne ikke oprettes." : "The invitation could not be created.") });
   };

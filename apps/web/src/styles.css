@@ -603,3 +603,10 @@ html[data-keyboard] .blockbox{max-height:calc(var(--vv-h,100dvh) * .34)}
 .msg-pending-actions{display:flex;gap:6px;margin:4px 1px 2px}
 .msg-pending-actions .ghost{min-height:36px;padding:6px 12px;font-size:14px}
 .msg.pending-send .msg-meta-spacer{width:68px}
+/* Pending invitations: resend / copy link / expired */
+.pendrow{flex-wrap:wrap}
+.pendrow-act-wide{flex-basis:100%;justify-content:flex-end;flex-wrap:wrap;gap:4px}
+.pend-tag{display:inline-block;margin-left:6px;padding:0 6px;border-radius:6px;background:color-mix(in srgb,var(--warn-b) 30%,transparent);font-size:11px;font-weight:600;vertical-align:1px}
+.pendrow-err{font-size:12px;margin:2px 0 0}
+.pendrow-link{flex-basis:100%;display:grid;gap:4px}
+.pendrow-link input{width:100%;font-size:13px}
