@@ -2,8 +2,15 @@
 
 **Status 2026-11-12:** approved by Nicolai and released from PR54 (migration `20261112210000_web_push.sql`).
 Every user starts opted out; push is only sent after the user's explicit Ja/Slå til on that device.
-The notification text follows the recipient's app language (`profiles.locale` via `locale_of`):
-“ROLFF — Du har nye beskeder klar.” (da, default) or “ROLFF — You have new messages ready.” (en).
+The notification text follows the recipient's app language (`profiles.locale` via `locale_of`).
+**Sender text (migration `20261120110000_push_sender_name.sql`):** title “Ny besked fra {navn}” /
+“New message from {name}” (several: “Nye beskeder fra Far og 2 andre” / “New messages from Dad and 2 others”),
+body “Åbn Rolff for at læse den.” / “Open Rolff to read it.” (“…læse dem.” / “…read them.” when batched).
+`{navn}` is ONLY the recipient's own private nickname for that contact (`contact_aliases`); Rolff has no public
+names and never shows e-mail addresses to others. No nickname => generic fallback “ROLFF — Du har nye beskeder
+klar.” / “ROLFF — You have new messages ready.” Muted (Lydløs) conversations are excluded from names and counts.
+Only names (≤40 chars, max 2) and counts travel in the encrypted payload; never message text. The notification has no
+`icon`/`image` (Android drew it as a duplicate large logo on the right); only the white `badge`.
 The frontend build gate is now on by default (`VITE_WEB_PUSH_ENABLED=false` hides it); the DB gate
 (`push_runtime.enabled` + VAPID public key) and worker gate (`WEB_PUSH_ENABLED`) are the kill switches.
 The historical notes below describe the original local implementation.
@@ -56,8 +63,9 @@ or real message was used. Source-only commit/PR validation is separate from rele
   credentials, IPs, custom domains, escapes, query strings or fragments. This intentionally
   does NOT support Edge WNS/other vendor endpoints yet; platform errors stay honest.
   `http_ece` supports a dangerous ECE_KEYLOG option: module loading fails closed if it is1.
-- Encrypted payload is ONLY v, random binding, short expiry. Notification is fixed:
-  **ROLFF — Du har nye beskeder klar.** No sender/body/email/conversation/private URL in
+- Encrypted payload is v, random binding, short expiry, language, and (since 2026-11-20) the recipient's own
+  nickname(s) for the sender(s) plus sender/message counts. Fallback text is fixed:
+  **ROLFF — Du har nye beskeder klar.** No body/email/conversation/private URL in
   payload, notification or logs. Click ignores payload navigation and opens only fixed
   same-origin overview. Stale/expired pushes, old clicks and mismatched binding are dropped;
   logout clears matching visible generic notices as feasible. Browser/OS may still retain

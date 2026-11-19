@@ -1,4 +1,5 @@
-/* Push-only worker. No fetch handler, no message caching, no token storage, no payload URLs. */
+/* Push-only worker. No fetch handler, no message caching, no token storage, no payload URLs.
+   The push may carry the recipient's own private nickname(s) for the sender plus counts, never message text. */
 'use strict';
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 let queue=Promise.resolve();
@@ -12,6 +13,24 @@ function store(write){return new Promise((resolve,reject)=>{
  tx.oncomplete=()=>{db.close();resolve(value);};tx.onerror=()=>{db.close();reject(Error('storage_failed'));};
  };
 });}
+// Names come from the recipient's own private nicknames only. Re-validated here; anything odd => generic text.
+const JUNK=/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g;
+function cleanName(x){return typeof x==='string'?Array.from(x.replace(JUNK,'').trim()).slice(0,40).join('').trim():'';}
+function noticeText(p){
+ const en=p.l==='en';
+ const generic={title:'ROLFF',body:en?'You have new messages ready.':'Du har nye beskeder klar.'};
+ const names=Array.isArray(p.s)?p.s.slice(0,2).map(cleanName).filter(Boolean):[];
+ const k=p.k;
+ if(!names.length || !Number.isInteger(k) || k<names.length || k>999)return generic;
+ const n=Number.isInteger(p.n) && p.n>=k && p.n<=99?p.n:k;
+ const one=k===1 && n===1;
+ let who;
+ if(k===1)who=names[0];
+ else if(k===2 && names.length===2)who=names[0]+(en?' and ':' og ')+names[1];
+ else{const o=k-1;who=names[0]+(en?' and ':' og ')+(en?(o===1?'1 other':o+' others'):(o===1?'1 anden':o+' andre'));}
+ return en?{title:(one?'New message from ':'New messages from ')+who,body:one?'Open Rolff to read it.':'Open Rolff to read them.'}
+  :{title:(one?'Ny besked fra ':'Nye beskeder fra ')+who,body:one?'Åbn Rolff for at læse den.':'Åbn Rolff for at læse dem.'};
+}
 async function closeNotifications(){for(const n of await self.registration.getNotifications({tag:'rolff-ready'}))n.close();}
 self.addEventListener('install',event=>event.waitUntil(self.skipWaiting()));
 self.addEventListener('activate',event=>event.waitUntil(self.clients.claim()));
@@ -37,10 +56,11 @@ self.addEventListener('push',event=>event.waitUntil(serial(async()=>{
   if(!event.data || event.data.text().length>512)return;
   const p=event.data.json(),s=await store();
   if(p.v!==1 || !uuid.test(p.binding) || s.binding!==p.binding || !s.owner || !Number.isFinite(p.expires) || p.expires<Date.now() || p.expires>Date.now()+31000)return;
-  // Fixed generic text in the recipient's app language (da default); never message content.
-  const body=p.l==='en'?'You have new messages ready.':'Du har nye beskeder klar.';
-  // icon = full-colour app icon (shown in the notification); badge = white silhouette on transparent (Android status bar).
-  await self.registration.showNotification('ROLFF',{body,lang:p.l==='en'?'en':'da',tag:'rolff-ready',icon:new URL('icons/rolff-192.png',self.registration.scope).href,badge:new URL('icons/rolff-badge-96.png',self.registration.scope).href,data:{binding:s.binding}});
+  // Title = recipient's own nickname for the sender(s); body is fixed. Never message content.
+  // No `icon` and no `image`: Android draws those as a large picture on the right, which duplicated the logo.
+  // badge = white silhouette on transparent (Android status bar and notification header).
+  const t=noticeText(p);
+  await self.registration.showNotification(t.title,{body:t.body,lang:p.l==='en'?'en':'da',tag:'rolff-ready',badge:new URL('icons/rolff-badge-96.png',self.registration.scope).href,data:{binding:s.binding}});
  }catch{/* Fail closed without logging payload or capabilities. */}
 })));
 self.addEventListener('notificationclick',event=>{

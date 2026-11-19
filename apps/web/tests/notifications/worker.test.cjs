@@ -12,8 +12,38 @@ function harness(storage={}){
 }
 async function bind(h){const s=await h.message({type:'IDENTITY',owner});assert.equal(await h.message({type:'BIND',fence:s.fence,binding}),true);return s;}
 const payload=(extra={})=>({v:1,binding,expires:Date.now()+20000,...extra});
-test('service worker displays fixed generic title/body, never payload text or links',async()=>{const h=harness();await bind(h);await h.push(payload({body:'MALICIOUS PRIVATE BODY',sender:'Synthetic Name',url:'https://evil.invalid/steal'}));assert.equal(h.shown.length,1);const n=h.shown[0];assert.equal(n.title,'ROLFF');assert.equal(n.body,'Du har nye beskeder klar.');assert.deepEqual(Object.keys(n.data),['binding']);assert(!JSON.stringify(n).includes('MALICIOUS'));});
-test('notification text follows app language: English only for l=en, Danish otherwise, never payload text',async()=>{const h=harness();await bind(h);await h.push(payload({l:'en'}));await h.push(payload({l:'en',body:'MALICIOUS'}));await h.push(payload({l:'xx'}));await h.push(payload());assert.equal(h.shown[0].body,'You have new messages ready.');assert.equal(h.shown[0].lang,'en');assert.equal(h.shown[1].body,'You have new messages ready.');assert.equal(h.shown[2].body,'Du har nye beskeder klar.');assert.equal(h.shown[3].body,'Du har nye beskeder klar.');assert.equal(h.shown[3].lang,'da');for(const n of h.shown)assert.equal(n.title,'ROLFF');});
+test('no name in payload: generic title/body, never payload text or links',async()=>{const h=harness();await bind(h);await h.push(payload({body:'MALICIOUS PRIVATE BODY',sender:'Synthetic Name',email:'a@b.invalid',title:'EVIL',url:'https://evil.invalid/steal'}));assert.equal(h.shown.length,1);const n=h.shown[0];assert.equal(n.title,'ROLFF');assert.equal(n.body,'Du har nye beskeder klar.');assert.deepEqual(Object.keys(n.data),['binding']);assert(!JSON.stringify(n).includes('MALICIOUS'));assert(!JSON.stringify(n).includes('EVIL'));assert(!JSON.stringify(n).includes('a@b'));});
+test('generic fallback follows app language: English only for l=en, Danish otherwise',async()=>{const h=harness();await bind(h);await h.push(payload({l:'en'}));await h.push(payload({l:'en',body:'MALICIOUS'}));await h.push(payload({l:'xx'}));await h.push(payload());assert.equal(h.shown[0].body,'You have new messages ready.');assert.equal(h.shown[0].lang,'en');assert.equal(h.shown[1].body,'You have new messages ready.');assert.equal(h.shown[2].body,'Du har nye beskeder klar.');assert.equal(h.shown[3].body,'Du har nye beskeder klar.');assert.equal(h.shown[3].lang,'da');for(const n of h.shown)assert.equal(n.title,'ROLFF');});
+const shownText=async(extra)=>{const h=harness();await bind(h);await h.push(payload(extra));const n=h.shown[0];return [n.title,n.body];};
+test('sender name (da): single message, several messages from one sender, two senders, many senders',async()=>{
+ assert.deepEqual(await shownText({s:['Far'],k:1,n:1}),['Ny besked fra Far','Åbn Rolff for at læse den.']);
+ assert.deepEqual(await shownText({s:['Far'],k:1,n:3}),['Nye beskeder fra Far','Åbn Rolff for at læse dem.']);
+ assert.deepEqual(await shownText({s:['Far','Mor'],k:2,n:2}),['Nye beskeder fra Far og Mor','Åbn Rolff for at læse dem.']);
+ assert.deepEqual(await shownText({s:['Far'],k:3,n:5}),['Nye beskeder fra Far og 2 andre','Åbn Rolff for at læse dem.']);
+ assert.deepEqual(await shownText({s:['Far'],k:2,n:2}),['Nye beskeder fra Far og 1 anden','Åbn Rolff for at læse dem.']);
+});
+test('sender name (en) follows the recipient language',async()=>{
+ assert.deepEqual(await shownText({l:'en',s:['Dad'],k:1,n:1}),['New message from Dad','Open Rolff to read it.']);
+ assert.deepEqual(await shownText({l:'en',s:['Dad'],k:1,n:2}),['New messages from Dad','Open Rolff to read them.']);
+ assert.deepEqual(await shownText({l:'en',s:['Dad','Mom'],k:2,n:4}),['New messages from Dad and Mom','Open Rolff to read them.']);
+ assert.deepEqual(await shownText({l:'en',s:['Dad'],k:3,n:3}),['New messages from Dad and 2 others','Open Rolff to read them.']);
+ assert.deepEqual(await shownText({l:'en',s:['Dad'],k:2,n:2}),['New messages from Dad and 1 other','Open Rolff to read them.']);
+});
+test('unusable name data falls back to the generic text (never throws, never shows odd input)',async()=>{
+ for(const extra of [{s:[],k:1},{s:'Far',k:1},{s:[5],k:1},{s:['Far']},{s:['Far'],k:0},{s:['Far'],k:'1'},{s:['\u200b'],k:1},{s:['Far','Mor'],k:1},{s:{x:1},k:1},{s:['Far'],k:1000}])assert.deepEqual(await shownText(extra),['ROLFF','Du har nye beskeder klar.'],JSON.stringify(extra));
+ assert.equal((await shownText({s:['Far'],k:1,n:'x'}))[0],'Ny besked fra Far','bad message count falls back to sender count');
+});
+test('names are cleaned and capped; title never contains message content or markup beyond the name',async()=>{
+ const [t]=await shownText({s:['\u202eFar\u200b\u0007 '+'x'.repeat(60)],k:1,n:1});assert.equal(t,'Ny besked fra Far '+'x'.repeat(36));assert(!/[\u202e\u200b\u0007]/.test(t));
+ const [t2,b2]=await shownText({s:['Far'],k:1,n:1,body:'SECRET TEXT',message:'SECRET TEXT',text:'SECRET TEXT'});assert(!(t2+b2).includes('SECRET'));
+});
+test('notification never sets icon or image (no duplicate large logo); only the white badge, no click URL or message data',async()=>{
+ const h=harness();await bind(h);await h.push(payload({s:['Far'],k:1,n:1,image:'https://evil.invalid/x.png',icon:'https://evil.invalid/y.png'}));const n=h.shown[0];
+ assert(!('icon' in n));assert(!('image' in n));assert.equal(n.badge,'https://synthetic.invalid/app/icons/rolff-badge-96.png');assert.deepEqual(Object.keys(n.data),['binding']);assert.equal(n.tag,'rolff-ready');
+});
+test('a new notice replaces the previous one (same tag) so batched names never stack',async()=>{
+ const h=harness();await bind(h);await h.push(payload({s:['Far'],k:1,n:1}));await h.push(payload({s:['Far'],k:2,n:2}));assert(h.shown.every(n=>n.tag==='rolff-ready'));
+});
 test('late old-account pushes dropped after logout; stale notifications closed',async()=>{const h=harness();await bind(h);await h.push(payload());await h.message({type:'IDENTITY',owner:null});assert(h.shown[0].closed);await h.push(payload());assert.equal(h.shown.length,1);});
 test('new account cannot receive old binding or stale click',async()=>{const h=harness();await bind(h);await h.push(payload());const notification=h.shown[0];await h.message({type:'IDENTITY',owner:'30000000-0000-4000-8000-000000000003'});await h.push(payload());await h.emit('notificationclick',{notification});assert.equal(h.shown.length,1);assert.equal(h.opened.length,0);});
 test('safe click always opens same-origin overview, ignores attacker URL',async()=>{const h=harness();await bind(h);await h.push(payload());h.shown[0].data.url='https://evil.invalid/steal';await h.emit('notificationclick',{notification:h.shown[0]});assert.deepEqual(h.opened,['https://synthetic.invalid/app/']);});
@@ -34,8 +64,8 @@ function png(file){const b=fs.readFileSync(path.resolve(__dirname,'../../public/
  return {w,h,px:out};}
 test('badge PNGs are 96x96 and 72x72 white silhouettes on a transparent background',()=>{for(const [file,n] of [['rolff-badge-96.png',96],['rolff-badge-72.png',72]]){const {w,h,px}=png(file);assert.equal(w,n);assert.equal(h,n);let opaque=0,clear=0;for(let i=0;i<px.length;i+=4){const a=px[i+3];if(a>0){assert.deepEqual([px[i],px[i+1],px[i+2]],[255,255,255],'only white pixels');}if(a===255)opaque++;if(a===0)clear++;}
  assert(clear>w*h*0.2,'transparent background');assert(opaque>w*h*0.25,'solid mark');assert.equal(px[3],0,'corner is transparent');}});
-test('notification uses badge (monochrome) and icon (full-colour app icon), both same-origin PNGs under the scope',async()=>{const h=harness();await bind(h);await h.push(payload());const n=h.shown[0];
- assert.equal(n.badge,'https://synthetic.invalid/app/icons/rolff-badge-96.png');assert.equal(n.icon,'https://synthetic.invalid/app/icons/rolff-192.png');
- for(const f of [n.badge,n.icon])assert(fs.existsSync(path.resolve(__dirname,'../../public/icons',path.basename(f))),f);
+test('notification uses the monochrome badge as a same-origin PNG under the scope; the full-colour app icon is NOT sent as a notification picture',async()=>{const h=harness();await bind(h);await h.push(payload());const n=h.shown[0];
+ assert.equal(n.badge,'https://synthetic.invalid/app/icons/rolff-badge-96.png');assert(!('icon' in n));
+ assert(fs.existsSync(path.resolve(__dirname,'../../public/icons',path.basename(n.badge))));
  const {px}=png('rolff-192.png');let colour=0;for(let i=0;i<px.length;i+=4)if(px[i+3]>0&&(px[i]!==px[i+1]||px[i+1]!==px[i+2]))colour++;assert(colour>1000,'icon is full colour, not a silhouette');
- const ex=n.icon.startsWith('https://synthetic.invalid/')&&n.badge.startsWith('https://synthetic.invalid/');assert(ex);});
+ assert(n.badge.startsWith('https://synthetic.invalid/'));});
