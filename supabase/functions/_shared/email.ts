@@ -1,4 +1,5 @@
 import { appUrl } from "./links.ts";
+import { renderCopyMail, renderInviteMail } from "./inviteTemplate.ts";
 import { buildMime, type Connect, type SmtpConfig, smtpSend } from "./smtp.ts";
 // Invitation e-mail templates. Never include message content.
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
@@ -58,41 +59,23 @@ const TEXT_FOOT = "Rolff (testversion): Skriv ikke rigtige eller følsomme oplys
 const TESTWARN = "!! Dette er en testversion af Rolff – brug den ikke til rigtige sager eller følsomme oplysninger. !!\n\n";
 const TESTWARN_EN = "!! This is a test version of Rolff – do not use it for real cases or sensitive information. !!\n\n";
 
+/** Legal/test-version footer (wording unchanged; only the layout is calmer): Danish first, then English. */
+const FOOT_HTML = "<strong>Testversion.</strong> Skriv ikke rigtige eller følsomme oplysninger. Beskeder tjekkes af OpenAI (USA/global behandling, ikke EU; ingen Zero Data Retention endnu; gemning slået fra). Ingen garanti for drift, og data kan blive slettet.<br><br><em>Test version. Do not enter real or sensitive information. Messages are checked by OpenAI (US/global processing, not EU; no Zero Data Retention yet; storage turned off). No uptime guarantee; data may be deleted.</em>";
+const logo192 = () => `${appUrl()}icons/rolff-192.png`;
+
+/** The real invitation. `inviterEmail` is the inviter's label as shown to others (their e-mail). */
 export function inviteMail(p: { inviterEmail: string; link: string; expires: string; inviteeEmail?: string; lang?: MailLang }) {
   const lang = mailLang(p.lang);
-  if (lang === "en") {
-    const subject = `${p.inviterEmail} has invited you to Rolff`;
-    const html = shell(subject, `<p style="margin:0 0 14px">Hi,</p>
-<p style="margin:0 0 14px"><strong>${esc(p.inviterEmail)}</strong> has invited you to a shared conversation in Rolff – a calm chat where messages are checked for tone before they are sent.</p>
-<p style="margin:0 0 22px">Tap the button to choose a password and join the conversation.</p>
-${inviteBlock(p.link, p.inviteeEmail, p.expires, lang)}`, lang);
-    const text = `${TESTWARN_EN}Hi,\n\n${p.inviterEmail} has invited you to a shared conversation in Rolff.\n\nOpen the invitation: ${p.link}\n\nThe invitation was sent to ${p.inviteeEmail ?? ""}. The link works once and expires ${fmt(p.expires, lang)} (3 days). Only this e-mail address can use it.\n\n${TEXT_FOOT}`;
-    return { subject, html, text };
-  }
-  const subject = `${p.inviterEmail} har inviteret dig til Rolff`;
-  const html = shell(subject, `<p style="margin:0 0 14px">Hej,</p>
-<p style="margin:0 0 14px"><strong>${esc(p.inviterEmail)}</strong> har inviteret dig til en fælles samtale i Rolff – en rolig chat, hvor beskeder bliver tjekket for tonen, før de sendes.</p>
-<p style="margin:0 0 22px">Tryk på knappen for at vælge en adgangskode og komme ind i samtalen.</p>
-${inviteBlock(p.link, p.inviteeEmail, p.expires, lang)}`, lang);
-  const text = `${TESTWARN}Hej,\n\n${p.inviterEmail} har inviteret dig til en fælles samtale i Rolff.\n\nÅbn invitationen: ${p.link}\n\nInvitationen er sendt til ${p.inviteeEmail ?? ""}. Linket virker én gang og udløber ${fmt(p.expires)} (3 dage). Kun denne e-mailadresse kan bruge det.\n\n${TEXT_FOOT}`;
+  const subject = lang === "en" ? `${p.inviterEmail} has invited you to Rolff` : `${p.inviterEmail} har inviteret dig til Rolff`;
+  const { html, text } = renderInviteMail({ lang, inviter: p.inviterEmail, invitee: p.inviteeEmail ?? "", link: p.link, expires: fmt(p.expires, lang), logo: logo192(), subject, footerHtml: FOOT_HTML, footerText: TEXT_FOOT });
   return { subject, html, text };
 }
 
+/** Confirmation copy to the inviter. Never contains the invitation link. */
 export function copyMail(p: { inviteeEmail: string; expires: string; lang?: MailLang }) {
   const lang = mailLang(p.lang);
-  if (lang === "en") {
-    const subject = `Copy: Your invitation to ${p.inviteeEmail} has been sent`;
-    const html = shell(subject, `<p style="margin:0 0 14px">Hi,</p>
-<p style="margin:0 0 14px">Your invitation to <strong>${esc(p.inviteeEmail)}</strong> has been sent. Once it is accepted, you will both find the conversation in Rolff.</p>
-<p style="margin:0;font-size:13px;color:#7a807e">For security, the link is only in the recipient's e-mail. The invitation expires ${esc(fmt(p.expires, lang))}.</p>`, lang);
-    const text = `${TESTWARN_EN}Hi,\n\nYour invitation to ${p.inviteeEmail} has been sent. The link is only in the recipient's e-mail. Expires ${fmt(p.expires, lang)}.\n\n${TEXT_FOOT}`;
-    return { subject, html, text };
-  }
-  const subject = `Kopi: Din invitation til ${p.inviteeEmail} er sendt`;
-  const html = shell(subject, `<p style="margin:0 0 14px">Hej,</p>
-<p style="margin:0 0 14px">Din invitation til <strong>${esc(p.inviteeEmail)}</strong> er sendt. Når invitationen er taget imod, finder I samtalen i Rolff.</p>
-<p style="margin:0;font-size:13px;color:#7a807e">Af sikkerhedshensyn er linket kun med i modtagerens mail. Invitationen udløber ${esc(fmt(p.expires))}.</p>`, lang);
-  const text = `${TESTWARN}Hej,\n\nDin invitation til ${p.inviteeEmail} er sendt. Linket er kun med i modtagerens mail. Udløber ${fmt(p.expires)}.\n\n${TEXT_FOOT}`;
+  const subject = lang === "en" ? `Copy: Your invitation to ${p.inviteeEmail} has been sent` : `Kopi: Din invitation til ${p.inviteeEmail} er sendt`;
+  const { html, text } = renderCopyMail({ lang, invitee: p.inviteeEmail, expires: fmt(p.expires, lang), appUrl: appUrl(), logo: logo192(), subject, footerHtml: FOOT_HTML, footerText: TEXT_FOOT });
   return { subject, html, text };
 }
 
