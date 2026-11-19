@@ -39,7 +39,10 @@ const WORD_PATTERNS: RegExp[] = [
   /^hore(n|r|rne|unge|søn|bukke|bukken)?$/u,
   /^knepp\p{L}*$/u,                                    // kneppe, knepper (not "knep" = trick)
   // English / international
-  /^\p{L}*fuck\p{L}*$/u, /^fuk(king|ker)?$/u, /^fck(ing)?$/u,
+  /^\p{L}*fuck\p{L}*$/u,                      // ANY word containing "fuck": fucking, fuckin, fucked, fucker(s), motherfucker, fuckface, fuckup, fucke, fucket, fuckede ...
+  /^ph?u(ck|kk)\p{L}*$/u, /^phuck\p{L}*$/u, /^f[xv]ck\p{L}*$/u, /^fuq\p{L}*$/u, // phuck, fxck, fvck, fuq
+  /^fuk(k\p{L}*|ing|ed|er|ers|s)?$/u,        // fuk, fukking, fukker (Fukushima passes)
+  /^fck(ing|ed|er|ers|s)?$/u, /^mf(er|ers)$/u, /^mofo(s)?$/u,
   /^(bull|horse|dip|ape|bat|chicken|dog|cow|jack|no)?shit(s|ty|ting|ted|e|head|hole|show|storm|face|bag|load)?$/u,
   /^bitch(es|y|ing)?$/u, /^a(ss|rse)holes?$/u, /^(dumb|jack|smart|fat|bad)ass(es)?$/u,
   /^motherfuck\p{L}*$/u, /^bastard(s)?$/u, /^bollocks$/u, /^wanker(s)?$/u, /^twat(s)?$/u, /^dickhead(s)?$/u,
@@ -47,7 +50,7 @@ const WORD_PATTERNS: RegExp[] = [
   /^wtf$/u, /^stfu$/u, /^ffs$/u,
 ];
 // Common symbol-obfuscated forms in the raw text: f*ck, f**k, sh*t, b*tch.
-const OBFUSCATED = /(?<![\p{L}\p{N}])(?:f[*@#.\-_]{1,3}(?:c?k)|f[u][*@#]k|sh[*@#]t|b[*@#]tch|fu[*@#]{1,2})(?![\p{L}\p{N}])/giu;
+const OBFUSCATED = /(?<![\p{L}\p{N}])(?:f[*@#]{1,3}c?k|f[u][*@#]{1,2}k?|f[*@#]ck|ph[u*@#]ck|sh[*@#]t|b[*@#]tch|mf['’]er)\p{L}*(?![\p{L}\p{N}])/giu;
 // English "hell" is only blocked in swearing phrases ("the hell", "go to hell", "hell no"), never as a bare word.
 const HELL_BEFORE = new Set(["what", "the", "to", "bloody", "holy", "like", "as", "in", "a", "go", "straight"]);
 const HELL_AFTER = new Set(["no", "yes", "yeah", "of"]);
