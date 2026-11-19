@@ -59,11 +59,22 @@ function readInviteToken(): string | null {
   return sessionStorage.getItem("invite");
 }
 
+// Push tap -> conversation: #open=<uuid> (cold start) or a ROLFF_OPEN_CONVERSATION message from the service worker.
+// Only a uuid is accepted; the conversation opens only if the signed-in user is a member of it.
+const OPEN_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function readOpenConversation(): string | null {
+  const m = location.hash.match(/(?:^#|&)open=([0-9a-f-]{36})(?:&|$)/i);
+  if (!m) return null;
+  history.replaceState(history.state, "", location.pathname + location.search);
+  return OPEN_ID.test(m[1]) ? m[1].toLowerCase() : null;
+}
+
 type Sheet = "notifications" | "members" | "privacy" | "words" | null | "lang" | "theme" | "times" | "faq" | "feedback" | "invite" | "export" | "addMember" | "report" | "account" | "newpw" | "plans";
 export type MenuItem = { label: string; run: () => void; danger?: boolean; divider?: boolean; checked?: boolean };
 
 export function App() {
   const [inviteToken, setInviteToken] = useState<string | null>(() => readInviteToken());
+  const [openConvId, setOpenConvId] = useState<string | null>(() => readOpenConversation());
   const [peek, setPeek] = useState<Peek | null | undefined>(undefined);
   const [inviteMsg, setInviteMsg] = useState("");
   const [lang, setLang] = useState<Lang>(detectLang());
@@ -105,6 +116,19 @@ export function App() {
         : (da ? "Invitationen kunne ikke bruges. Den kan være udløbet, brugt eller sendt til en anden e-mail. Er der kommet en ny deltager i samtalen, skal den også godkende – så får du en ny mail med et nyt link." : "The invitation could not be used. It may be expired, used, or meant for another email. If someone new joined the conversation, they must approve too – you will then get a new email with a new link."));
     });
   }, [session, inviteToken]);
+  useEffect(() => {
+    const sw = navigator.serviceWorker; if (!sw) return;
+    const onMsg = (e: MessageEvent) => { const d = e.data; if (d?.type === "ROLFF_OPEN_CONVERSATION" && typeof d.c === "string" && OPEN_ID.test(d.c)) setOpenConvId(d.c.toLowerCase()); };
+    sw.addEventListener("message", onMsg); return () => sw.removeEventListener("message", onMsg);
+  }, []);
+  useEffect(() => {
+    if (!session || !openConvId) return;
+    const id = openConvId; setOpenConvId(null);
+    supabase.rpc("list_my_conversations").then(({ data }) => {
+      const c = ((data as Conv[]) ?? []).find((x) => x.id === id);
+      if (c) { resetSheet(); setRenameContacts(null); setConv(c); }
+    });
+  }, [session, openConvId]);
   const authLink = (type: string, th: string) => {
     if (type !== "recovery" && type !== "email_change") return;
     supabase.auth.verifyOtp({ token_hash: th, type }).then(({ error }) => {
@@ -166,7 +190,7 @@ export function App() {
       {inviteMsg && <div className="notice" role="status">{inviteMsg}</div>}
       {session && !conv && !sheet && <PushSettings key={`push-offer:${session.user.id}`} uid={session.user.id} lang={lang} onboarding />}
       {!session ? <Auth lang={lang} peek={inviteToken ? peek : undefined} />
-        : conv ? <Chat session={session} key={session.user.id} lang={lang} conv={conv} rename={openRename} back={() => setConv(null)} openPlans={() => setSheet("plans")} planKey={sheet} menuButtonRef={menuButtonRef} />
+        : conv ? <Chat session={session} key={`${session.user.id}:${conv.id}`} lang={lang} conv={conv} rename={openRename} back={() => setConv(null)} openPlans={() => setSheet("plans")} planKey={sheet} menuButtonRef={menuButtonRef} />
         : <Home key={`home:${session.user.id}`} refreshKey={homeKey} lang={lang} open={setConv} rename={openRename} invite={() => setSheet("invite")} />}
       {sheet === "lang" && <SheetView title={t.lang} close={close} lang={lang} anchor={menuButtonRef}><Choice name="lang" value={lang} set={(v) => setLang(v as Lang)} opts={[["da", "Dansk"], ["en", "English"]]} /></SheetView>}
       {sheet === "theme" && <SheetView title={t.theme} close={close} lang={lang} anchor={menuButtonRef}><Choice name="theme" value={theme} set={setTheme} opts={[["dark", t.dark], ["light", t.light], ["system", t.system]]} /></SheetView>}

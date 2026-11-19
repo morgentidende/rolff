@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createECDH } from "node:crypto";
 import { Buffer } from "node:buffer";
 import { sendPush } from "../../supabase/functions/notification-dispatch/transport.ts";
-import { validEndpoint,outcome,handoffFresh,pushLang,pushWho,pushPayload,cleanName, type Prepared } from "../../supabase/functions/notification-dispatch/policy.ts";
+import { validEndpoint,outcome,handoffFresh,pushLang,pushWho,pushAccept,pushPayload,cleanName, type Prepared } from "../../supabase/functions/notification-dispatch/policy.ts";
 import { dispatch } from "../../supabase/functions/notification-dispatch/worker.ts";
 // Known, deterministic PUBLIC test scalars (not deployable secrets). Never generate production keys here.
 const raw=(n:number)=>{const e=createECDH("prime256v1");e.setPrivateKey(Buffer.alloc(32,n));return e.getPublicKey().toString("base64url");};
@@ -109,4 +109,40 @@ Deno.test("worst-case payload (two 40-character emoji names, 99 messages) stays 
  const worst={...prepared(),who:{s:["😀".repeat(40),"\"\\".repeat(20)],k:2,n:99}};const text=pushPayload(worst);
  assert(text.length<400,String(text.length));
  let size=0;await sendPush(worst,vapid,allow,async(_u,o)=>{size=(o?.body as Uint8Array).byteLength;return new Response(null,{status:201});});assert(size>0&&size<2048,String(size));
+});
+
+const CONV="30000000-0000-4000-8000-000000000003";
+Deno.test("invitation-accepted payload: type, conversation uuid and one name; nothing else, and it never mixes with message fields",()=>{
+ const base=prepared();
+ const a=JSON.parse(pushPayload({...base,lang:"en",accept:{c:CONV,s:"Dad"}}));
+ assert.deepEqual(a,{v:1,binding:base.binding,l:"en",t:"a",c:CONV,s:["Dad"],expires:a.expires});
+ const noName=JSON.parse(pushPayload({...base,accept:{c:CONV,s:null}}));assert.deepEqual(Object.keys(noName).sort(),["binding","c","expires","l","t","v"]);
+ // hostile extra fields are dropped, message fields are never added next to an acceptance notice
+ const hostile=JSON.parse(pushPayload({...base,who:{s:["Far"],k:1,n:1},accept:{c:CONV,s:"Far",body:"SECRET",url:"https://evil.invalid",email:"a@b.c",read:true,delivered:true} as never}));
+ assert.deepEqual(Object.keys(hostile).sort(),["binding","c","expires","l","s","t","v"]);assert.ok(!("k" in hostile)&&!("n" in hostile));
+ assert.ok(!JSON.stringify(hostile).includes("SECRET")&&!JSON.stringify(hostile).includes("evil"));
+ // message payloads are unchanged
+ assert.deepEqual(Object.keys(JSON.parse(pushPayload({...base,who:{s:["Far"],k:1,n:1}}))).sort(),["binding","expires","k","l","n","s","v"]);
+});
+Deno.test("invitation-accepted payload: a malformed conversation id is dropped (generic text, overview), name is cleaned and capped",()=>{
+ for(const c of ["","not-a-uuid","../../etc","javascript:alert(1)",CONV+"x",5,null,{}] as never[]){const p=pushAccept({accept:{c,s:"Far"}});assert.deepEqual(p,{t:"a",s:["Far"]},JSON.stringify(c));}
+ assert.equal(pushAccept({accept:null}),null);assert.equal(pushAccept({}),null);
+ assert.deepEqual(pushAccept({accept:{c:CONV,s:"\u202eFar\u200b\u0007 "}}),{t:"a",c:CONV,s:["Far"]});
+ assert.equal(pushAccept({accept:{c:CONV,s:"x".repeat(100)}})!.s![0].length,40);
+ assert.deepEqual(pushAccept({accept:{c:CONV,s:["Far"]}}),{t:"a",c:CONV},"a non-string name is ignored");
+});
+Deno.test("worst-case invitation-accepted payload (40-character emoji name) stays under the worker's 512 characters and the 2048-byte push limit",async()=>{
+ const worst={...prepared(),accept:{c:CONV,s:"😀".repeat(40)}};const text=pushPayload(worst);assert(text.length<400,String(text.length));
+ let size=0;await sendPush(worst,vapid,allow,async(_u,o)=>{size=(o?.body as Uint8Array).byteLength;return new Response(null,{status:201});});assert(size>0&&size<2048,String(size));
+});
+Deno.test("worker sends an invitation-accepted job through the same claim/prepare/handoff/finish steps",async()=>{
+ const calls:string[]=[];const sent:Prepared[]=[];
+ const rpc=async(name:string,args?:Record<string,unknown>)=>{calls.push(name);
+  if(name==="claim_push_work")return{data:[{job_id:7,subscription_id:"50000000-0000-4000-8000-000000000005",lease:"60000000-0000-4000-8000-000000000006"}],error:null};
+  if(name==="prepare_push")return{data:{...prepared(),accept:{c:CONV,s:"Far"}},error:null};
+  if(name==="handoff_push")return{data:{id:"40000000-0000-4000-8000-000000000004",valid_for_ms:750},error:null};
+  return{data:null,error:null};};
+ const counts=await dispatch(rpc,async(p,authorize)=>{sent.push(p);await authorize("a".repeat(64));return"accepted";});
+ assert.equal(counts.accepted,1);assert.deepEqual(calls,["push_release_tick","claim_push_work","prepare_push","handoff_push","finish_push","cleanup_push_work"]);
+ assert.deepEqual((sent[0] as Prepared).accept,{c:CONV,s:"Far"});
 });

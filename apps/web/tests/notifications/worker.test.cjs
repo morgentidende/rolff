@@ -2,13 +2,13 @@ const test=require('node:test'),assert=require('node:assert/strict'),vm=require(
 const source=fs.readFileSync(path.resolve(__dirname,'../../public/sw.js'),'utf8');
 const owner='10000000-0000-4000-8000-000000000001',binding='20000000-0000-4000-8000-000000000002';
 function harness(storage={}){
- const handlers={},shown=[],opened=[],logs=[],self={location:{origin:'https://synthetic.invalid'},registration:{scope:'https://synthetic.invalid/app/',getNotifications:async()=>shown.filter(x=>!x.closed),showNotification:async(title,options)=>{shown.push({title,...options,closed:false,close(){this.closed=true;}});}},clients:{claim:async()=>{},matchAll:async()=>[],openWindow:async url=>opened.push(url)},skipWaiting:async()=>{},addEventListener:(name,fn)=>handlers[name]=fn};
+ const handlers={},shown=[],opened=[],logs=[],windows=[],self={location:{origin:'https://synthetic.invalid'},registration:{scope:'https://synthetic.invalid/app/',getNotifications:async()=>shown.filter(x=>!x.closed),showNotification:async(title,options)=>{shown.push({title,...options,closed:false,close(){this.closed=true;}});}},clients:{claim:async()=>{},matchAll:async()=>windows,openWindow:async url=>opened.push(url)},skipWaiting:async()=>{},addEventListener:(name,fn)=>handlers[name]=fn};
  const indexedDB={open(){const open={};setImmediate(()=>{open.result={createObjectStore(){},close(){},transaction(){const tx={objectStore:()=>({get(){const r={};setImmediate(()=>{r.result=structuredClone(storage.value);r.onsuccess();setImmediate(()=>tx.oncomplete());});return r;},put(v){storage.value=structuredClone(v);setImmediate(()=>tx.oncomplete());}})};return tx;}};open.onsuccess();});return open;}};
  vm.runInNewContext(source,{self,indexedDB,crypto:{randomUUID},URL,Date,Number,Promise,console:{log:(...a)=>logs.push(a),warn:(...a)=>logs.push(a),error:(...a)=>logs.push(a)},fetch(){throw Error('Network forbidden');}});
  async function emit(name,event={}){const waits=[];handlers[name]({...event,waitUntil:p=>waits.push(p)});await Promise.all(waits);assert.equal(logs.length,0);}
  async function message(data,origin='https://synthetic.invalid/app/'){let response;await emit('message',{data,source:{url:origin},ports:[{postMessage:x=>response=x}]});return response?.value;}
  async function push(data){await emit('push',{data:{text:()=>JSON.stringify(data),json:()=>data}});}
- return {self,storage,shown,opened,message,push,emit};
+ return {self,storage,shown,opened,windows,message,push,emit};
 }
 async function bind(h){const s=await h.message({type:'IDENTITY',owner});assert.equal(await h.message({type:'BIND',fence:s.fence,binding}),true);return s;}
 const payload=(extra={})=>({v:1,binding,expires:Date.now()+20000,...extra});
@@ -75,3 +75,59 @@ test('notification uses the monochrome badge as a same-origin PNG under the scop
  assert(fs.existsSync(path.resolve(__dirname,'../../public/icons',path.basename(n.badge))));
  const {px}=png('rolff-192.png');let colour=0;for(let i=0;i<px.length;i+=4)if(px[i+3]>0&&(px[i]!==px[i+1]||px[i+1]!==px[i+2]))colour++;assert(colour>1000,'icon is full colour, not a silhouette');
  assert(n.badge.startsWith('https://synthetic.invalid/'));});
+
+// ---- Invitation accepted ("X har accepteret din invitation") ----
+const CONV='30000000-0000-4000-8000-000000000003';
+test('invitation accepted (da): "<name> har accepteret din invitation" / "Nu kan I chatte på Rolff."; own tag, badge only, no icon',async()=>{
+ const h=harness();await bind(h);await h.push(payload({t:'a',c:CONV,s:['Far']}));const n=h.shown[0];
+ assert.equal(n.title,'Far har accepteret din invitation');assert.equal(n.body,'Nu kan I chatte på Rolff.');assert.equal(n.lang,'da');
+ assert.equal(n.tag,'rolff-accept-'+CONV,'does not replace (or get replaced by) the message notice');
+ assert.equal(n.badge,'https://synthetic.invalid/app/icons/rolff-badge-96.png');assert(!('icon' in n)&&!('image' in n));
+ assert.equal(JSON.stringify(n.data),JSON.stringify({binding,c:CONV}));
+});
+test('invitation accepted (en): "<name> accepted your invitation" / "You can now chat on Rolff."; e-mail fallback name is shown as is',async()=>{
+ const h=harness();await bind(h);await h.push(payload({l:'en',t:'a',c:CONV,s:['mor@example.invalid']}));
+ assert.equal(h.shown[0].title,'mor@example.invalid accepted your invitation');assert.equal(h.shown[0].body,'You can now chat on Rolff.');assert.equal(h.shown[0].lang,'en');
+});
+test('invitation accepted without a (valid) name: generic text in the right language',async()=>{
+ for(const extra of [{},{s:[]},{s:['']},{s:['\u200b']},{s:[5]},{s:'Far'}]){
+  const h=harness();await bind(h);await h.push(payload({t:'a',c:CONV,...extra}));assert.equal(h.shown[0].title,'Din invitation er accepteret',JSON.stringify(extra));assert.equal(h.shown[0].body,'Nu kan I chatte på Rolff.');}
+ const h=harness();await bind(h);await h.push(payload({l:'en',t:'a',c:CONV}));assert.equal(h.shown[0].title,'Your invitation was accepted');assert.equal(h.shown[0].body,'You can now chat on Rolff.');
+});
+test('invitation accepted: only text from the payload name; control characters stripped, 40 characters, never message text, links or read/delivery fields',async()=>{
+ const h=harness();await bind(h);await h.push(payload({t:'a',c:CONV,s:['\u202eFar\u200b'+'x'.repeat(60)],body:'MALICIOUS BODY',title:'EVIL',url:'https://evil.invalid',read:true,delivered:true,k:3,n:9}));
+ const n=h.shown[0];assert.equal(n.title,('Far'+'x'.repeat(60)).slice(0,40)+' har accepteret din invitation');assert.equal(n.body,'Nu kan I chatte på Rolff.');
+ const all=JSON.stringify(n);for(const bad of ['MALICIOUS','EVIL','evil.invalid','read','delivered','Ny besked','nye beskeder'])assert(!all.toLowerCase().includes(bad.toLowerCase()),bad);
+ assert.deepEqual(Object.keys(n.data).sort(),['binding','c']);
+});
+test('invitation accepted: a hostile conversation id is ignored (no id in data, no id in the tag)',async()=>{
+ for(const c of ['../../x','https://evil.invalid/','javascript:alert(1)',CONV+'x',5,null]){
+  const h=harness();await bind(h);await h.push(payload({t:'a',c,s:['Far']}));assert.equal(h.shown[0].tag,'rolff-accept');assert.deepEqual(Object.keys(h.shown[0].data),['binding']);}
+});
+test('invitation accepted: a message push still uses the message notice and its own tag; both can be shown together',async()=>{
+ const h=harness();await bind(h);await h.push(payload({s:['Far'],k:1,n:1}));await h.push(payload({t:'a',c:CONV,s:['Mor']}));
+ assert.equal(h.shown[0].tag,'rolff-ready');assert.equal(h.shown[0].title,'Ny besked fra Far');assert.equal(h.shown[1].title,'Mor har accepteret din invitation');
+});
+test('tap on an invitation-accepted notice with no open window opens the overview with #open=<conversation> (id built by the worker)',async()=>{
+ const h=harness();await bind(h);await h.push(payload({t:'a',c:CONV,s:['Far']}));await h.emit('notificationclick',{notification:h.shown[0]});
+ assert.deepEqual(h.opened,['https://synthetic.invalid/app/#open='+CONV]);
+});
+test('tap with the app already open focuses it and asks it to open that conversation (message carries only the validated uuid)',async()=>{
+ const h=harness();await bind(h);const sent=[];let focused=0;h.windows.push({url:'https://synthetic.invalid/app/#x',focus:async()=>{focused++;},postMessage:m=>sent.push(m)});
+ await h.push(payload({t:'a',c:CONV,s:['Far']}));await h.emit('notificationclick',{notification:h.shown[0]});
+ assert.equal(focused,1);assert.equal(JSON.stringify(sent),JSON.stringify([{type:'ROLFF_OPEN_CONVERSATION',c:CONV}]));assert.deepEqual(h.opened,[]);
+ // a message notice only focuses; no navigation message
+ sent.length=0;await h.push(payload({s:['Far'],k:1,n:1}));await h.emit('notificationclick',{notification:h.shown[1]});assert.deepEqual(sent,[]);assert.equal(focused,2);
+});
+test('click: attacker-controlled notification data cannot choose a URL or an id; a stale click after identity change does nothing',async()=>{
+ const h=harness();await bind(h);await h.push(payload({t:'a',c:CONV,s:['Far']}));h.shown[0].data.c='../../evil';h.shown[0].data.url='https://evil.invalid/';
+ await h.emit('notificationclick',{notification:h.shown[0]});assert.deepEqual(h.opened,['https://synthetic.invalid/app/']);
+ const h2=harness();await bind(h2);await h2.push(payload({t:'a',c:CONV,s:['Far']}));const stale=h2.shown[0];await h2.message({type:'IDENTITY',owner:'30000000-0000-4000-8000-000000000003'});await h2.emit('notificationclick',{notification:stale});assert.deepEqual(h2.opened,[]);
+});
+test('sign-out / identity change closes acceptance notices as well as message notices',async()=>{
+ const h=harness();await bind(h);await h.push(payload({t:'a',c:CONV,s:['Far']}));await h.push(payload({s:['Far'],k:1,n:1}));
+ await h.message({type:'IDENTITY',owner:'30000000-0000-4000-8000-000000000003'});assert(h.shown.every(n=>n.closed),'all rolff notices closed');
+});
+test('invitation accepted: expired/foreign-binding pushes are dropped like any other push',async()=>{
+ const h=harness();await bind(h);await h.push({...payload({t:'a',c:CONV,s:['Far']}),expires:Date.now()-1});await h.push({...payload({t:'a',c:CONV,s:['Far']}),binding:'40000000-0000-4000-8000-000000000004'});assert.equal(h.shown.length,0);
+});
