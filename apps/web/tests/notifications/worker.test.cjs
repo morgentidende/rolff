@@ -33,6 +33,12 @@ test('unusable name data falls back to the generic text (never throws, never sho
  for(const extra of [{s:[],k:1},{s:'Far',k:1},{s:[5],k:1},{s:['Far']},{s:['Far'],k:0},{s:['Far'],k:'1'},{s:['\u200b'],k:1},{s:['Far','Mor'],k:1},{s:{x:1},k:1},{s:['Far'],k:1000}])assert.deepEqual(await shownText(extra),['ROLFF','Du har nye beskeder klar.'],JSON.stringify(extra));
  assert.equal((await shownText({s:['Far'],k:1,n:'x'}))[0],'Ny besked fra Far','bad message count falls back to sender count');
 });
+test('e-mail fallback names show as-is (da and en), including a shortened long address',async()=>{
+ assert.deepEqual(await shownText({s:['far@example.com'],k:1,n:1}),['Ny besked fra far@example.com','Åbn Rolff for at læse den.']);
+ assert.deepEqual(await shownText({l:'en',s:['dad@example.com'],k:1,n:1}),['New message from dad@example.com','Open Rolff to read it.']);
+ assert.deepEqual(await shownText({s:['far@example.com','mor@example.com'],k:2,n:2}),['Nye beskeder fra far@example.com og mor@example.com','Åbn Rolff for at læse dem.']);
+ const long='very.long.local.part.of.an.address…@example.invalid';assert(Array.from(long).length>40);const [t]=await shownText({s:[long],k:1,n:1});assert.equal(Array.from(t.replace('Ny besked fra ','')).length,40,'worker caps any name at 40 characters');
+});
 test('names are cleaned and capped; title never contains message content or markup beyond the name',async()=>{
  const [t]=await shownText({s:['\u202eFar\u200b\u0007 '+'x'.repeat(60)],k:1,n:1});assert.equal(t,'Ny besked fra Far '+'x'.repeat(36));assert(!/[\u202e\u200b\u0007]/.test(t));
  const [t2,b2]=await shownText({s:['Far'],k:1,n:1,body:'SECRET TEXT',message:'SECRET TEXT',text:'SECRET TEXT'});assert(!(t2+b2).includes('SECRET'));

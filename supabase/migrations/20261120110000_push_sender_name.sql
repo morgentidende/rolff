@@ -1,9 +1,24 @@
--- Notification text names the sender, but ONLY by the recipient's own private nickname
--- (contact_aliases). Rolff removed public display names on 2026-11-09 and never shows other
--- people's e-mail addresses, so a sender without a nickname is not named (generic text is used).
--- Message content is never read here. Muted conversations are excluded, so a muted chat can
+-- Notification text names the sender: the recipient's own private nickname (contact_aliases) if
+-- there is one, otherwise the sender's e-mail address (Nicolai's decision 2026-11-19; Rolff has no
+-- public display names and the recipient already sees this e-mail in the app). Long e-mail
+-- addresses are shortened to 40 characters, keeping the domain. If neither exists the generic
+-- text is used. Message content is never read here. Muted conversations are excluded, so a muted chat can
 -- neither trigger nor appear in a notification. The sender is not told anything: this only
 -- shapes the text of the push to the recipient's own device.
+
+-- Shortens an e-mail address to at most 40 characters: keep the domain when it is short enough.
+create function public._push_short_email(e text) returns text
+language sql immutable set search_path = pg_catalog as $$
+  select case
+    when e is null or btrim(e) = '' then null
+    when char_length(btrim(e)) <= 40 then btrim(e)
+    when position('@' in btrim(e)) > 1 and char_length(substr(btrim(e), position('@' in btrim(e)))) <= 24
+      then left(btrim(e), 40 - char_length(substr(btrim(e), position('@' in btrim(e)))) - 1) || '…' || substr(btrim(e), position('@' in btrim(e)))
+    else left(btrim(e), 39) || '…'
+  end
+$$;
+revoke all on function public._push_short_email(text) from public, anon, authenticated;
+grant execute on function public._push_short_email(text) to service_role;
 
 create function public.push_notice_who(uid uuid, p_job bigint, at timestamptz)
 returns jsonb language plpgsql stable security definer set search_path = pg_catalog, public as $$
@@ -20,15 +35,23 @@ begin
       and public.is_active_member(m.conversation_id, uid)
       and not public.conversation_is_muted(uid, m.conversation_id, at)
     group by m.sender_id
-  ), named as (
+  ), cleaned as (
+    -- own nickname first, else the sender's e-mail; identical cleaning for both
     select r.sender_id, r.last_at,
-           left(btrim(regexp_replace(a.alias, '[[:cntrl:]\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]', '', 'g')), 40) nm
-    from rel r join public.contact_aliases a on a.owner_id = uid and a.contact_user_id = r.sender_id
+           nullif(btrim(regexp_replace(coalesce(a.alias, ''),
+                '[[:cntrl:]\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]', '', 'g')), '') nick,
+           nullif(btrim(regexp_replace(coalesce(public._push_short_email(u.email::text), ''),
+                '[[:cntrl:]\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]', '', 'g')), '') mail
+    from rel r
+    left join public.contact_aliases a on a.owner_id = uid and a.contact_user_id = r.sender_id
+    left join auth.users u on u.id = r.sender_id
+  ), named as (
+    select sender_id, last_at, left(coalesce(nick, mail), 40) nm from cleaned
   )
   select coalesce((select count(*) from rel), 0)::int,
          coalesce((select sum(cnt) from rel), 0)::int,
          coalesce((select array_agg(nm order by last_at desc) from (
-            select nm, last_at from named where nm <> '' order by last_at desc limit 2) t), '{}')
+            select nm, last_at from named where nm is not null and nm <> '' order by last_at desc limit 2) t), '{}')
     into k, n, names;
   if k = 0 then return null; end if;
   -- One name unless exactly two senders; more names never fit the short title.
@@ -38,7 +61,7 @@ end $$;
 revoke all on function public.push_notice_who(uuid, bigint, timestamptz) from public, anon, authenticated;
 grant execute on function public.push_notice_who(uuid, bigint, timestamptz) to service_role;
 
--- Same as the previous prepare_push, plus 'who' (names/counts only; never message text).
+-- Same as the previous prepare_push, plus 'who' (nickname/e-mail names and counts only; never message text).
 create or replace function public.prepare_push(p_job bigint,p_sub uuid,p_lease uuid) returns jsonb
 language plpgsql security definer set search_path=pg_catalog,public as $$
 declare a public.push_attempts; j public.notification_jobs; s public.push_subscriptions;
