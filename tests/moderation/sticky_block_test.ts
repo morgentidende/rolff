@@ -4,14 +4,14 @@ import { assertEquals, assertNotEquals } from "jsr:@std/assert@1";
 import { applySticky, normalizeForSticky, stickyHash } from "../../supabase/functions/_shared/stickyBlock.ts";
 import { moderate, type ModerationProvider, type ModerationResult } from "../../supabase/functions/_shared/moderation.ts";
 
-const MSG = "Hvorfor gjorde du ikke det lorte-arbejde?";
+const MSG = "Hvorfor gjorde du ikke det sløve arbejde?";
 const allow: ModerationResult = { decision: "allow", reason_code: "none", spans: [], suggestion: "", explanation: "" };
 const clarify: ModerationResult = { decision: "clarify", reason_code: "unclear_meaning", spans: [], suggestion: "", explanation: "" };
 const fake = (out: unknown): ModerationProvider => ({ name: "fake", model: "fake", moderate: () => Promise.resolve(out) });
 
 Deno.test("normalization ignores case, spacing and punctuation but not wording", async () => {
-  assertEquals(normalizeForSticky("  Hvorfor  GJORDE du ikke det lorte-arbejde?! "), "hvorfor gjorde du ikke det lorte arbejde");
-  assertEquals(await stickyHash(MSG), await stickyHash("hvorfor gjorde du ikke det lorte arbejde"));
+  assertEquals(normalizeForSticky("  Hvorfor  GJORDE du ikke det sløve arbejde?! "), "hvorfor gjorde du ikke det sløve arbejde");
+  assertEquals(await stickyHash(MSG), await stickyHash("hvorfor gjorde du ikke det sløve arbejde"));
   assertNotEquals(await stickyHash(MSG), await stickyHash("Hvorfor gjorde du ikke det arbejde?"));
   assertEquals((await stickyHash(MSG)).length, 64);
 });
@@ -36,7 +36,7 @@ Deno.test("remembered block overrides clarify too", () => {
 });
 
 Deno.test("fresh block keeps its own suggestion/spans", () => {
-  const fresh: ModerationResult = { decision: "block", reason_code: "personal_attack", spans: ["lorte"], suggestion: "Hvorfor gjorde du ikke arbejdet?", explanation: "" };
+  const fresh: ModerationResult = { decision: "block", reason_code: "personal_attack", spans: ["sløve"], suggestion: "Hvorfor gjorde du ikke arbejdet?", explanation: "" };
   assertEquals(applySticky({ ...fresh }, "personal_attack"), fresh);
 });
 
