@@ -23,3 +23,19 @@ test('stale BIND fence cannot resurrect after CLEAR',async()=>{const h=harness()
 test('cross-origin page cannot alter local binding',async()=>{const h=harness();await bind(h);assert.equal(await h.message({type:'IDENTITY',owner:null},'https://evil.invalid/'),undefined);await h.push(payload());assert.equal(h.shown.length,1);});
 test('subscription change clears visibility, closes notifications, no background permission prompt',async()=>{const h=harness();await bind(h);await h.push(payload());await h.emit('pushsubscriptionchange');assert(h.shown[0].closed);await h.push(payload());assert.equal(h.shown.length,1);assert.equal(h.storage.value.binding,null);});
 test('worker never registers a fetch interception or logs payload',()=>{assert(!source.includes("addEventListener('fetch'"));assert(!/console\.(log|warn|error)/.test(source));assert(!source.includes('requestPermission'));});
+
+// Android status bar: monochrome Rolff badge (white silhouette, transparent background) + full-colour icon.
+const zlib=require('node:zlib');
+function png(file){const b=fs.readFileSync(path.resolve(__dirname,'../../public/icons',file));assert.equal(b.subarray(1,4).toString(),'PNG');
+ const w=b.readUInt32BE(16),h=b.readUInt32BE(20),depth=b[24],type=b[25];let off=8,idat=[];while(off<b.length){const len=b.readUInt32BE(off),t=b.subarray(off+4,off+8).toString();if(t==='IDAT')idat.push(b.subarray(off+8,off+8+len));off+=12+len;}
+ assert.equal(depth,8);assert.equal(type,6,'RGBA');const raw=zlib.inflateSync(Buffer.concat(idat)),bpp=4,stride=w*bpp,out=Buffer.alloc(h*stride);
+ for(let y=0;y<h;y++){const f=raw[y*(stride+1)];for(let x=0;x<stride;x++){const v=raw[y*(stride+1)+1+x],a=x>=bpp?out[y*stride+x-bpp]:0,u=y?out[(y-1)*stride+x]:0,c=x>=bpp&&y?out[(y-1)*stride+x-bpp]:0;
+  let p=0;if(f===1)p=a;else if(f===2)p=u;else if(f===3)p=(a+u)>>1;else if(f===4){const q=a+u-c,pa=Math.abs(q-a),pb=Math.abs(q-u),pc=Math.abs(q-c);p=pa<=pb&&pa<=pc?a:pb<=pc?u:c;}out[y*stride+x]=(v+p)&255;}}
+ return {w,h,px:out};}
+test('badge PNGs are 96x96 and 72x72 white silhouettes on a transparent background',()=>{for(const [file,n] of [['rolff-badge-96.png',96],['rolff-badge-72.png',72]]){const {w,h,px}=png(file);assert.equal(w,n);assert.equal(h,n);let opaque=0,clear=0;for(let i=0;i<px.length;i+=4){const a=px[i+3];if(a>0){assert.deepEqual([px[i],px[i+1],px[i+2]],[255,255,255],'only white pixels');}if(a===255)opaque++;if(a===0)clear++;}
+ assert(clear>w*h*0.2,'transparent background');assert(opaque>w*h*0.25,'solid mark');assert.equal(px[3],0,'corner is transparent');}});
+test('notification uses badge (monochrome) and icon (full-colour app icon), both same-origin PNGs under the scope',async()=>{const h=harness();await bind(h);await h.push(payload());const n=h.shown[0];
+ assert.equal(n.badge,'https://synthetic.invalid/app/icons/rolff-badge-96.png');assert.equal(n.icon,'https://synthetic.invalid/app/icons/rolff-192.png');
+ for(const f of [n.badge,n.icon])assert(fs.existsSync(path.resolve(__dirname,'../../public/icons',path.basename(f))),f);
+ const {px}=png('rolff-192.png');let colour=0;for(let i=0;i<px.length;i+=4)if(px[i+3]>0&&(px[i]!==px[i+1]||px[i+1]!==px[i+2]))colour++;assert(colour>1000,'icon is full colour, not a silhouette');
+ const ex=n.icon.startsWith('https://synthetic.invalid/')&&n.badge.startsWith('https://synthetic.invalid/');assert(ex);});
