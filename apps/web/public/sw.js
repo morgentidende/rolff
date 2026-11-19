@@ -1,5 +1,6 @@
 /* Push-only worker. No fetch handler, no message caching, no token storage, no payload URLs.
-   The push may carry the recipient's own private nickname(s) for the sender plus counts, never message text. */
+   The push may carry the recipient's own private nickname(s) for the sender plus counts, never message text.
+   An "invitation accepted" push (t:'a') carries only a conversation id and one name; tapping it opens that conversation. */
 'use strict';
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 let queue=Promise.resolve();
@@ -31,7 +32,15 @@ function noticeText(p){
  return en?{title:(one?'New message from ':'New messages from ')+who,body:one?'Open Rolff to read it.':'Open Rolff to read them.'}
   :{title:(one?'Ny besked fra ':'Nye beskeder fra ')+who,body:one?'Åbn Rolff for at læse den.':'Åbn Rolff for at læse dem.'};
 }
-async function closeNotifications(){for(const n of await self.registration.getNotifications({tag:'rolff-ready'}))n.close();}
+// "<name> accepted your invitation". Name = the inviter's own nickname for the person, else their e-mail (server-side);
+// no name -> generic text. Never message text, never read/delivery status.
+function acceptText(p){
+ const en=p.l==='en';
+ const name=Array.isArray(p.s)?cleanName(p.s[0]):'';
+ if(!name)return en?{title:'Your invitation was accepted',body:'You can now chat on Rolff.'}:{title:'Din invitation er accepteret',body:'Nu kan I chatte på Rolff.'};
+ return en?{title:name+' accepted your invitation',body:'You can now chat on Rolff.'}:{title:name+' har accepteret din invitation',body:'Nu kan I chatte på Rolff.'};
+}
+async function closeNotifications(){for(const n of await self.registration.getNotifications())if(typeof n.tag==='string' && n.tag.startsWith('rolff-'))n.close();}
 self.addEventListener('install',event=>event.waitUntil(self.skipWaiting()));
 self.addEventListener('activate',event=>event.waitUntil(self.clients.claim()));
 self.addEventListener('message',event=>{
@@ -59,18 +68,29 @@ self.addEventListener('push',event=>event.waitUntil(serial(async()=>{
   // Title = recipient's own nickname for the sender(s); body is fixed. Never message content.
   // No `icon` and no `image`: Android draws those as a large picture on the right, which duplicated the logo.
   // badge = white silhouette on transparent (Android status bar and notification header).
+  const badge=new URL('icons/rolff-badge-96.png',self.registration.scope).href;
+  if(p.t==='a'){
+   // Invitation accepted: own tag (never replaces or is replaced by the message notice), conversation id only if a valid uuid.
+   const c=typeof p.c==='string' && uuid.test(p.c)?p.c.toLowerCase():null;
+   const t=acceptText(p);
+   await self.registration.showNotification(t.title,{body:t.body,lang:p.l==='en'?'en':'da',tag:'rolff-accept'+(c?'-'+c:''),badge,data:c?{binding:s.binding,c}:{binding:s.binding}});
+   return;
+  }
   const t=noticeText(p);
-  await self.registration.showNotification(t.title,{body:t.body,lang:p.l==='en'?'en':'da',tag:'rolff-ready',badge:new URL('icons/rolff-badge-96.png',self.registration.scope).href,data:{binding:s.binding}});
+  await self.registration.showNotification(t.title,{body:t.body,lang:p.l==='en'?'en':'da',tag:'rolff-ready',badge,data:{binding:s.binding}});
  }catch{/* Fail closed without logging payload or capabilities. */}
 })));
 self.addEventListener('notificationclick',event=>{
  event.notification.close();event.waitUntil(serial(async()=>{
   const s=await store();if(!s.binding || s.binding!==event.notification.data?.binding)return;
-  // Fixed same-origin overview only. Never trust any URL carried by a push.
+  // Fixed same-origin overview only. Never trust any URL carried by a push. For an acceptance notice the only extra
+  // is a validated conversation id, put in the URL fragment by this worker; the app opens it only for a member.
   const overview=new URL('./',self.registration.scope).href;
+  const c=typeof event.notification.data?.c==='string' && uuid.test(event.notification.data.c)?event.notification.data.c.toLowerCase():null;
   const windows=await self.clients.matchAll({type:'window',includeUncontrolled:false});
-  const existing=windows.find(w=>w.url===overview);
-  if(existing)await existing.focus();else await self.clients.openWindow(overview);
+  const existing=windows.find(w=>w.url.split('#')[0]===overview);
+  if(existing){await existing.focus();if(c)existing.postMessage({type:'ROLFF_OPEN_CONVERSATION',c});}
+  else await self.clients.openWindow(c?overview+'#open='+c:overview);
  }));
 });
 self.addEventListener('pushsubscriptionchange',event=>event.waitUntil(serial(async()=>{

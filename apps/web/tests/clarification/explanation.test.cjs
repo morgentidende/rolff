@@ -20,7 +20,7 @@ test('text: explanation replaces the standard reason, as plain text', async () =
     assert.ok(!/fordi tonen|ordre/.test(box.textContent));
   } finally { await f.close(); }
 });
-for (const [name, explanation] of [['missing', undefined], ['empty', ''], ['non-string', { x: 1 }], ['too long', 'a'.repeat(161)], ['only markup', '<b></b>']])
+for (const [name, explanation] of [['missing', undefined], ['empty', ''], ['non-string', { x: 1 }], ['too long', 'a'.repeat(361)], ['only markup', '<b></b>']])
   test(`text: ${name} explanation falls back to the standard text`, async () => {
     const f = await env(); try {
       const r = { status: 'blocked', reason_code: 'personal_attack', spans: [], suggestion: '' }; if (explanation !== undefined) r.explanation = explanation;

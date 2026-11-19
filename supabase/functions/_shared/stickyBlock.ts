@@ -19,3 +19,10 @@ export function applySticky<T extends ModerationResult>(res: T, remembered: unkn
   if (typeof remembered !== "string" || !(REASON_CODES as readonly string[]).includes(remembered) || remembered === "none" || remembered === "unclear_meaning") return res;
   return { decision: "block", reason_code: remembered as ReasonCode, spans: [], suggestion: "", explanation: "", sticky: true };
 }
+
+/** Only model verdicts are remembered. House-rule blocks (swear words, exclamation marks) are deterministic and are
+ *  recomputed on every send, so remembering them is both pointless and harmful: the sticky key ignores punctuation, so
+ *  "Tekst!" (house block) would also block the corrected "Tekst." (e.g. via "Brug forslag") for a week. */
+export function shouldRememberBlock(res: { decision: string; source?: string }): boolean {
+  return res.decision === "block" && res.source !== "house";
+}

@@ -5,7 +5,8 @@ export function validEndpoint(raw: unknown): raw is string {
   return !u.username && !u.password && !u.port && !u.search && !u.hash && !u.pathname.includes("//") && !u.pathname.includes("/../");
 }
 export type Who = {s?:unknown;k?:unknown;n?:unknown};
-export type Prepared = {endpoint: string; keys: {p256dh:string;auth:string};binding:string;lang?:string;who?:Who|null;prepared_at:string;expires_at:string};
+export type Accept = {c?:unknown;s?:unknown};
+export type Prepared = {endpoint: string; keys: {p256dh:string;auth:string};binding:string;lang?:string;who?:Who|null;accept?:Accept|null;prepared_at:string;expires_at:string};
 /** Notification language follows the recipient's app language (profiles.locale); default Danish. */
 export const pushLang=(p:Pick<Prepared,"lang">):"da"|"en"=>p.lang==="en"?"en":"da";
 /** Display-name fields for the notification title: only the recipient's own private nicknames
@@ -24,8 +25,17 @@ export function pushWho(p:Pick<Prepared,"who">):{s:string[];k:number;n:number}|n
   const msgs=typeof n==="number" && Number.isInteger(n) && n>=k && n<=99?n:k;
   return {s:k===2?s:s.slice(0,1),k,n:msgs};
 }
-/** The exact (pre-encryption) push payload: binding, language, expiry and, if valid, nickname(s)+counts. */
-export const pushPayload=(p:Prepared,now=Date.now())=>JSON.stringify({v:1,binding:p.binding,l:pushLang(p),...(pushWho(p)??{}),expires:now+30000});
+/** "Invitation accepted" notice: the conversation to open (uuid) and, if there is one, the display name (the
+ *  inviter's own nickname for the person, else that person's e-mail). Nothing else, never message data. */
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+export function pushAccept(p:Pick<Prepared,"accept">):{t:"a";c?:string;s?:string[]}|null {
+  const a=p.accept;if(!a || typeof a!=="object")return null;
+  const name=cleanName(a.s);
+  return {t:"a",...(typeof a.c==="string" && UUID.test(a.c)?{c:a.c}:{}),...(name?{s:[name]}:{})};
+}
+/** The exact (pre-encryption) push payload: binding, language, expiry and, if valid, either the acceptance notice
+ *  or nickname(s)+counts. A malformed acceptance notice keeps the generic acceptance text and opens the overview. */
+export const pushPayload=(p:Prepared,now=Date.now())=>JSON.stringify({v:1,binding:p.binding,l:pushLang(p),...(p.accept?pushAccept(p):(pushWho(p)??{})),expires:now+30000});
 export type Outcome = "accepted" | "gone" | "permanent" | "retry" | "deferred" | "expired";
 export function outcome(status:number):Outcome {
   if (status>=200 && status<300) return "accepted";
