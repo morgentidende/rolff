@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        script: [notifications.mjs, notifications-concurrency.mjs, notifications-v3.mjs, conversation-mutes.mjs, push-sender-name.mjs]
+        script: [notifications.mjs, notifications-concurrency.mjs, notifications-v3.mjs, conversation-mutes.mjs, push-sender-name.mjs, pending-alias-push.mjs]
     services:
       postgres:
         image: postgres:17
