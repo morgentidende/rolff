@@ -177,7 +177,8 @@ const env = (k: string): string | undefined => { try { return Deno.env.get(k) ||
 let smtpConnect: Connect | undefined;
 /** Tests only: replace the TLS socket with a fake SMTP server. */
 export const _setSmtpConnect = (c: Connect | undefined) => { smtpConnect = c; };
-/** SMTP settings when configured (SMTP_USER + SMTP_PASS); otherwise the PHP relay is used. */
+/** SMTP settings when configured (SMTP_USER + SMTP_PASS); otherwise the PHP relay is used.
+ *  Production: SMTP_USER=rolff-no-reply@nicolaipetersen.dk, so mail goes out as "Rolff" <rolff-no-reply@nicolaipetersen.dk>. */
 export function smtpConfig(): SmtpConfig | null {
   const user = env("SMTP_USER"), pass = env("SMTP_PASS");
   if (!user || !pass) return null;

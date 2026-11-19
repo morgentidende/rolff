@@ -44,7 +44,7 @@ Deno.test("relay fallback (no SMTP configured): success and 502 are logged with 
   assertEquals(await E.sendMail("far@example.test", msg), false, "boolean wrapper still works");
 });
 Deno.test("SMTP configured: relay is not used; rejection reason is logged; recipient only as a keyed hash", async () => {
-  Deno.env.set("SMTP_USER", "no-reply@nicolaipetersen.dk"); Deno.env.set("SMTP_PASS", "test-pass");
+  Deno.env.set("SMTP_USER", "rolff-no-reply@nicolaipetersen.dk"); Deno.env.set("SMTP_PASS", "test-pass");
   try {
     logs.length = 0; relayHits = 0;
     E._setSmtpConnect(async () => server());
@@ -59,7 +59,7 @@ Deno.test("SMTP configured: relay is not used; rejection reason is logged; recip
     assertEquals(String(logs[0].recipient_hash).length, 32);
     assertEquals(Object.keys(logs[0]).sort(), ["kind", "provider", "reason", "recipient_hash", "response_code", "status"]);
     logs.forEach(noContent);
-    assertEquals(E.smtpConfig()?.host, "smtp.hostinger.com"); assertEquals(E.smtpConfig()?.port, 465); assertEquals(E.smtpConfig()?.from, "no-reply@nicolaipetersen.dk");
+    assertEquals(E.smtpConfig()?.host, "smtp.hostinger.com"); assertEquals(E.smtpConfig()?.port, 465); assertEquals(E.smtpConfig()?.from, "rolff-no-reply@nicolaipetersen.dk");
   } finally { Deno.env.delete("SMTP_USER"); Deno.env.delete("SMTP_PASS"); E._setSmtpConnect(undefined); }
 });
 Deno.test("not configured at all -> failed with reason not_configured, still logged", async () => {

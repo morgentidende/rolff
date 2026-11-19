@@ -36,7 +36,7 @@ function fakeServer(script: Script = {}, opts: { hang?: boolean } = {}) {
   };
   return { conn, lines, get data() { return data; }, get closed() { return closed; } };
 }
-const cfg = { host: "smtp.test", port: 465, user: "no-reply@nicolaipetersen.dk", pass: "s3cret-pass", from: "no-reply@nicolaipetersen.dk", heloName: "nicolaipetersen.dk" };
+const cfg = { host: "smtp.test", port: 465, user: "rolff-no-reply@nicolaipetersen.dk", pass: "s3cret-pass", from: "rolff-no-reply@nicolaipetersen.dk", heloName: "nicolaipetersen.dk" };
 const mime = (over: Partial<Parameters<typeof buildMime>[0]> = {}) => buildMime({ from: cfg.from, fromName: "Rolff", to: "far@example.test", subject: "Maya har inviteret dig til Rolff", html: "<p>Hej</p>", text: "Hej\n.\nslut", ...over });
 
 Deno.test("SMTP: success path authenticates with PLAIN over the given connection and sends one message", async () => {
@@ -45,10 +45,10 @@ Deno.test("SMTP: success path authenticates with PLAIN over the given connection
   assertEquals(r, { ok: true, code: 250, reason: "ok" });
   assertEquals([host, port], ["smtp.test", 465]);
   assertEquals(s.lines[0], "EHLO nicolaipetersen.dk");
-  assertEquals(s.lines[1], "AUTH PLAIN " + btoa("\0no-reply@nicolaipetersen.dk\0s3cret-pass"));
-  assertEquals(s.lines.slice(2, 5), ["MAIL FROM:<no-reply@nicolaipetersen.dk>", "RCPT TO:<far@example.test>", "DATA"]);
+  assertEquals(s.lines[1], "AUTH PLAIN " + btoa("\0rolff-no-reply@nicolaipetersen.dk\0s3cret-pass"));
+  assertEquals(s.lines.slice(2, 5), ["MAIL FROM:<rolff-no-reply@nicolaipetersen.dk>", "RCPT TO:<far@example.test>", "DATA"]);
   assertEquals(s.lines.at(-1), "QUIT");
-  assertMatch(s.data, /^From: "Rolff" <no-reply@nicolaipetersen\.dk>\r\n/);
+  assertMatch(s.data, /^From: "Rolff" <rolff-no-reply@nicolaipetersen\.dk>\r\n/);
   assert(s.data.includes("\r\nTo: <far@example.test>\r\n"));
   assert(/\r\nMessage-ID: <[0-9a-f]+\.\d+@nicolaipetersen\.dk>\r\n/.test(s.data));
   assert(s.closed);
