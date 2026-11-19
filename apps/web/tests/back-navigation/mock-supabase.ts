@@ -25,10 +25,11 @@ async function getSession() {
 }
 // Pending invitation fixture (window.__QA_PENDING = 'live' | 'nomail'): nobody has accepted yet, the owner's own nickname is stored per invitation.
 export const inv = '50000000-0000-4000-8000-000000000001';
+export const inv2 = '50000000-0000-4000-8000-000000000002';
 const pendingAliases = new Map<string, string | null>();
 const pendingConv = () => ({ id: cid, role: 'parent', members: 1, others: [], color: 'teal',
     pending_invitee: (globalThis as any).__QA_PENDING === 'nomail' ? null : 'afventer@example.invalid',
-    pending_invitation_id: inv, pending_alias: pendingAliases.get(session?.user.id) ?? null });
+    pending_invitation_id: inv, pending_alias: pendingAliases.get(inv) ?? null });
 const conv = () => (globalThis as any).__QA_PENDING ? pendingConv() : ({ id: cid, role: 'parent', members: 2, others: [{ user_id: other, email: 'kontakt@example.invalid', alias: aliases.get(session?.user.id) ?? null }], color: 'teal' });
 function query() {
     const p: any = Promise.resolve({ data: [], error: null });
@@ -44,6 +45,16 @@ function rpc(name: string, args: any) {
         data = [conv()];
     if (name === 'list_my_conversations_v2')
         data = [(globalThis as any).__QA_PENDING ? { ...conv(), last_at: null, last_body: null, last_mine: false, last_sender_name: null, last_att_mime: null } : { ...conv(), last_at: '2026-11-07T08:00:00Z', last_body: 'Kun en opdigtet testbesked.', last_mine: true, last_sender_name: null, last_att_mime: null }];
+    // QA-only: __QA_PENDING = 'list' returns a realistic front page (two waiting rows and one accepted contact).
+    if ((name === 'list_my_conversations' || name === 'list_my_conversations_v2') && (globalThis as any).__QA_PENDING === 'list') {
+        const base = { role: 'parent', color: 'teal', last_at: null, last_body: null, last_mine: false, last_sender_name: null, last_att_mime: null };
+        data = [
+            { ...base, id: cid, members: 1, others: [], pending_invitee: 'far@example.invalid', pending_invitation_id: inv, pending_alias: pendingAliases.get(inv) ?? null },
+            { ...base, id: '20000000-0000-4000-8000-000000000002', color: 'violet', members: 1, others: [], pending_invitee: null, pending_invitation_id: inv2, pending_alias: pendingAliases.get(inv2) ?? null },
+            { ...base, id: '20000000-0000-4000-8000-000000000003', color: 'blue', members: 2, others: [{ user_id: other, email: 'kontakt@example.invalid', alias: 'Mor' }], pending_invitee: null, pending_invitation_id: null, pending_alias: null,
+              last_at: '2026-11-18T08:00:00Z', last_body: 'Kun en opdigtet testbesked.', last_mine: false },
+        ];
+    }
     if (name === 'get_my_public_name')
         data = 'Testperson';
     if (name === 'get_my_plan')
@@ -100,7 +111,7 @@ function rpc(name: string, args: any) {
         ? new Promise(resolve => { pendingAlias = () => resolve({ data, error: null }); })
         : Promise.resolve({ data, error: null });
     if (name === 'set_invitation_alias')
-        result.then(() => { pendingAliases.set(session?.user.id, String(args.p_alias ?? '').trim() || null); });
+        result.then(() => { pendingAliases.set(String(args.p_invitation), String(args.p_alias ?? '').trim() || null); });
     if (name === 'set_contact_alias')
         result.then(() => { const owner = call.headers.Authorization === `Bearer ${TOKEN_A}` ? uid : session?.user.id; aliases.set(owner, args.p_alias.trim() || null); });
     result.setHeader = (key: string, value: string) => { call.headers[key] = value; return result; };
