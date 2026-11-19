@@ -106,18 +106,49 @@ export function houseCheck(text: string, opts: { exclamations?: boolean } = {}):
   return { kind, spans: [...profanity, ...exclamations].slice(0, 5), profanity, exclamations };
 }
 
-/** Sender-facing texts (max 140 chars). User-facing: "Rolff" only, never a pronoun, no model name. */
+/** Sender-facing texts: one short line (shown in full, no "Mere"). User-facing: "Rolff" only, never a pronoun, no model name. */
 export const HOUSE_EXPLANATION: Record<HouseKind, Record<AppLang, string>> = {
   profanity: {
-    da: "Rolff lader ikke grove ord og bandeord passere, heller ikke når de ikke er rettet mod nogen. Prøv uden ordet.",
-    en: "Rolff doesn't let swear words or crude language through, even when they aren't aimed at anyone. Try without the word.",
+    da: "Rolff lader ikke bandeord passere.",
+    en: "Rolff doesn't let swear words through.",
   },
   exclamation: {
-    da: "Udråbstegn kan lyde som råb eller et påbud, så Rolff afviser dem. Prøv et punktum i stedet.",
-    en: "Exclamation marks can sound like shouting or an order, so Rolff doesn't allow them. Try a period instead.",
+    da: "Rolff lader ikke udråbstegn passere.",
+    en: "Rolff doesn't let exclamation marks through.",
   },
   both: {
-    da: "Rolff afviser grove ord, bandeord og udråbstegn, også når de ikke er rettet mod nogen. Prøv uden dem.",
-    en: "Rolff doesn't allow swear words, crude language or exclamation marks, even when not aimed at anyone. Try without them.",
+    da: "Rolff lader ikke bandeord og udråbstegn passere.",
+    en: "Rolff doesn't let swear words or exclamation marks through.",
   },
 };
+
+const escRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const wordCount = (s: string) => (s.match(/[\p{L}\p{N}]+/gu) ?? []).length;
+/** Danish idioms where the swear word is part of a fixed phrase: remove the whole phrase ("for helvede", "ad helvede til"). */
+const DA_IDIOM = /^(helvede|helvedes|pokker|pokkers)$/u;
+
+/** Deterministic fallback rewrite for swear-word hits: the flagged word(s) removed, spaces/commas tidied
+ *  ("Sikke noget lort at fyre af" -> "Sikke noget at fyre af"). Exclamation marks (if any) become periods.
+ *  Returns "" (= no suggestion) unless the result still has at least 2 words and passes the house rules again. */
+export function houseFallbackSuggestion(text: string, hit: HouseHit | null = houseCheck(text)): string {
+  if (!hit || !hit.profanity.length) return "";
+  let out = text;
+  for (const span of hit.profanity) {
+    const w = norm(span), core = `(?<![\\p{L}\\p{N}])${escRe(span)}(?![\\p{L}\\p{N}])`;
+    const phrase = DA_IDIOM.test(w) ? `(?:(?:[Ff]or|[Aa]d)\\s+)?${core}(?:\\s+til)?`
+      : w === "hell" ? `(?:(?:${[...HELL_BEFORE].join("|")})\\s+)*${core}`
+      : core;
+    out = out.replace(new RegExp(phrase, w === "dick" ? "gu" : "giu"), " ");
+  }
+  out = out.replace(/\s+/g, " ")
+    .replace(/\s+([,.;:?？])/g, "$1")
+    .replace(/([,;:])(\s*[,;:])+/g, "$1")
+    .replace(/[,;:]+([.?？])/g, "$1")
+    .replace(/^[\s,;:.]+/, "")
+    .replace(/[\s,;:]+$/, "")
+    .trim();
+  const first = text.trimStart()[0] ?? "";
+  if (out && first !== first.toLowerCase()) out = out[0].toUpperCase() + out.slice(1);
+  if (hit.exclamations.length) out = fixExclamations(out) || out;
+  return wordCount(out) >= 2 && out !== text.trim() && houseCheck(out) === null ? out : "";
+}

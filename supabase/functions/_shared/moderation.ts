@@ -1,5 +1,5 @@
 // Provider-agnostic moderation. Pure module: no Supabase deps, runs in Deno & tests.
-import { fixExclamations, houseCheck, type HouseKind } from "./houseRules.ts";
+import { houseFallbackSuggestion, fixExclamations, houseCheck, type HouseKind } from "./houseRules.ts";
 export const DECISIONS = ["allow", "block", "clarify"] as const;
 export type Decision = typeof DECISIONS[number];
 export const REASON_CODES = [
@@ -232,16 +232,18 @@ async function aiCheck(provider: ModerationProvider, msg: string, ctx: ContextMs
 async function houseBlock(provider: ModerationProvider, msg: string, ctx: ContextMsg[], timeoutMs: number, house: ReturnType<typeof houseCheck> & object): Promise<ModerationResult> {
   const base: ModerationResult = { decision: "block", reason_code: "other_harmful", spans: house.spans, suggestion: "", explanation: "" };
   if (!house.profanity.length) return { ...base, suggestion: fixExclamations(msg) };
+  // Deterministic fallback when the model gives no usable rewrite: the flagged word(s) removed (only if >= 2 words remain and the house rules pass).
+  const fallback = houseFallbackSuggestion(msg, house);
   let ai: ModerationResult | null = null;
   try { ai = await aiCheck(provider, msg, ctx, timeoutMs); } catch { ai = null; }
   if (ai && ai.decision === "block") {
     let sug = house.exclamations.length ? fixExclamations(ai.suggestion) || ai.suggestion : ai.suggestion;
     sug = sug.replace(/[!！‼⁉]+/gu, ".").replace(/\.{2,}/g, ".");
-    const clean = houseCheck(sug) === null && sug !== msg.trim();
+    const clean = sug.trim() !== "" && houseCheck(sug) === null && sug !== msg.trim();
     const spans = [...new Set([...house.spans, ...ai.spans.filter((x) => !house.spans.includes(x))])].slice(0, 5);
-    return { ...base, spans, suggestion: clean ? sug : "", reason_code: ai.reason_code === "uncertain" ? "other_harmful" : ai.reason_code };
+    return { ...base, spans, suggestion: clean ? sug : fallback, reason_code: ai.reason_code === "uncertain" ? "other_harmful" : ai.reason_code };
   }
-  return base;
+  return { ...base, suggestion: fallback };
 }
 
 export interface ModerateOptions {

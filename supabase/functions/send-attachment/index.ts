@@ -1,4 +1,4 @@
-import { fixExclamations, houseCheck, HOUSE_EXPLANATION } from "../_shared/houseRules.ts";
+import { houseFallbackSuggestion, fixExclamations, houseCheck, HOUSE_EXPLANATION } from "../_shared/houseRules.ts";
 import { checkTopics, validateFilterSnapshot } from "../_shared/topics.ts";
 // POST {conversation_id, idempotency_key, file_b64, file_name, caption?, alt?}
 // Same pipeline as send-message, for one image/PDF: auth (sender must have plan 'text_attachments')
@@ -110,7 +110,7 @@ Deno.serve(async (req) => {
   const capHouse = caption ? houseCheck(caption) : null;
   if (capHouse) {
     await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "block", p_reason: "other_harmful" });
-    return json({ status: "blocked", reason_code: "other_harmful", spans: capHouse.spans, suggestion: capHouse.profanity.length ? "" : fixExclamations(caption), explanation: HOUSE_EXPLANATION[capHouse.kind][lang] }, 200);
+    return json({ status: "blocked", reason_code: "other_harmful", spans: capHouse.spans, suggestion: capHouse.profanity.length ? houseFallbackSuggestion(caption, capHouse) : fixExclamations(caption), explanation: HOUSE_EXPLANATION[capHouse.kind][lang], house: capHouse.kind }, 200);
   }
 
   // Files need a provider that accepts images/PDF: OpenAI only. Anything else fails closed.
@@ -149,7 +149,7 @@ Deno.serve(async (req) => {
   const fileHouse = houseCheck(res.transcript + "\n" + name, { exclamations: false });
   if (fileHouse) {
     await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "block", p_reason: "other_harmful" });
-    return json({ status: "blocked", reason_code: "other_harmful", spans: fileHouse.spans, suggestion: "", explanation: HOUSE_EXPLANATION.profanity[lang], meta }, 200);
+    return json({ status: "blocked", reason_code: "other_harmful", spans: fileHouse.spans, suggestion: "", explanation: HOUSE_EXPLANATION.profanity[lang], house: "profanity", meta }, 200);
   }
   if (res.decision === "clarify") {
     await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "clarify", p_reason: "unclear_meaning" });

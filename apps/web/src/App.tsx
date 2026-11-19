@@ -30,7 +30,7 @@ import { passwordsMatch, pwText, toggleLabel } from "./pw";
 import { cacheClear, cacheGet, cacheSet } from "./localStore";
 import { LunaIndicator } from "./LunaRobot";
 import { applySuggestion } from "./suggestion";
-import { BlockedNotice } from "./BlockedNotice";
+import { BlockedNotice, cleanHouse, type HouseKind } from "./BlockedNotice";
 import { KEY as A2HS_KEY, platform as a2hsPlatform, shouldAsk } from "./install";
 import { makeZip, myDataFiles, findHits } from "./exportUtil";
 import { ConversationExport, fetchMyPlan, PLAN_TIMEOUT_MS, withTimeout } from "./ConversationExport";
@@ -695,7 +695,7 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
   const [replyFocus, setReplyFocus] = useState(0);
   const [invs, setInvs] = useState<Pending[]>([]);
   const [text, setText] = useState(localStorage.getItem(draftKey) ?? "");
-  const [status, setStatus] = useState<{ kind: string; spans?: string[]; blockedText?: string; suggestion?: string; reason?: string; explanation?: string } | null>(null);
+  const [status, setStatus] = useState<{ kind: string; spans?: string[]; blockedText?: string; suggestion?: string; reason?: string; explanation?: string; house?: HouseKind } | null>(null);
   const [acceptedSeq, setAcceptedSeq] = useState(0);
   const [busy, setBusy] = useState(false); const [attachmentBusy, setAttachmentBusy] = useState(false); const sending = busy || attachmentBusy;
   // Soft one-shot glow on the just-approved own bubble (not history / initial load).
@@ -878,7 +878,7 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
     setBusy(false);
     if (r.status === 200 && r.data?.status === "accepted") { setText(""); setReply(null); setEditId(null); localStorage.removeItem(draftKey); localStorage.removeItem(replyKey); localStorage.removeItem(keyStore); setStatus({ kind: "accepted" }); setAcceptedSeq((x) => x + 1); armFlash(r.data?.message_id); load(); }
     else if (r.status === 200 && r.data?.status === "clarification_required") setStatus({ kind: "clarification" });
-    else if (r.status === 200 && r.data?.status === "blocked") setStatus({ kind: "blocked", spans: r.data.spans ?? [], blockedText: text, suggestion: typeof r.data.suggestion === "string" ? r.data.suggestion : "", reason: r.data.reason_code, explanation: cleanExplanation(r.data.explanation) });
+    else if (r.status === 200 && r.data?.status === "blocked") setStatus({ kind: "blocked", spans: r.data.spans ?? [], blockedText: text, suggestion: typeof r.data.suggestion === "string" ? r.data.suggestion : "", reason: r.data.reason_code, explanation: cleanExplanation(r.data.explanation), house: cleanHouse(r.data.house) });
     else if (r.status === 200 && r.data?.status === "private_boundary") setStatus({ kind: "note", blockedText: da ? "Beskeden kan ikke sendes på grund af en privat modtagerindstilling. Ret beskeden og prøv igen." : "Not sent due to a private recipient setting. Edit your message and retry." });
     else if (r.status === 200 && r.data?.status === "blocked_word") setStatus({ kind: "note", blockedText: da ? `Beskeden blev ikke sendt: Modtageren har blokeret ordet/sætningen "${r.data.word}". Ret beskeden og prøv igen.` : `The message was not sent: the recipient has blocked the word/phrase "${r.data.word}". Edit the message and try again.` });
     else if (r.status === 200 && r.data?.status === "rule") setStatus({ kind: "note", blockedText: ({ emoji: da ? "Beskeden blev ikke sendt: Emojis er ikke tilladt i Rolff. Skriv det med ord." : "Not sent: emojis are not allowed in Rolff. Use words.", caps: da ? "Beskeden blev ikke sendt: Den er skrevet med store bogstaver, som kan opfattes som råb." : "Not sent: all caps can read as shouting.", repeat: da ? "Beskeden blev ikke sendt: Du har lige sendt den samme besked." : "Not sent: you just sent the same message." } as Record<string, string>)[r.data.rule] ?? "" });
@@ -1014,7 +1014,7 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
         {eventsBefore(events, msgs, msgs.length).map((e) => <EventNotice key={e.id} e={e} lang={lang} />)}
         <div ref={endRef} />
       </div>
-      {status?.kind === "blocked" && <BlockedNotice key={status.blockedText} lang={lang} reason={status.reason} explanation={status.explanation} spans={status.spans ?? []} blockedText={status.blockedText ?? ""} suggestion={status.suggestion ?? ""} onUse={() => { setText(applySuggestion(text, status.suggestion)); setStatus(null); }} onClose={() => setStatus(null)} />}
+      {status?.kind === "blocked" && <BlockedNotice key={status.blockedText} lang={lang} reason={status.reason} house={status.house} explanation={status.explanation} spans={status.spans ?? []} blockedText={status.blockedText ?? ""} suggestion={status.suggestion ?? ""} onUse={() => { setText(applySuggestion(text, status.suggestion)); setStatus(null); }} onClose={() => setStatus(null)} />}
       {status?.kind === "clarification" && <div className="notice" role="alert">{da ? "Beskeden er ikke sendt. Vi er usikre på, hvad du mener. Vil du skrive det lidt tydeligere?" : "Your message was not sent. We’re not sure what you mean. Could you write it a little more clearly?"}</div>}
       {status?.kind === "note" && <div className="notice" role="alert">{status.blockedText}</div>}
       {status && status.kind !== "blocked" && status.kind !== "note" && status.kind !== "clarification" && status.kind !== "accepted" && <div className="err" role="status">{(t as any)[status.kind]}</div>}

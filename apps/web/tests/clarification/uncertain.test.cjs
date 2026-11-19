@@ -1,5 +1,5 @@
 // Borderline tone ("uncertain"): Rolff blocks, says briefly that the tone is uncertain, highlights the
-// doubtful words and offers "Brug forslaget" exactly like a normal block. Synthetic text, mocked sends only.
+// doubtful words and offers "Brug forslag" exactly like a normal block. Synthetic text, mocked sends only.
 const { test } = require('node:test'); const assert = require('node:assert/strict');
 const { env, delay, button, label, click } = require('./support.cjs');
 const put = async (w, el, v) => { Object.getOwnPropertyDescriptor(w.HTMLTextAreaElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new w.Event('input', { bubbles: true })); await delay(30); };
@@ -20,7 +20,7 @@ async function send(f, response, en = false) {
 }
 const noPronoun = t => !/\b(Luna|hun|hende|han|ham|she|her|he|him)\b/i.test(t);
 
-test('da: uncertain shows the fixed Rolff text, highlights the span and offers Brug forslaget', async () => {
+test('da: uncertain shows the fixed Rolff text, highlights the span and offers Brug forslag', async () => {
   const f = await env(); const { d } = f; try {
     const box = await send(f, { ...RES, explanation: DA });
     assert.ok(box); assert.equal(box.querySelector('.blockbox-head strong').textContent, 'Ikke sendt');
@@ -28,7 +28,7 @@ test('da: uncertain shows the fixed Rolff text, highlights the span and offers B
     assert.ok(!reason.textContent.includes('Ret den og prøv igen'));
     assert.equal(box.querySelector('.blockbox-flag mark').textContent, 'skodbøger');
     assert.equal(box.querySelector('.blockbox-quote').textContent, 'Hvorfor tog du ikke bøgerne med?');
-    const use = box.querySelector('.blockbox-use'); assert.equal(use.textContent, 'Brug forslaget');
+    const use = box.querySelector('.blockbox-use'); assert.equal(use.textContent, 'Brug forslag');
     assert.ok(noPronoun(box.textContent), box.textContent);
     await click(use); await delay(30); assert.equal(label(d, 'Skriv en besked').value, 'Hvorfor tog du ikke bøgerne med?');
   } finally { await f.close(); }
