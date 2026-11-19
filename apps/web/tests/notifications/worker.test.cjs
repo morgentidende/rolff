@@ -45,7 +45,7 @@ test('names are cleaned and capped; title never contains message content or mark
 });
 test('notification never sets icon or image (no duplicate large logo); only the white badge, no click URL or message data',async()=>{
  const h=harness();await bind(h);await h.push(payload({s:['Far'],k:1,n:1,image:'https://evil.invalid/x.png',icon:'https://evil.invalid/y.png'}));const n=h.shown[0];
- assert(!('icon' in n));assert(!('image' in n));assert.equal(n.badge,'https://synthetic.invalid/app/icons/rolff-badge-96.png');assert.deepEqual(Object.keys(n.data),['binding']);assert.equal(n.tag,'rolff-ready');
+ assert(!('icon' in n));assert(!('image' in n));assert.equal(n.badge,'https://synthetic.invalid/app/icons/rolff-badge-96.png?v=3');assert.deepEqual(Object.keys(n.data),['binding']);assert.equal(n.tag,'rolff-ready');
 });
 test('a new notice replaces the previous one (same tag) so batched names never stack',async()=>{
  const h=harness();await bind(h);await h.push(payload({s:['Far'],k:1,n:1}));await h.push(payload({s:['Far'],k:2,n:2}));assert(h.shown.every(n=>n.tag==='rolff-ready'));
@@ -71,8 +71,8 @@ function png(file){const b=fs.readFileSync(path.resolve(__dirname,'../../public/
 test('badge PNGs are 96x96 and 72x72 white silhouettes on a transparent background',()=>{for(const [file,n] of [['rolff-badge-96.png',96],['rolff-badge-72.png',72]]){const {w,h,px}=png(file);assert.equal(w,n);assert.equal(h,n);let opaque=0,clear=0;for(let i=0;i<px.length;i+=4){const a=px[i+3];if(a>0){assert.deepEqual([px[i],px[i+1],px[i+2]],[255,255,255],'only white pixels');}if(a===255)opaque++;if(a===0)clear++;}
  assert(clear>w*h*0.2,'transparent background');assert(opaque>w*h*0.25,'solid mark');assert.equal(px[3],0,'corner is transparent');}});
 test('notification uses the monochrome badge as a same-origin PNG under the scope; the full-colour app icon is NOT sent as a notification picture',async()=>{const h=harness();await bind(h);await h.push(payload());const n=h.shown[0];
- assert.equal(n.badge,'https://synthetic.invalid/app/icons/rolff-badge-96.png');assert(!('icon' in n));
- assert(fs.existsSync(path.resolve(__dirname,'../../public/icons',path.basename(n.badge))));
+ assert.equal(n.badge,'https://synthetic.invalid/app/icons/rolff-badge-96.png?v=3');assert(!('icon' in n));
+ assert(fs.existsSync(path.resolve(__dirname,'../../public/icons',path.basename(n.badge).split('?')[0])));
  const {px}=png('rolff-192.png');let colour=0;for(let i=0;i<px.length;i+=4)if(px[i+3]>0&&(px[i]!==px[i+1]||px[i+1]!==px[i+2]))colour++;assert(colour>1000,'icon is full colour, not a silhouette');
  assert(n.badge.startsWith('https://synthetic.invalid/'));});
 
@@ -82,7 +82,7 @@ test('invitation accepted (da): "<name> har accepteret din invitation" / "Nu kan
  const h=harness();await bind(h);await h.push(payload({t:'a',c:CONV,s:['Far']}));const n=h.shown[0];
  assert.equal(n.title,'Far har accepteret din invitation');assert.equal(n.body,'Nu kan I chatte på Rolff.');assert.equal(n.lang,'da');
  assert.equal(n.tag,'rolff-accept-'+CONV,'does not replace (or get replaced by) the message notice');
- assert.equal(n.badge,'https://synthetic.invalid/app/icons/rolff-badge-96.png');assert(!('icon' in n)&&!('image' in n));
+ assert.equal(n.badge,'https://synthetic.invalid/app/icons/rolff-badge-96.png?v=3');assert(!('icon' in n)&&!('image' in n));
  assert.equal(JSON.stringify(n.data),JSON.stringify({binding,c:CONV}));
 });
 test('invitation accepted (en): "<name> accepted your invitation" / "You can now chat on Rolff."; e-mail fallback name is shown as is',async()=>{
@@ -130,4 +130,18 @@ test('sign-out / identity change closes acceptance notices as well as message no
 });
 test('invitation accepted: expired/foreign-binding pushes are dropped like any other push',async()=>{
  const h=harness();await bind(h);await h.push({...payload({t:'a',c:CONV,s:['Far']}),expires:Date.now()-1});await h.push({...payload({t:'a',c:CONV,s:['Far']}),binding:'40000000-0000-4000-8000-000000000004'});assert.equal(h.shown.length,0);
+});
+
+// App icon size: the speech bubble fills most of the icon (like Signal/WhatsApp) and the maskable/monochrome
+// artwork still sits inside Android's 80 % safe-zone circle (radius 40 % of the width).
+test('app icon: bubble is at least 70 % of the width, and the monochrome/maskable artwork stays inside the safe-zone circle',()=>{
+ const extent=(file)=>{const {w,px}=png(file);let x0=w,x1=0,far=0;for(let i=0,p=0;i<px.length;i+=4,p++){if(px[i+3]>128&&px[i]>235&&px[i+1]>235&&px[i+2]>235){const x=p%w,y=(p-x)/w;if(x<x0)x0=x;if(x>x1)x1=x;far=Math.max(far,Math.hypot(x+.5-w/2,y+.5-w/2));}}return {width:(x1-x0+1)/w,far:far/w};};
+ assert(extent('rolff-512.png').width>=0.72,'any icon: bubble >= 72 % of icon width');
+ assert(extent('rolff-192.png').width>=0.72);
+ const m=extent('rolff-monochrome-512.png');assert(m.width>=0.60,'maskable/monochrome bubble >= 60 % of width (was 50 %)');assert(m.far<=0.401,'artwork inside the 80 % safe zone');
+});
+
+test('status-bar badge: the bubble fills >= 92 % of the badge canvas (was 85 %), still white on transparent',()=>{
+ for(const file of ['rolff-badge-96.png','rolff-badge-72.png']){const {w,h,px}=png(file);let x0=w,x1=0,y0=h,y1=0;for(let i=0,p=0;i<px.length;i+=4,p++){if(px[i+3]>128){const x=p%w,y=(p-x)/w;x0=Math.min(x0,x);x1=Math.max(x1,x);y0=Math.min(y0,y);y1=Math.max(y1,y);}}
+  assert((x1-x0+1)/w>=0.92,file+' bubble width');assert(x0>=1&&y0>=1&&x1<=w-2&&y1<=h-2,file+' keeps a small margin');}
 });
