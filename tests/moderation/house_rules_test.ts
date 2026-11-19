@@ -29,7 +29,7 @@ Deno.test("variants and compounds are blocked (en)", () => {
 });
 
 Deno.test("false positives: innocent words containing the same letters pass", () => {
-  for (const m of ["Hent kortet i morgen", "Vi skal til Helsinge", "Scunthorpe er en by", "Penistone og Cockburn", "Dickens og Dick", "Til slut sagde vi det", "Shiitake og shitake", "Pisa og Pisces", "Assistent og classic", "Kan du lave et knep?", "Røveren blev taget", "Fukushima", "Hello og Hellerup", "Mortensen og lortoft".replace("lortoft", "Lorentzen"), "Klassisk analyse", "Han er en skidt fyr", "Hell er et sted i Norge", "Bassist og hornist", "Skidegade".replace("Skidegade", "Skolegade"), "Vi mødes kl. 16.00", "Kan du hente børnene? Tak.", "Møgspreder på marken", "Du kan hente dem i dag."]) {
+  for (const m of ["Hent kortet i morgen", "Vi skal til Helsinge", "Scunthorpe er en by", "Penistone og Cockburn", "Dickens og Dick", "Til slut sagde vi det", "Shiitake og shitake", "Pisa og Pisces", "Assistent og classic", "Kan du lave et knep?", "Pikante detaljer og pikkolo", "Pikeren sagde det", "Fuglen vil pikke i brødet", "Skodderne og skodden er lukket", "Skodsborg station", "Kusk og kusine", "Vi spiller poker", "Røveren blev taget", "Fukushima", "Hello og Hellerup", "Mortensen og lortoft".replace("lortoft", "Lorentzen"), "Klassisk analyse", "Hell er et sted i Norge", "Bassist og hornist", "Skidegade".replace("Skidegade", "Skolegade"), "Vi mødes kl. 16.00", "Kan du hente børnene? Tak.", "Møgspreder på marken", "Du kan hente dem i dag."]) {
     assertEquals(findProfanity(m), [], m);
   }
 });
@@ -130,4 +130,19 @@ Deno.test("prompt (text and file) tells the model to block swear words, with rew
 Deno.test("houseCheck: file text can skip the exclamation rule", () => {
   assertEquals(houseCheck("Tak for det!", { exclamations: false }), null);
   assertEquals(houseCheck("Tak for det!")?.kind, "exclamation");
+});
+
+Deno.test("mild swear words from Nicolai: sgu, pokker, skidt, skod (+ compounds and variants)", () => {
+  for (const m of ["Det er sgu ikke rigtigt", "SGU", "for pokker", "pokkers også", "Skidt!", "det skidtvejr", "skidtet", "Din skodbil", "skod", "skodbøger", "skodtøj", "SKOD", "skiiidt"]) {
+    assert(findProfanity(m).length > 0, m);
+  }
+});
+
+Deno.test("kusse and pik are blocked with variants; pikant/pikkolo/pikere/pikke (to peck) pass", () => {
+  for (const m of ["kusse", "Kussen", "kusser", "Kusserne", "kussefjæs", "KUSSE", "pik", "Pikken", "pikhoved", "piksvin", "pussy", "cunts"]) {
+    assert(findProfanity(m).length > 0, m);
+  }
+  for (const m of ["pikant", "pikkolo", "pikere", "pikke", "Pikante krydderier", "En pikkolo-flaske", "Skodde og skodder", "Skodsborg", "Kusk", "kusine"]) {
+    assertEquals(findProfanity(m), [], m);
+  }
 });

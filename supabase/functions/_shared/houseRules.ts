@@ -21,7 +21,12 @@ const WORD_PATTERNS: RegExp[] = [
   /^fandens$/u, /^fanden$/u, /^fandeme$/u, /^fandme$/u, /^satans$/u,
   /^møg(?!spreder|dynge|fork|kælder|kran)\p{L}*$/u,    // møg, møgsvin, møgunge (not farm words)
   /^røv(en)?$/u, /^røv(hul|dårlig|sur|syg|kedelig|irriteret|fuld|spark|slikker|pulver)\p{L}*$/u, // not røver/røvere
-  /^pik(ken|hoved|fjæs)?$/u, /^fisse(n|fjæs|hår)?$/u,
+  /^pik(ken)?$/u, /^pik(hoved|fjæs|svin|slikker|slugger)\p{L}*$/u, // pik; not pikant/pikkolo/pikere/pikke (to peck)
+  /^kusse\p{L}*$/u,                                    // kusse, kussen, kusser, kussefjæs
+  /^sgu$/u, /^pokker\p{L}*$/u,                         // sgu, pokker(s), for pokker
+  /^skidt\p{L}*$/u,                                    // skidt, skidtvejr
+  /^skod(?!d|sborg)\p{L}*$/u,                          // skod, skodbil (not skodde/skodder = fog/shutters, Skodsborg)
+  /^pussy$/u, /^pussies$/u, /^cunts?$/u, /^fisse(n|fjæs|hår)?$/u,
   /^hore(n|r|rne|unge|søn|bukke|bukken)?$/u,
   /^knepp\p{L}*$/u,                                    // kneppe, knepper (not "knep" = trick)
   // English / international
