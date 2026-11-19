@@ -1,6 +1,6 @@
 // Deterministic house rules: swear words (da+en) and exclamation marks. Synthetic text only; providers are mocked (no network, no model calls).
 import { assert, assertEquals } from "jsr:@std/assert@1";
-import { findExclamations, findProfanity, fixExclamations, houseCheck, HOUSE_EXPLANATION } from "../../supabase/functions/_shared/houseRules.ts";
+import { findExclamations, findProfanity, fixExclamations, houseCheck, houseFallbackSuggestion, HOUSE_EXPLANATION } from "../../supabase/functions/_shared/houseRules.ts";
 import { EXPLANATION_MAX, moderate, SYSTEM_PROMPT, type ModerationProvider } from "../../supabase/functions/_shared/moderation.ts";
 import { filePromptForLang } from "../../supabase/functions/_shared/attachments.ts";
 
@@ -75,7 +75,9 @@ Deno.test("moderate: swear word is blocked even when the model says allow or is 
       const r = await moderate(p, msg, []);
       assertEquals([r.decision, r.reason_code, r.house], ["block", "other_harmful", "profanity"], msg);
       assert(r.spans.length >= 1 && r.spans.every((s) => msg.includes(s)), msg);
-      assertEquals(r.suggestion, "");
+      // The model gave no rewrite: only the deterministic fallback (flagged word removed) may appear, and only when it is clean.
+      assertEquals(r.suggestion, houseFallbackSuggestion(msg), msg);
+      assert(r.suggestion === "" || houseCheck(r.suggestion) === null, msg);
     }
   }
 });
@@ -85,9 +87,9 @@ Deno.test("moderate: swear word block keeps the model's polite rewrite when it i
   const ok = mock({ decision: "block", reason_code: "other_harmful", spans: ["Lort"], suggestion: "Kan du huske bøgerne næste gang?", explanation: "" });
   const r = await moderate(ok, msg, []);
   assertEquals([r.decision, r.spans, r.suggestion], ["block", ["Lort"], "Kan du huske bøgerne næste gang?"]);
-  // A rewrite that still contains a swear word or '!' is never shown.
+  // A rewrite that still contains a swear word or '!' is never shown (the clean deterministic fallback is offered instead).
   const bad = await moderate(mock({ decision: "block", reason_code: "other_harmful", spans: ["Lort"], suggestion: "Lort, husk bøgerne", explanation: "" }), msg, []);
-  assertEquals(bad.suggestion, "");
+  assertEquals(bad.suggestion, "Glemte bøgerne");
   const excl = await moderate(mock({ decision: "block", reason_code: "other_harmful", spans: ["Lort"], suggestion: "Husk bøgerne!", explanation: "" }), msg, []);
   assert(!/!/.test(excl.suggestion));
 });
@@ -178,4 +180,75 @@ Deno.test("fuck variants: look-alikes still pass (Fukushima, initials F.K., fucu
   for (const m of ["Fukushima", "F.K. Hansen", "Fuchs og Fuchsia", "Fucus er en tang", "Fuji og Fuka", "Funk og fun", "Fakta om fakir", "Mfa og mfg"]) {
     assertEquals(findProfanity(m), [], m);
   }
+});
+
+Deno.test("house explanations are short (one line, shown in full) and exactly the agreed texts", () => {
+  assertEquals(HOUSE_EXPLANATION.profanity.da, "Rolff lader ikke bandeord passere.");
+  assertEquals(HOUSE_EXPLANATION.exclamation.da, "Rolff lader ikke udråbstegn passere.");
+  assertEquals(HOUSE_EXPLANATION.profanity.en, "Rolff doesn't let swear words through.");
+  assertEquals(HOUSE_EXPLANATION.exclamation.en, "Rolff doesn't let exclamation marks through.");
+  for (const kind of ["profanity", "exclamation", "both"] as const) for (const lang of ["da", "en"] as const) assert([...HOUSE_EXPLANATION[kind][lang]].length <= 60, `${kind}/${lang}`);
+});
+
+Deno.test("fallback suggestion: flagged word removed, spaces tidied", () => {
+  assertEquals(houseFallbackSuggestion("Sikke noget lort at fyre af"), "Sikke noget at fyre af");
+  assertEquals(houseFallbackSuggestion("Sikke   noget   lort   at fyre af"), "Sikke noget at fyre af");
+  assertEquals(houseFallbackSuggestion("Lort glemte bøgerne"), "Glemte bøgerne");
+  assertEquals(houseFallbackSuggestion("Du har glemt bøgerne, lort."), "Du har glemt bøgerne.");
+  assertEquals(houseFallbackSuggestion("Du har glemt lort, bøgerne"), "Du har glemt, bøgerne");
+  assertEquals(houseFallbackSuggestion("That was a shit idea"), "That was a idea");
+  assertEquals(houseFallbackSuggestion("Det er fucking sent nu"), "Det er sent nu");
+  assertEquals(houseFallbackSuggestion("Du er f*cking sen i dag"), "Du er sen i dag");
+});
+
+Deno.test("fallback suggestion: several flagged words and fixed phrases", () => {
+  assertEquals(houseFallbackSuggestion("Det er lort og pis at vente"), "Det er og at vente");
+  assertEquals(houseFallbackSuggestion("Kan du ikke hente ham, for helvede"), "Kan du ikke hente ham");
+  assertEquals(houseFallbackSuggestion("Det er ad helvede til sent"), "Det er sent");
+  assertEquals(houseFallbackSuggestion("What the hell, you are late"), "You are late");
+  assertEquals(houseFallbackSuggestion("Fuck, det har jeg sagt!"), "Det har jeg sagt.");
+});
+
+Deno.test("fallback suggestion: only exact flagged words go (look-alikes, other words and names stay)", () => {
+  assertEquals(houseFallbackSuggestion("Dick kan hente, du er en dick"), "Dick kan hente, du er en");
+  assertEquals(houseFallbackSuggestion("Kortet er lort i dag"), "Kortet er i dag");
+});
+
+Deno.test("fallback suggestion: not offered when fewer than 2 words are left", () => {
+  for (const m of ["Lort", "Pisse", "fuck", "Lort!", "Fuck fuck fuck", "lort ... pis", "Helvede", "Nej lort"]) assertEquals(houseFallbackSuggestion(m), "", m);
+});
+
+Deno.test("fallback suggestion: not offered without a swear word (clean text, '!' only is handled elsewhere)", () => {
+  assertEquals(houseFallbackSuggestion("Kan du hente børnene kl. 16?"), "");
+  assertEquals(houseFallbackSuggestion("Det har jeg sagt!"), "");
+  assertEquals(houseFallbackSuggestion(""), "");
+});
+
+Deno.test("fallback suggestion: never contains a swear word or '!' (house rules re-checked)", () => {
+  for (const m of ["Det er lort og fuck, og pis!", "Hold dine lortehænder væk", "Du er en idiot, tøs og fjols", "du er en dick!!", "Skod, skod, skod og mere skod", "Hej Hej lort lorte lortet lortebil", "f*ck f**k fuuuck det er sent"]) {
+    const s = houseFallbackSuggestion(m);
+    assert(s === "" || (houseCheck(s) === null && !/[!！]/.test(s)), `${m} -> ${s}`);
+  }
+  // A leftover the removal cannot reach (a 6th distinct swear word is beyond the span cap) -> no suggestion at all.
+  assertEquals(houseFallbackSuggestion("lort pis skod sgu pokker skidt og fanden"), "");
+});
+
+Deno.test("moderate: model gives no rewrite -> deterministic fallback is used (model allow, model down, empty rewrite)", async () => {
+  for (const p of [mock(ALLOW), mock(() => { throw new Error("x"); }), mock({ decision: "block", reason_code: "other_harmful", spans: ["lort"], suggestion: "", explanation: "" })]) {
+    const r = await moderate(p, "Sikke noget lort at fyre af", []);
+    assertEquals([r.decision, r.house, r.suggestion], ["block", "profanity", "Sikke noget at fyre af"]);
+  }
+  // Model rewrite that is itself dirty -> fallback instead.
+  const dirty = await moderate(mock({ decision: "block", reason_code: "other_harmful", spans: ["lort"], suggestion: "Sikke noget lort!", explanation: "" }), "Sikke noget lort at fyre af", []);
+  assertEquals(dirty.suggestion, "Sikke noget at fyre af");
+  // Model rewrite wins when it is clean.
+  const ok = await moderate(mock({ decision: "block", reason_code: "other_harmful", spans: ["lort"], suggestion: "Det var ikke fint at sige.", explanation: "" }), "Sikke noget lort at fyre af", []);
+  assertEquals(ok.suggestion, "Det var ikke fint at sige.");
+});
+
+Deno.test("moderate: no suggestion when the fallback is not allowed (single word) and '!' keeps its own suggestion", async () => {
+  const r = await moderate(mock(ALLOW), "Lort", []);
+  assertEquals([r.decision, r.suggestion], ["block", ""]);
+  const e = await moderate(mock(ALLOW), "Det har jeg sagt!", []);
+  assertEquals(e.suggestion, "Det har jeg sagt.");
 });

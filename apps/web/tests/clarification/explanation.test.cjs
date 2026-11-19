@@ -46,7 +46,7 @@ for (const explanation of [EXPL, undefined]) test(`file: ${explanation ? 'explan
     else assert.match(d.body.textContent, /Filen blev ikke sendt: teksten/);
   } finally { await f.close(); }
 });
-test('compact blocked box: header + close, one flagged line, quoted suggestion with primary button, short fine print, Mere expands', async () => {
+test('compact blocked box: header + close, marked text, quoted suggestion with primary button (no Mere for a short reason)', async () => {
   const f = await env(); const { w, d } = f; try {
     const box = await sendText(f, { status: 'blocked', reason_code: 'controlling_demand', spans: ['blokeret'], suggestion: 'Opdigtet venligt forslag.', explanation: EXPL });
     assert.ok(box.classList.contains('blockbox'));
@@ -54,11 +54,9 @@ test('compact blocked box: header + close, one flagged line, quoted suggestion w
     assert.equal(box.querySelector('.blockbox-flag mark').textContent, 'blokeret');
     assert.equal(box.querySelectorAll('.blockbox-flag').length, 1);
     assert.equal(box.querySelector('.blockbox-quote').textContent, 'Opdigtet venligt forslag.');
-    const use = box.querySelector('.blockbox-use'); assert.equal(use.textContent, 'Brug forslaget'); assert.ok(!use.classList.contains('ghost'));
-    assert.equal(box.querySelector('.blockbox-act .blockbox-fine').textContent, 'Du kan rette den – det tjekkes igen.');
-    assert.equal(box.querySelector('.blockbox-long'), null);
-    const more = box.querySelector('.blockbox-more'); assert.equal(more.getAttribute('aria-expanded'), 'false');
-    await click(more); assert.equal(more.getAttribute('aria-expanded'), 'true'); assert.ok(box.querySelector('.blockbox-reason.open')); assert.ok(box.querySelector('.blockbox-long'));
+    const use = box.querySelector('.blockbox-use'); assert.equal(use.textContent, 'Brug forslag'); assert.ok(!use.classList.contains('ghost'));
+    assert.equal(box.querySelector('.blockbox-sugg-k').textContent, 'Forslag');
+    assert.equal(box.querySelector('.blockbox-more'), null); assert.equal(box.querySelector('.blockbox-fine'), null);
     await click(use); await delay(30);
     assert.equal(label(d, 'Skriv en besked').value, 'Opdigtet venligt forslag.'); assert.equal(d.querySelector('.blockbox'), null);
   } finally { await f.close(); }

@@ -177,7 +177,7 @@ test('blocked box never pushes the composer away: capped height, internal scroll
   assert.match(css, /\.blockbox > \*\{flex-shrink:0\}/);
   assert.match(css, /html\[data-keyboard\] \.blockbox\{max-height:calc\(var\(--vv-h,100dvh\) \* \.34\)\}/);
   assert.match(css, /\.blockbox-reason\{[^}]*-webkit-line-clamp:2/);
-  assert.match(css, /\.blockbox-flag\{[^}]*white-space:nowrap;overflow:hidden;text-overflow:ellipsis/);
+  assert.match(css, /\.blockbox-flag\{[^}]*overflow-wrap:anywhere;[^}]*-webkit-line-clamp:2;[^}]*overflow:hidden/);
   const bn = src('BlockedNotice.tsx');
   assert.match(bn, /role="alert" aria-labelledby="blockbox-title"/);
   assert.match(bn, /"Ikke sendt" : "Not sent"/); assert.match(bn, /"Mere" : "More"/); assert.match(bn, /"Markeret:" : "Flagged:"/);
