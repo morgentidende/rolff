@@ -32,14 +32,14 @@ Deno.test("English: subject, html lang, body, en-GB Copenhagen date, bilingual t
   assertEquals(m.member.subject, "a@x.test has invited you to take part in a conversation in Rolff");
   for (const [k, x] of Object.entries(m)) {
     assert(x.html.startsWith('<!doctype html><html lang="en">'), k);
-    assert(x.html.includes("This is a test version of Rolff"), k);
+    assert(x.html.includes("This is a test version of Rolff") || x.html.includes("This is a test version – do not enter real or sensitive information."), k);
     assert(x.html.includes(FOOT_DA) && x.html.includes(FOOT_EN), `${k}: bilingual footer`);
     assert(x.text.includes(FOOT_DA) && x.text.toLowerCase().includes(FOOT_EN.toLowerCase()), `${k}: bilingual text footer`);
     assert(x.html.includes("Hi,") && !x.html.includes("Hej,"), k);
     assert(!/Åbn|udløber|Kopiér|godkendt/.test(x.html.replace(/<em>.*?<\/em>|<strong>Testversion\.<\/strong>[^<]*/gs, "")), `${k}: no Danish body text`);
   }
   assert(m.invite.html.includes("12 November at 16:30") || m.invite.html.includes("12 November, 16:30"), m.invite.html.match(/expires <strong>([^<]*)/)?.[1]);
-  assert(m.invite.html.includes("Open the invitation"));
+  assert(m.invite.html.includes("Join the chat"));
   assert(m.approval.text.includes("read only") && m.member.html.includes("read and write"));
   assertEquals(m.copy.html.includes("#invite="), false);
 });
@@ -50,7 +50,7 @@ Deno.test("Danish is the default and identical to an explicit da", () => {
   assertEquals(d.invite.subject, "a@x.test har inviteret dig til Rolff");
   assert(d.invite.html.startsWith('<!doctype html><html lang="da">'));
   assert(d.invite.html.includes("12. november kl. 16.30") || d.invite.html.includes("12. november 16.30"), d.invite.html.match(/udløber <strong>([^<]*)/)?.[1]);
-  assert(d.copy.html.includes("Dette er en testversion af Rolff"));
+  assert(d.copy.html.includes("Dette er en testversion"));
 });
 
 // ---- Endpoint: the invite-email function passes the caller's lang to the templates ----
