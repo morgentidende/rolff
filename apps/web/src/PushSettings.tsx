@@ -24,7 +24,7 @@ export function PushSettings({uid,lang,onboarding=false}:{uid:string;lang:Lang;o
  if(onboarding && (!pushBuildEnabled || !state?.available || state.offered || dismissed))return null;
  if(!pushBuildEnabled || (state && !state.available))return <p role="status">{errors.unavailable[da?0:1]}</p>;
  if(!state)return <p role="status">{error||(da?"Henter status…":"Loading status…")}</p>;
- const lead=da?"Neutral besked uden afsender eller tekst. Slået fra som standard.":"A neutral notice with no sender or text. Off by default.";
+ const lead=da?"Viser afsenderens navn, men aldrig beskedteksten. Slået fra som standard.":"Shows the sender's name, but never the message text. Off by default.";
  if(onboarding)return <section className="card push-offer" aria-label={da?"Notifikationer":"Notifications"}>
    <h3>{da?"Vil du have besked om nye beskeder?":"Would you like new-message notifications?"}</h3>
    <p className="push-lead">{lead} {da?"Du kan ændre det under Menu → Notifikationer.":"You can change it under Menu → Notifications."}</p>
@@ -50,7 +50,7 @@ export function PushSettings({uid,lang,onboarding=false}:{uid:string;lang:Lang;o
        <span className={`setting-status${active?" is-on":""}${denied?" is-blocked":""}`} id="push-toggle-status" role="status">{status}</span></div>
      <button type="button" role="switch" className="toggle-switch" aria-checked={active} aria-labelledby="push-toggle-label" aria-describedby="push-toggle-status" disabled={!canToggle} aria-busy={busy||undefined} onClick={toggle}><span className="switch-knob" aria-hidden="true"/></button>
    </div>
-   <p className="push-lead">{da?"Notifikationerne er neutrale og viser hverken afsender eller tekst. Du kan gøre en enkelt samtale lydløs i samtalens menu.":"Notifications are neutral and show no sender or text. You can mute a single conversation in the conversation’s menu."}</p>
+   <p className="push-lead">{da?"Notifikationer viser afsenderens navn, men aldrig beskedteksten. Du kan gøre en enkelt samtale lydløs i samtalens menu.":"Notifications show the sender's name, but never the message text. You can mute a single conversation in its menu."}</p>
    {!supported && <p className="meta" role="status">{errors.unsupported[da?0:1]}</p>}
    {error && <p className="err" role="alert">{error}</p>}
    {help && <div className="notice push-help" role="status"><strong>{help.title}</strong><ol className="permission-steps">{help.steps.map((x,i)=><li key={i}>{x}</li>)}</ol></div>}
@@ -65,7 +65,7 @@ export function PushSettings({uid,lang,onboarding=false}:{uid:string;lang:Lang;o
          <button type="button" className="text-link" disabled={busy} aria-label={`${da?"Fjern":"Remove"} ${label}`} onClick={()=>void perform(()=>pushController.disable(d.id))}>{da?"Fjern":"Remove"}</button></li>;})}</ul>
        <p className="meta">{da?"Tilmeldinger udløber efter 90 dage. Enheder vises uden navn.":"Registrations expire after 90 days. Devices are shown without names."}</p>
      </div>}
-     <p>{da?"Notifikationen lyder fx “Ny besked fra Far” og “Åbn Rolff for at læse den.” Navnet er det, du selv har givet personen i Rolff. Har du ikke givet personen et navn, står personens e-mailadresse der i stedet. Navnet kan ses på låseskærmen, men beskedteksten vises aldrig.":"The notice reads e.g. “New message from Dad” and “Open Rolff to read it.” The name is the one you gave that person in Rolff. If you have not named them, their e-mail address is shown instead. The name can be seen on the lock screen, but the message text never is."}</p>
+     <p>{da?"Notifikationen lyder fx “Ny besked fra Far” og “Åbn Rolff for at læse den.” Navnet er det, du selv har givet personen i Rolff. Har du ikke givet personen et navn, står personens e-mailadresse der i stedet. Navnet kan ses på låseskærmen, men beskedteksten vises aldrig. Når nogen accepterer din invitation, får du fx “Far har accepteret din invitation”.":"The notice reads e.g. “New message from Dad” and “Open Rolff to read it.” The name is the one you gave that person in Rolff. If you have not named them, their e-mail address is shown instead. The name can be seen on the lock screen, but the message text never is. When someone accepts your invitation you get e.g. “Dad accepted your invitation”."}</p>
      <p>{da?"Har du modtagetider slået til, sendes en notifikation først, når beskederne frigives. En notifikation, der allerede er på vej, kan stadig nå frem, selv om du ændrer tider eller slår fra.":"If receive times are on, a notification is only sent once messages are released. A notification already on its way may still arrive after you change times or turn it off."}</p>
      <p>{da?"Browser, netværk og telefon kan forsinke eller undlade at vise notifikationen. Det præcise tidspunkt kan ikke garanteres.":"Browser, network and phone may delay or not show the notification. The exact time cannot be guaranteed."}</p>
      {state.devices.length>0 && <div className="sheet-danger-zone"><button type="button" className="text-danger" disabled={busy} onClick={()=>void offAll()}>{da?"Slå fra på alle enheder":"Turn off on all devices"}</button></div>}

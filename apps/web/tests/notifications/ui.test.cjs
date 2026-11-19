@@ -22,7 +22,7 @@ const outside=e=>{const c=e.d.querySelector('.push-settings').cloneNode(true);c.
 test('sheet shows one toggle and one short neutral line; everything else is collapsed under Mere',async()=>{const e=await env();await e.click('settings');
  const top=outside(e),text=top.textContent;
  assert.equal(top.querySelectorAll('button[role=switch]').length,1);assert(text.includes('Notifikationer på denne telefon'));
- assert(text.includes('Notifikationerne er neutrale og viser hverken afsender eller tekst. Du kan gøre en enkelt samtale lydløs i samtalens menu.'));
+ assert(text.includes('Notifikationer viser afsenderens navn, men aldrig beskedteksten. Du kan gøre en enkelt samtale lydløs i samtalens menu.'));
  assert.equal(top.querySelectorAll('p.push-lead').length,1);
  const more=e.d.querySelector('details.more');assert(more&&!more.open,'Mere is collapsed by default');assert.equal(more.querySelector('summary').textContent,'Mere');
  assert(!text.includes('Tilmeldte enheder'));assert(!text.includes('Forny'));assert(!text.includes('Slå fra på alle'));assert(!text.includes('90 dage'));assert(!text.includes('fornyes'));assert(!text.includes('Mere om notifikationer'));
