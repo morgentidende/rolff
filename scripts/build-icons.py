@@ -3,7 +3,7 @@
 
 Needs Pillow, numpy and a headless Chrome/Chromium (CHROME env var or `google-chrome`).
 Run from the repo root:  python3 scripts/build-icons.py
-The white notification badges (icons/rolff-badge-*.png) are NOT touched.
+Also builds the white status-bar notification badges (icons/rolff-badge-72/96.png).
 """
 import io, os, subprocess, sys, tempfile, shutil
 from PIL import Image
@@ -22,6 +22,7 @@ BBOX = (134.0, 140.0, 505.0, 500.0)   # measured bubble bounds in glyph space (t
 
 # Bubble width as a share of the whole icon.  Before: ~54 % (png) / 66 % (svg).
 ANY_FRAC = 0.76        # any / apple-touch / favicon
+BADGE_FRAC = 0.94      # status-bar badge: glyph fills the canvas (was 85 %), ~3 % margin each side
 MASKABLE_FRAC = 0.648  # limited by the 80 %-diameter safe circle (checked below)
 
 # Glyph point that sits at the exact middle of the canvas.  'any'/apple: middle of the bubble's
@@ -71,12 +72,14 @@ def save(im, path, size, opaque=False):
 def main():
     any_ = render(svg('any', ANY_FRAC)); full = render(svg('full', ANY_FRAC))
     mask = render(svg('full', MASKABLE_FRAC, center=CENTER_MASKABLE)); mono = render(svg('mono', MASKABLE_FRAC, center=CENTER_MASKABLE))
+    badge = render(svg('mono', BADGE_FRAC))
     r = safe_radius(mask); print('maskable farthest white pixel from centre: %.3f of icon width (limit 0.400)' % r)
     assert r <= 0.40, 'glyph leaves the maskable safe zone'
     for s in (16, 32, 64, 128, 192, 512): save(any_, f'{PUB}/icons/rolff-{s}.png', s)
     for s in (192, 512): save(mask, f'{PUB}/icons/rolff-maskable-{s}.png', s, opaque=True)
     save(full, f'{PUB}/apple-touch-icon.png', 180, opaque=True)
     save(mono, f'{PUB}/icons/rolff-monochrome-512.png', 512)
+    for n in (72, 96): save(badge, f'{PUB}/icons/rolff-badge-{n}.png', n)
     any_.resize((48, 48), Image.LANCZOS).save(f'{PUB}/favicon.ico', sizes=[(16, 16), (32, 32), (48, 48)])
     open(f'{PUB}/favicon.svg', 'w').write(svg('any', ANY_FRAC) + '\n')
 
