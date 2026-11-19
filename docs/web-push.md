@@ -12,6 +12,24 @@ names). Addresses over 40 characters are shortened keeping a short domain (`far�
 No nickname and no e-mail => generic fallback “ROLFF — Du har nye beskeder klar.” / “ROLFF — You have new messages ready.” Muted (Lydløs) conversations are excluded from names and counts.
 Only names (≤40 chars, max 2) and counts travel in the encrypted payload; never message text. The notification has no
 `icon`/`image` (Android drew it as a duplicate large logo on the right); only the white `badge`.
+**Invitation accepted (migration `20261120130000_invite_accepted_push.sql`):** when someone accepts an invitation, the
+inviter (`invitations.created_by`, only them) gets “{navn} har accepteret din invitation” / “Nu kan I chatte på Rolff.”
+(English “{name} accepted your invitation” / “You can now chat on Rolff.”). `{navn}` = the inviter's OWN private nickname for
+the person who accepted (including one given while the invitation was still pending, which PR95 copies to
+`contact_aliases` on accept), else that person's e-mail address, cleaned and shortened exactly like the message text; no
+name at all => “Din invitation er accepteret” / “Your invitation was accepted”. It is a `notification_jobs` row of kind
+`invite_accepted` (columns `conversation_id`, `subject_id`, `invitation_id`; one per invitation) and goes through the unchanged
+pipeline (`claim_push_work` → `prepare_push` → `handoff_push` → `finish_push`, `notification-dispatch`), with the same
+gates, leases, 24-hour lifetime, badge-only/no-icon rules. Decisions: **opt-in** is required when the job is created and
+again at claim and prepare time (no notifications => no job). **Lydløs**: a muted conversation never gets it; checked at
+send time and a job that meets a mute is closed (it does not fire when the mute ends). **Receive times**: it is queued until
+the inviter's receive window for that conversation is open (like messages), at most 24 hours, then dropped.
+The inviter and the person who accepted must both still be members. The encrypted payload is
+`{t:'a', c:<conversation uuid>, s:[name]}` plus the usual `v/binding/l/expires`: never message text and no read or delivery
+status of any message (nothing about messages is involved; the person who accepted learns nothing).
+**Tap:** the service worker validates `c` as a uuid and opens `…/#open=<uuid>` (or, if Rolff is already open, focuses it and
+posts `ROLFF_OPEN_CONVERSATION`); the app opens that conversation only if the signed-in user is a member of it.
+Own tag `rolff-accept-<conversation>`, so it neither replaces nor is replaced by the message notice.
 The frontend build gate is now on by default (`VITE_WEB_PUSH_ENABLED=false` hides it); the DB gate
 (`push_runtime.enabled` + VAPID public key) and worker gate (`WEB_PUSH_ENABLED`) are the kill switches.
 The historical notes below describe the original local implementation.
