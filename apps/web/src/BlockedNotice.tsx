@@ -14,9 +14,11 @@ type Props = { lang: Lang; reason?: string; house?: HouseKind; explanation?: str
  *  the marked text, and a suggestion row with a "Brug forslag" button. House-rule blocks (swear words, "!") never show the generic guidance. */
 export function BlockedNotice({ lang, reason, house, explanation: given, spans, blockedText, suggestion, onUse, onClose }: Props) {
   const t = strings[lang], da = lang === "da";
-  // Borderline tone ("uncertain"): Rolff says briefly that the tone is uncertain and asks for a rephrase – fixed text, no extra retry line.
+  // Borderline tone ("uncertain"): the detailed explanation (words + role of the earlier conversation) when there is one;
+  // otherwise a fixed short Rolff text that already asks for a rephrase (no extra retry line).
   const uncertain = reason === "uncertain" && !house;
-  const explanation = uncertain ? t.uncertainExplanation : given;
+  const fixedUncertain = uncertain && (!given || given === strings.da.uncertainExplanation || given === strings.en.uncertainExplanation);
+  const explanation = fixedUncertain ? t.uncertainExplanation : given;
   const [open, setOpen] = useState(false), [clamped, setClamped] = useState(false);
   const reasonRef = useRef<HTMLParagraphElement>(null);
   useLayoutEffect(() => {
@@ -37,7 +39,7 @@ export function BlockedNotice({ lang, reason, house, explanation: given, spans, 
         </button>
       </div>
       <p ref={reasonRef} id="blockbox-reason" className={`blockbox-reason${explanation ? " block-explained" : ""}${open || house ? " open" : ""}`}>
-        {explanation ? <><span className="sr-only">{t.blockedLead} </span>{uncertain || house ? explanation : `${explanation} ${t.blockedRetry}`}</> : t.blocked}
+        {explanation ? <><span className="sr-only">{t.blockedLead} </span>{fixedUncertain || house ? explanation : `${explanation} ${t.blockedRetry}`}</> : t.blocked}
       </p>
       {more && <button type="button" className="blockbox-more" aria-expanded={open} aria-controls="blockbox-reason" onClick={() => setOpen(!open)}>{open ? (da ? "Mindre" : "Less") : (da ? "Mere" : "More")}</button>}
       {snip && <p className="blockbox-flag"><span className="blockbox-flag-k">{da ? "Markeret:" : "Flagged:"}</span> <span className="blockbox-flag-v">{snip.pre}<mark>{snip.hit}</mark>{snip.post}</span></p>}

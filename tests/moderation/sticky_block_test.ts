@@ -43,3 +43,63 @@ Deno.test("fresh block keeps its own suggestion/spans", () => {
 Deno.test("no memory, or invalid memory, leaves an allow untouched", () => {
   for (const m of [null, undefined, "", "none", "unclear_meaning", "nonsense", 42]) assertEquals(applySticky({ ...allow }, m).decision, "allow");
 });
+
+// ---- 19/11 false positive: "Udråbstegn blokeres nu!" (house block) made "Udråbstegn blokeres nu." sticky-blocked ----
+import { shouldRememberBlock } from "../../supabase/functions/_shared/stickyBlock.ts";
+import { houseCheck } from "../../supabase/functions/_shared/houseRules.ts";
+
+const EXCL = "Udråbstegn blokeres nu!";
+const FIXED = "Udråbstegn blokeres nu.";
+const neverCalled: ModerationProvider = { name: "fake", model: "fake", moderate: () => Promise.reject(new Error("model must not be called for an exclamation-only block")) };
+
+Deno.test("meta-talk about exclamation marks passes the house rules; only the real '!' is a house hit", () => {
+  assertEquals(houseCheck(FIXED), null);
+  assertEquals(houseCheck("Udråbstegn blokeres nu")?.kind, undefined);
+  assertEquals(houseCheck(EXCL)?.kind, "exclamation");
+});
+
+Deno.test("sticky key ignores '!' vs '.', which is why house blocks must not be remembered", async () => {
+  assertEquals(await stickyHash(EXCL), await stickyHash(FIXED));
+});
+
+Deno.test("house blocks are not remembered; model blocks and sticky refreshes are", async () => {
+  const res = await moderate(neverCalled, EXCL, []);
+  assertEquals(res.decision, "block");
+  assertEquals(res.source, "house");
+  assertEquals(shouldRememberBlock(res), false);
+  const modelBlock = await moderate(fake({ decision: "block", reason_code: "personal_attack", spans: [], suggestion: "", explanation: "" }), "Du er altid så sur", []);
+  assertEquals(shouldRememberBlock(modelBlock), true);
+  assertEquals(shouldRememberBlock(applySticky({ ...allow }, "personal_attack")), true);
+  assertEquals(shouldRememberBlock(allow), false);
+  assertEquals(shouldRememberBlock({ ...clarify }), false);
+});
+
+Deno.test("regression: after a house block of the '!' text, the suggested '.' text is judged fresh and goes through on allow", async () => {
+  const memory = new Map<string, string>(); // stands in for moderation_block_memory (send-message flow)
+  const send = async (text: string, provider: ModerationProvider) => {
+    const key = await stickyHash(text);
+    let res = applySticky(await moderate(provider, text, []), memory.get(key));
+    if (shouldRememberBlock(res)) memory.set(key, res.reason_code);
+    return res;
+  };
+  const first = await send(EXCL, neverCalled);
+  assertEquals(first.decision, "block");
+  assertEquals(first.suggestion, FIXED);
+  const second = await send(FIXED, fake(allow));
+  assertEquals(second.decision, "allow");
+});
+
+Deno.test("a genuine model block is still sticky across punctuation (fail strict kept)", async () => {
+  const memory = new Map<string, string>();
+  const send = async (text: string, provider: ModerationProvider) => {
+    const key = await stickyHash(text);
+    const res = applySticky(await moderate(provider, text, []), memory.get(key));
+    if (shouldRememberBlock(res)) memory.set(key, res.reason_code);
+    return res;
+  };
+  const block = fake({ decision: "block", reason_code: "personal_attack", spans: [], suggestion: "", explanation: "" });
+  assertEquals((await send("Du er altid så sur", block)).decision, "block");
+  const again = await send("Du er altid så sur.", fake(allow));
+  assertEquals(again.decision, "block");
+  assertEquals(again.reason_code, "personal_attack");
+});

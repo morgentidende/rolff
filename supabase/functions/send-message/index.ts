@@ -11,7 +11,7 @@ import { checkPlanLength, planLengthError } from "../_shared/planLimits.ts";
 import { checkPersonLimits } from "../_shared/limits.ts";
 import { HOUSE_EXPLANATION } from "../_shared/houseRules.ts";
 import { checkRules } from "../_shared/rules.ts";
-import { applySticky, stickyHash } from "../_shared/stickyBlock.ts";
+import { applySticky, shouldRememberBlock, stickyHash } from "../_shared/stickyBlock.ts";
 import { charCount, doubleCheckFromEnv, moderate, moderationContract, ModerationTechnicalError, providerFromEnv, resolveSenderLang, timeoutFromEnv, UNCERTAIN_EXPLANATION } from "../_shared/moderation.ts";
 
 async function sha256Hex(s: string) {
@@ -114,14 +114,14 @@ Deno.serve(async (req) => {
     return json({ status: "technical_error" }, 503);
   }
   res = applySticky(res, remembered.data);
-  if (res.decision === "block") {
+  if (shouldRememberBlock(res)) {
     const mem = await admin.rpc("remember_moderation_block", { p_sender: uid, conv, p_hash: textKey, p_reason: res.reason_code });
     if (mem.error) console.log(JSON.stringify({ evt: "sticky_block_store_error" }));
     if ("sticky" in res) console.log(JSON.stringify({ evt: "sticky_block_applied" }));
   }
   if (res.decision !== "allow") await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: res.decision, p_reason: "sticky" in res ? "sticky_" + res.reason_code : res.reason_code });
   // "uncertain" (borderline tone): always the same short, friendly Rolff text in the sender's language.
-  const explanation = res.decision === "block" && "house" in res && res.house ? HOUSE_EXPLANATION[res.house][lang] : res.decision === "block" && res.reason_code === "uncertain" ? UNCERTAIN_EXPLANATION[lang] : res.explanation;
+  const explanation = res.decision === "block" && "house" in res && res.house ? HOUSE_EXPLANATION[res.house][lang] : res.decision === "block" && res.reason_code === "uncertain" ? (res.explanation || UNCERTAIN_EXPLANATION[lang]) : res.explanation;
   if (res.decision === "block") return json({ status: "blocked", reason_code: res.reason_code, spans: res.spans, suggestion: res.suggestion, ...(explanation ? { explanation } : {}), ...("house" in res && res.house ? { house: res.house } : {}) }, 200);
   if (res.decision === "clarify") return json({ status: "clarification_required" }, 200);
 

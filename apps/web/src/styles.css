@@ -517,7 +517,7 @@ html[data-keyboard] .blockbox{max-height:calc(var(--vv-h,100dvh) * .34)}
 .blockbox-icon{color:var(--bb-icon);flex-shrink:0}
 .blockbox-x{min-height:36px;min-width:36px;width:36px;padding:0;display:grid;place-items:center;background:transparent;border:0;border-radius:999px;color:var(--muted)}
 .blockbox-x:hover,.blockbox-x:focus-visible{color:var(--text);background:color-mix(in srgb,currentColor 10%,transparent)}
-.blockbox-reason{margin:0;font-size:15px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden}
+.blockbox-reason{margin:0;font-size:15px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:7;line-clamp:7;overflow:hidden}
 .blockbox-reason.open{display:block;-webkit-line-clamp:unset}
 .blockbox-flag{margin:0;font-size:14px;color:var(--muted);overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden}
 .blockbox-flag-k{font-weight:600}
