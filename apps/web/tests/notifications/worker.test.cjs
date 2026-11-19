@@ -75,3 +75,12 @@ test('notification uses the monochrome badge as a same-origin PNG under the scop
  assert(fs.existsSync(path.resolve(__dirname,'../../public/icons',path.basename(n.badge))));
  const {px}=png('rolff-192.png');let colour=0;for(let i=0;i<px.length;i+=4)if(px[i+3]>0&&(px[i]!==px[i+1]||px[i+1]!==px[i+2]))colour++;assert(colour>1000,'icon is full colour, not a silhouette');
  assert(n.badge.startsWith('https://synthetic.invalid/'));});
+
+// App icon size: the speech bubble fills most of the icon (like Signal/WhatsApp) and the maskable/monochrome
+// artwork still sits inside Android's 80 % safe-zone circle (radius 40 % of the width).
+test('app icon: bubble is at least 70 % of the width, and the monochrome/maskable artwork stays inside the safe-zone circle',()=>{
+ const extent=(file)=>{const {w,px}=png(file);let x0=w,x1=0,far=0;for(let i=0,p=0;i<px.length;i+=4,p++){if(px[i+3]>128&&px[i]>235&&px[i+1]>235&&px[i+2]>235){const x=p%w,y=(p-x)/w;if(x<x0)x0=x;if(x>x1)x1=x;far=Math.max(far,Math.hypot(x+.5-w/2,y+.5-w/2));}}return {width:(x1-x0+1)/w,far:far/w};};
+ assert(extent('rolff-512.png').width>=0.72,'any icon: bubble >= 72 % of icon width');
+ assert(extent('rolff-192.png').width>=0.72);
+ const m=extent('rolff-monochrome-512.png');assert(m.width>=0.60,'maskable/monochrome bubble >= 60 % of width (was 50 %)');assert(m.far<=0.401,'artwork inside the 80 % safe zone');
+});

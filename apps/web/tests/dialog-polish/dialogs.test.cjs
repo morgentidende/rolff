@@ -130,8 +130,8 @@ test('PWA icons: separate any/maskable/monochrome entries, cache-busted; maskabl
   assert.deepEqual([png('apple-touch-icon.png').w, png('apple-touch-icon.png').h], [180, 180]);
   assert.equal(png('icons/rolff-monochrome-512.png').colorType, 6, 'monochrome keeps alpha');
   const html = fs.readFileSync(path.join(__dirname, '../../index.html'), 'utf8');
-  assert.match(html, /rel="apple-touch-icon" sizes="180x180" href="\.\/apple-touch-icon\.png\?v=2"/);
-  assert.match(html, /rel="manifest" href="\.\/manifest\.webmanifest\?v=2"/);
+  assert.match(html, /rel="apple-touch-icon" sizes="180x180" href="\.\/apple-touch-icon\.png\?v=3"/);
+  assert.match(html, /rel="manifest" href="\.\/manifest\.webmanifest\?v=3"/);
 });
 
 test('Day separators: I dag / I går / weekday / date, in da and en; tail stays on the first bubble of a group', async () => {
