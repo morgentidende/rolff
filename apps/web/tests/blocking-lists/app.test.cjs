@@ -11,6 +11,7 @@ async function env(){
 const btn=(d,text)=>{const b=[...d.querySelectorAll('button')].find(b=>b.textContent.trim()===text);assert.ok(b,text);return b};
 async function click(b){b.click();await delay(20)}
 function input(w,id,value){const el=w.document.getElementById(id);Object.getOwnPropertyDescriptor(w.HTMLInputElement.prototype,'value').set.call(el,value);el.dispatchEvent(new w.Event('input',{bubbles:true}));}
+const topicAck=d=>d.getElementById('blocked-topic').form.querySelector('.blocking-ack input');
 const list=d=>[...d.querySelector('section').querySelectorAll('li span')].map(x=>x.textContent);
 function pointer(w,el,type,props={}){const e=new w.Event(type,{bubbles:true});Object.assign(e,{isPrimary:true,button:0,clientX:0,clientY:0,...props});el.dispatchEvent(e);}
 test('Danish order, true creation timestamps, stable ties, display sort does not save',async()=>{const e=await env();try{assert.deepEqual(list(e.d),['æble','åben aftale','ønske']);const select=e.d.querySelector('select');for(const [value,expected]of [['alphabetical',['æble','ønske','åben aftale']],['newest',['ønske','åben aftale','æble']],['oldest',['æble','åben aftale','ønske']]]){select.value=value;select.dispatchEvent(new e.w.Event('change',{bubbles:true}));await delay(5);assert.deepEqual(list(e.d),expected);}assert.ok(e.w.QA.requests.every(x=>x.method==='GET'||String(x.url).includes('get_my_attachment_blocks')));}finally{await e.close()}});
@@ -18,7 +19,7 @@ test('Accessible trash removes just one word; topic list unchanged',async()=>{co
 test('Reset confirmation cancel/Escape preserve words and both typed drafts',async()=>{const e=await env();try{input(e.w,'blocked-word','udkast');input(e.w,'blocked-topic','omtaler min cykel');await click(btn(e.d,'Nulstil blokeringsliste'));assert.ok(e.d.querySelector('dialog[open]'));assert.equal(e.w.QA.requests.filter(x=>x.method!=='GET'&&!String(x.url).includes('get_my_attachment_blocks')).length,0);await click(btn(e.d,'Annuller'));await click(btn(e.d,'Nulstil blokeringsliste'));e.d.dispatchEvent(new e.w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await delay(10);assert.ok(!e.d.querySelector('dialog'));assert.equal(e.d.getElementById('blocked-word').value,'udkast');assert.equal(e.d.getElementById('blocked-topic').value,'omtaler min cykel');assert.equal(list(e.d).length,3);}finally{await e.close()}});
 test('Confirmed reset clears only words and only owner/conversation RPC',async()=>{const e=await env();try{await click(btn(e.d,'Nulstil blokeringsliste'));await click(btn(e.d,'Nulstil'));assert.deepEqual(list(e.d),[]);assert.match(e.d.querySelectorAll('section')[1].textContent,/omtaler mine forældre/);const request=e.w.QA.requests.find(x=>x.url.includes('reset_blocked_words'));assert.deepEqual(JSON.parse(JSON.stringify(request.body)),{conv:'synthetic-conversation'});assert.equal(request.token,'Bearer fabricated-synthetic-owner-a');}finally{await e.close()}});
 test('Failed single delete and reset retain existing list and report unconfirmed',async()=>{const e=await env();try{e.w.QA.fail=true;await click(e.d.querySelector('[aria-label="Fjern æble"]'));assert.equal(list(e.d).length,3);assert.match(e.d.querySelector('[role=alert]').textContent,/kunne ikke bekræftes/);await click(btn(e.d,'Nulstil blokeringsliste'));await click(btn(e.d,'Nulstil'));assert.equal(list(e.d).length,3);}finally{await e.close()}});
-test('Failed topic add retains draft, successful add loads actual timestamp separately',async()=>{const e=await env();try{input(e.w,'blocked-topic','omtaler min cykel');await delay(5);e.w.QA.fail=true;await click(btn(e.d,'Tilføj emne'));assert.equal(e.d.getElementById('blocked-topic').value,'omtaler min cykel');e.w.QA.fail=false;await click(btn(e.d,'Tilføj emne'));assert.equal(e.d.getElementById('blocked-topic').value,'');assert.match(e.d.querySelectorAll('section')[1].textContent,/omtaler min cykel/);assert.equal(list(e.d).length,3);}finally{await e.close()}});
+test('Failed topic add retains draft, successful add loads actual timestamp separately',async()=>{const e=await env();try{input(e.w,'blocked-topic','omtaler min cykel');await click(topicAck(e.d));await delay(5);e.w.QA.fail=true;await click(btn(e.d,'Tilføj emne'));assert.equal(e.d.getElementById('blocked-topic').value,'omtaler min cykel');e.w.QA.fail=false;await click(btn(e.d,'Tilføj emne'));assert.equal(e.d.getElementById('blocked-topic').value,'');assert.match(e.d.querySelectorAll('section')[1].textContent,/omtaler min cykel/);assert.equal(list(e.d).length,3);}finally{await e.close()}});
 test('Info tap/keyboard opens, Back closes only modal and draft/history remain private',async()=>{const e=await env();try{input(e.w,'blocked-topic','privat kladde');await click(e.d.querySelector('[aria-label="Om blokerede emner"]'));assert.match(e.d.querySelector('dialog').textContent,/AI kan tage fejl/);assert.ok(!JSON.stringify(e.w.history.state).includes('privat'));e.w.history.back();await delay(35);assert.ok(!e.d.querySelector('dialog'));assert.equal(e.d.getElementById('blocked-topic').value,'privat kladde');const info=e.d.querySelector('[aria-label="Om blokerede ord"]');info.dispatchEvent(new e.w.KeyboardEvent('keydown',{key:'Enter',bubbles:true}));await click(info);assert.match(e.d.querySelector('dialog').textContent,/Ord, udtryk/);}finally{await e.close()}});
 test('Longpress opens once and suppresses subsequent synthetic click',async()=>{const e=await env();try{const b=e.d.querySelector('[aria-label="Om blokerede ord"]');pointer(e.w,b,'pointerdown');await delay(520);assert.equal(e.d.querySelectorAll('dialog').length,1);pointer(e.w,b,'pointerup');await click(btn(e.d,'Luk'));await click(b);assert.equal(e.d.querySelectorAll('dialog').length,0);}finally{await e.close()}});
 for(const kind of ['move','scroll','pointercancel'])test(`Longpress ${kind} cancels and suppresses accidental click`,async()=>{const e=await env();try{const b=e.d.querySelector('[aria-label="Om blokerede ord"]');pointer(e.w,b,'pointerdown');if(kind==='move')pointer(e.w,b,'pointermove',{clientX:20});else if(kind==='scroll')e.d.dispatchEvent(new e.w.Event('scroll'));else pointer(e.w,b,'pointercancel');await delay(520);await click(b);assert.equal(e.d.querySelectorAll('dialog').length,0);}finally{await e.close()}});
@@ -119,3 +120,34 @@ test('Attachment info opens in Danish and English close label path stays on the 
   assert.equal(file.getAttribute('aria-checked'),'true');
  }finally{await e.close()}
 });
+
+test('Consent texts: exact da wording for words and topics (and the old wording is gone)',async()=>{const e=await env();try{
+ const labels=[...e.d.querySelectorAll('.blocking-ack')].map(l=>l.textContent);
+ assert.deepEqual(labels,['Jeg forstår, at afsenderen får at vide, at du har blokeret ordet, hvis de forsøger at sende det.','Jeg forstår, at afsenderen får at vide, at du har blokeret emnet, hvis de forsøger at sende en besked om det.']);
+ assert.ok(!/får det ramte ord at se/.test(e.d.body.textContent));
+}finally{await e.close()}});
+test('Topics: Tilføj emne needs the tick (explains, focuses the box, sends nothing); with it p_ack=true is sent and the tick resets',async()=>{const e=await env();try{
+ const writes=()=>e.w.QA.requests.filter(x=>x.method!=='GET'&&!String(x.url).includes('get_my_attachment_blocks'));
+ input(e.w,'blocked-topic','omtaler min cykel');const add=btn(e.d,'Tilføj emne');assert.equal(add.disabled,false);assert.equal(add.getAttribute('aria-disabled'),'true');
+ await click(add);assert.equal(writes().length,0,'nothing sent without the tick');
+ const hint=e.d.getElementById('blocked-topic-ack-hint');assert.ok(hint);assert.equal(hint.getAttribute('role'),'alert');assert.equal(hint.textContent,'Sæt flueben i ”Jeg forstår …” for at tilføje.');
+ const box=topicAck(e.d);assert.equal(e.d.activeElement,box);assert.equal(box.getAttribute('aria-describedby'),'blocked-topic-ack-hint');assert.ok(box.closest('label').classList.contains('needs-attention'));
+ assert.ok(!e.d.getElementById('blocked-ack-hint'),'word form untouched');
+ await click(box);assert.ok(!e.d.getElementById('blocked-topic-ack-hint'));assert.equal(btn(e.d,'Tilføj emne').hasAttribute('aria-disabled'),false);
+ await click(btn(e.d,'Tilføj emne'));await delay(20);
+ const w=writes();assert.equal(w.length,1);assert.match(String(w[0].url),/add_blocked_topic/);assert.equal(w[0].body.p_ack,true);assert.equal(w[0].body.p_word,'omtaler min cykel');
+ assert.equal(e.d.getElementById('blocked-topic').value,'');assert.equal(topicAck(e.d).checked,false,'tick must be given again for the next topic');
+ assert.equal(e.d.querySelector('.blocking-ack input').checked,false);
+}finally{await e.close()}});
+test('Topics: the word tick does not satisfy the topic tick and vice versa',async()=>{const e=await env();try{
+ input(e.w,'blocked-word','biler');await click(e.d.querySelector('.blocking-ack input'));
+ input(e.w,'blocked-topic','omtaler min cykel');await click(btn(e.d,'Tilføj emne'));
+ assert.ok(e.d.getElementById('blocked-topic-ack-hint'));assert.equal(e.w.QA.requests.filter(x=>String(x.url).includes('add_blocked')).length,0);
+}finally{await e.close()}});
+test('English consent texts exist in the source',()=>{const src=require('node:fs').readFileSync(path.join(__dirname,'../../src/BlockingLists.tsx'),'utf8');
+ assert.ok(src.includes('I understand that the sender will be told that you have blocked the word if they try to send it.'));
+ assert.ok(src.includes('I understand that the sender will be told that you have blocked the topic if they try to send a message about it.'));
+ assert.ok(!src.includes('får det ramte ord at se'));assert.ok(!src.includes('will see the matched word'));
+ const app=require('node:fs').readFileSync(path.join(__dirname,'../../src/App.tsx'),'utf8');
+ assert.ok(app.includes('Modtageren har blokeret et emne, som beskeden handler om.'));assert.ok(app.includes('the recipient has blocked a topic this message is about'));
+ assert.ok(!app.includes('privat modtagerindstilling')&&!app.includes('private recipient setting'));});

@@ -9,7 +9,7 @@ const empty=async()=>{for(const table of ['messages','message_deliveries','notif
 const body='En neutral praktisk aftale';
 await test('actual owner lists private; service snapshot and v3 issuer remain server-only',async()=>{
  await f.owner(U,'select add_blocked_word($1,$2,true)',[f.conv,'cykel']);
- await f.owner(U,'select add_blocked_topic($1,$2)',[f.conv,'Privat syntetisk emne']);
+ await f.owner(U,'select add_blocked_topic($1,$2,true)',[f.conv,'Privat syntetisk emne']);
  const s=await f.snapshot();assert.ok(s.words.includes('cykel'));assert.ok(s.topics.includes('Privat syntetisk emne'));
  assert.equal((await f.owner(V,'select * from conversation_blocked_topics where conversation_id=$1',[f.conv])).length,0);
  await assert.rejects(f.owner(U,"select issue_reply_approval_v3($1,$2,$3,'synthetic','mock',$4,null)",[V,f.conv,await f.digest(body),s.revision]),/permission denied/);
@@ -20,7 +20,7 @@ await test('owner edit between evaluation and v3 issuance prevents message, deli
 });
 await test('owner topic edit between v3 issuance and consume prevents message and notification',async()=>{
  const id=await f.issue(body,(await f.snapshot()).revision);
- await f.owner(U,'select add_blocked_topic($1,$2)',[f.conv,'Endnu et privat emne']);
+ await f.owner(U,'select add_blocked_topic($1,$2,true)',[f.conv,'Endnu et privat emne']);
  await assert.rejects(f.commit(id,body,'synthetic-stale'),/recipient_policy_changed/);await empty();
 });
 await test('legacy v2 ticket cannot bypass v3 consumption gate or create notification work',async()=>{

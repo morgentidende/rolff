@@ -100,3 +100,8 @@ type if only one is blocked). Own sends are not affected by one's own toggles.
 
 The personal export includes `own_attachment_blocks`. Word-list reset does not
 clear these toggles. The migration file is not applied by this workstream.
+
+## Confirmation before adding (words and topics)
+- Adding a blocked word **and** a blocked topic each need a tick on "Jeg forstår, at afsenderen får at vide, at du har blokeret ordet/emnet, hvis de forsøger …". The tick is per add (not stored); it resets after each save.
+- Server side: `add_blocked_word(conv, word, p_ack)` and `add_blocked_topic(conv, word, p_ack)` both raise `ack_required` unless `p_ack` is true.
+- What the sender is told: for a word, "the recipient has blocked the word/phrase \"X\"" (the matched word is named). For a topic, "the recipient has blocked a topic this message/file is about" (never which topic).

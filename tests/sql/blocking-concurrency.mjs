@@ -25,7 +25,7 @@ try{
  });
  await test('uncommitted topic edit blocks consumption then stale ticket cannot store',async()=>{
   const issuer=await client(),edit=await client(),consumer=await client(),r=await revision();
-  const id=await issue(issuer,r);await begin(edit,B);await edit.query("select add_blocked_topic($1,'omtaler min opdigtede cykel')",[cv]);await begin(consumer);
+  const id=await issue(issuer,r);await begin(edit,B);await edit.query("select add_blocked_topic($1,'omtaler min opdigtede cykel',true)",[cv]);await begin(consumer);
   const pending=reflected(consumer.query("select * from commit_message_reply($1,$2,$3,$4,'synthetic-topic-race',null)",[id,A,cv,text]));
   await waitBlocked(consumer,edit);await edit.query('commit');assert.match((await pending).error?.message||'',/recipient_policy_changed/);await consumer.query('rollback');
   assert.equal(Number((await db.query('select count(*) n from messages where conversation_id=$1',[cv])).rows[0].n),0);
@@ -54,7 +54,7 @@ try{
    await begin(remove,B);
    const pending=reflected(reset?remove.query('select reset_blocked_words($1)',[cv]):remove.query(`select remove_blocked_${kind}($1,$2)`,[cv,entry]));
    await waitBlocked(remove,add);
-   const duplicate=(await add.query(kind==='topic'?'select add_blocked_topic($1,$2) id':'select add_blocked_word($1,$2,true) id',[cv,word])).rows[0].id;
+   const duplicate=(await add.query(kind==='topic'?'select add_blocked_topic($1,$2,true) id':'select add_blocked_word($1,$2,true) id',[cv,word])).rows[0].id;
    assert.equal(duplicate,entry);await add.query('commit');
    const result=await pending;if(result.error)throw result.error;await remove.query('commit');
    assert.equal(Number((await db.query(`select count(*) n from ${table} where id=$1`,[entry])).rows[0].n),0);
