@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useBackLayer } from "./backNavigation";
+import { useBackdropDismiss, useModalLayer, useUnderChatHeader } from "./modalLayer";
 import { MUTE_DURATIONS, muteMenuLabel, unmuteLabel, type MuteDuration, type MuteRow } from "./muteModel";
 import type { Lang } from "./i18n";
 
@@ -9,7 +10,11 @@ export function MuteDialog({ lang, current, done, onUnmute }: { lang: Lang; curr
   const [pick, setPick] = useState<MuteDuration>("8h");
   const box = useRef<HTMLDivElement>(null), firstRef = useRef<HTMLInputElement>(null);
   const prev = useRef<Element | null>(typeof document !== "undefined" ? document.activeElement : null);
+  const layer = useRef<HTMLDivElement>(null);
   useBackLayer(true, () => done(null));
+  useModalLayer(true, layer);
+  const backdrop = useBackdropDismiss(() => done(null));
+  const underHeader = useUnderChatHeader();
   useEffect(() => {
     firstRef.current?.focus({ preventScroll: true });
     const back = prev.current;
@@ -25,7 +30,7 @@ export function MuteDialog({ lang, current, done, onUnmute }: { lang: Lang; curr
     e.preventDefault(); f[next].focus();
   };
   return (
-    <div className="overlay confirm-overlay" onPointerDown={(e) => { if (e.target === e.currentTarget) done(null); }}>
+    <div className={underHeader !== null ? "overlay confirm-overlay top-overlay" : "overlay confirm-overlay"} ref={layer} style={underHeader !== null ? { paddingTop: underHeader + 8 } : undefined} {...backdrop}>
       <div className="confirm-card mute-card" role="dialog" aria-modal="true" aria-labelledby="mute-title" aria-describedby="mute-body" ref={box} onKeyDown={trap}>
         <h2 id="mute-title">{da ? "Lydløs" : "Mute"}</h2>
         <p id="mute-body">{da
