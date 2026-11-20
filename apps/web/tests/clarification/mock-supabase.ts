@@ -50,7 +50,7 @@ function rpc(name: string, args: any) {
     if (name === 'get_my_privacy')
         data = [{ inactivity_delete: true, inactivity_days: 90, cloud_sync: false, retention: '1y' }];
     if (name === 'get_my_plan')
-        data = [{ plan: currentPlan, price: currentPlan === 'text' ? 49 : 79, pending_plan: null, period_end: '2026-12-09T00:00:00Z', test_switch: true }];
+        data = [{ plan: currentPlan, price: currentPlan === 'text' ? 49 : 79, pending_plan: pendingPlan, period_end: '2026-12-09T00:00:00Z', test_switch: true }];
     if (name === 'set_my_plan_test') { currentPlan = args?.p_plan ?? currentPlan; data = [{ plan: currentPlan, pending_plan: null, period_end: '2026-12-09T00:00:00Z' }]; }
     if (name === 'get_my_send_limits')
         data = [{ next_at: null }];
@@ -98,11 +98,14 @@ function acceptSend(args: any) {
     return { status: 200, data: { status: 'accepted', message_id: id } };
 }
 // Optional: next send-* call returns this exact response body (e.g. a blocked result with an explanation).
-let nextSend: any = null;
-export function setNextSend(data: any) { nextSend = data; }
+let nextSend: any = null, nextSendStatus = 200;
+export function setNextSend(data: any, status = 200) { nextSend = data; nextSendStatus = status; }
+// Optional: a pending downgrade (plan stays text_attachments, switch to 'text' at period_end).
+let pendingPlan: string | null = null;
+export function setPendingPlan(p: string | null) { pendingPlan = p; }
 export async function callFn(name: string, args: any) {
     calls.push({ function: name, args });
-    if (nextSend && name.startsWith('send-')) { const data = nextSend; nextSend = null; return { status: 200, data }; }
+    if (nextSend && name.startsWith('send-')) { const data = nextSend; nextSend = null; return { status: nextSendStatus, data }; }
     if (holdSend && name.startsWith('send-')) {
         const status = await new Promise<string>(r => heldSends.push(r));
         if (status === 'accepted') return acceptSend(args);

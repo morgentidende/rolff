@@ -20,13 +20,13 @@ test('current plan has a quiet label (not a button); other plan keeps its action
     assert.ok(!/Din nuværende plan/.test(d.body.textContent));
   } finally { await f.close(); }
 });
-test('rule text is two short lines without "Regel:"; period line and TESTFUNKTION kept', async () => {
+test('rule text is two short lines without "Regel:"; TESTFUNKTION kept, no period line', async () => {
   const f = await env(); const { d } = f; try {
     await openPlans(f);
     const rules = [...d.querySelectorAll('.plan-rule')].map(p => p.textContent);
     assert.deepEqual(rules, ['Opgradering gælder med det samme. Nedgradering gælder fra næste periode.', 'Planen gælder kun dig – den anden forælder kan have en anden plan, og alle kan altid se vedhæftninger, de modtager.']);
     assert.ok(!/Regel:/.test(d.body.textContent));
-    assert.match(d.body.textContent, /Periode slutter: /); assert.match(d.body.textContent, /TESTFUNKTION – ingen betaling\./);
+    assert.ok(!/Periode slutter/.test(d.body.textContent), 'no period line without a pending downgrade'); assert.match(d.body.textContent, /TESTFUNKTION – ingen betaling\./);
   } finally { await f.close(); }
 });
 test('plan change confirms with the app-wide success toast, not an orange notice', async () => {
@@ -39,5 +39,13 @@ test('plan change confirms with the app-wide success toast, not an orange notice
     assert.ok(![...d.querySelectorAll('.notice')].some(n => /Planen er skiftet/.test(n.textContent)), 'no orange box');
     assert.equal(d.querySelectorAll('.toast-region').length, 1, 'single app-wide toast region');
     assert.equal(d.querySelector('.plan.current .plan-badge:not(.plan-badge-spacer)').closest('.plan').querySelector('h3').textContent, 'Tekst');
+  } finally { await f.close(); }
+});
+test('period end is shown only while a downgrade is pending (da)', async () => {
+  const f = await env(); const { w, d } = f; try {
+    w.QA.setPendingPlan('text');
+    await openPlans(f);
+    assert.match(d.body.textContent, /Periode slutter: 9\. december 2026/);
+    assert.match(d.body.textContent, /Skifter hertil ved næste periode\./);
   } finally { await f.close(); }
 });

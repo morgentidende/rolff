@@ -16,7 +16,8 @@ Stripe-konto + Checkout/Billing + webhook; Apple IAP / Google Play Billing for k
 - Pipeline (`send-attachment`): auth → medlemskab/rolle/rate (`prepare_send`) → plan → filtjek → regler på billedtekst → OpenAI Responses API (`input_image` / `input_file`, `store:false`) med samme regler + `inappropriate_image` → modtagerens blokerede ord og hårdt forfilter på den aflæste tekst → engangsgodkendelse bundet til sha256(tekst + sha256(fil)) → atomisk lagring.
 - Intet gemmes eller leveres før godkendelse. Fail closed. Ingen filindhold/tekst i logs (kun type, sider, ms, tokens, afgørelse).
 - Lagring: `message_attachments` (bytea) ved siden af beskeden, så opbevaring, sletning, kontosletning (modtagere beholder kopi) og kaskader virker uændret. Ingen RLS-policies; kun `get_attachment` (samme synlighed som `get_messages`).
-- Rate limit: 10 forsøg/min (fælles med beskeder) og 20 vedhæftninger/døgn pr. afsender.
+- Rate limit: 10 forsøg/min (fælles med beskeder) og **5 vedhæftninger pr. afsender i et rullende døgn (24 timer)**. Håndhæves i `send-attachment` før modelkaldet (429 `daily_attachment_limit`, så en over-grænse-upload koster 0 tokens) og igen i `commit_attachment_message`. En kort reservation (`attachment_slots`, 3 min) tages under en lås lige før modelkaldet, så parallelle uploads ikke alle når modellen. Sendte vedhæftninger og igangværende reservationer tæller; vedhæftninger blokeret af moderation bruger ikke kvoten.
+- Billedtjek: `input_image` med `detail:"high"` (fastholdt i `IMAGE_DETAIL`). Ikke `low` (512 px, tekst i screenshots bliver ulæselig) og ikke `auto` (kan betyde fuld størrelse på nyere modeller). Se PR-beskrivelsen for token-regnestykket.
 
 
 ## Skrivefelt, kamera og tegnkvoter

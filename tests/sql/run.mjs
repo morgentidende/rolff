@@ -476,6 +476,46 @@ await t('Vedhæftning kræver afsenders 79-plan; tabeller er lukkede for kliente
   await rejects(as(X, `select * from get_attachment($1)`, [mid]), /not_found/);
 });
 
+await t('Daglig vedhæftningskvote: 5 pr. afsender i et rullende døgn, reservation før model, ingen over-grænse', async () => {
+  const [P, Q] = (await db.query(`insert into auth.users(raw_user_meta_data) values ('{}'),('{}') returning id`)).rows.map(r => r.id);
+  const cv = (await db.query(`insert into conversations(created_by) values ($1) returning id`, [P])).rows[0].id;
+  await db.query(`insert into memberships(conversation_id,user_id,role) values ($1,$2,'parent'),($1,$3,'parent')`, [cv, P, Q]);
+  await as(P, `select * from set_my_plan_test('text_attachments')`);
+  assert.equal((await svc(`select _attachment_daily_limit() l`))[0].l, 5);
+  const mk = async (n) => { const data = new Uint8Array([0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a,n]); const h = (await db.query(`select encode(extensions.digest($1 || E'\n' || encode(extensions.digest($2::bytea,'sha256'),'hex'),'sha256'),'hex') h`, ['Vedhæftning: a.png', data])).rows[0].h;
+    const id = (await svc(`select test_issue_current_approval($1,$2,$3,'openai','m') id`, [P, cv, h]))[0].id;
+    return svc(`select * from commit_attachment_message($1,$2,$3,'Vedhæftning: a.png',$4,'image/png','a.png','alt',null,$5::bytea)`, [id, P, cv, 'key-quota-' + n, data]); };
+  const used = async (u) => (await svc(`select attachment_daily_used($1) n`, [u]))[0].n;
+  assert.equal(await used(P), 0);
+  for (let n = 1; n <= 3; n++) await mk(n);
+  assert.equal(await used(P), 3);
+  // Reservation counts as in-flight; releasing frees it; a sent message replaces it (no double count).
+  await svc(`select reserve_attachment_slot($1,'key-quota-4')`, [P]); assert.equal(await used(P), 4);
+  await svc(`select release_attachment_slot($1,'key-quota-4')`, [P]); assert.equal(await used(P), 3);
+  await svc(`select reserve_attachment_slot($1,'key-quota-4')`, [P]);
+  await mk(4); assert.equal(await used(P), 4);
+  await svc(`select reserve_attachment_slot($1,'key-quota-5')`, [P]); assert.equal(await used(P), 5);
+  await rejects(svc(`select reserve_attachment_slot($1,'key-quota-extra')`, [P]), /daily_attachment_limit/); // 5th slot is in flight: no 6th model call
+  await mk(5); assert.equal(await used(P), 5);
+  await rejects(mk(6), /daily_attachment_limit/);
+  await rejects(svc(`select reserve_attachment_slot($1,'key-quota-7')`, [P]), /daily_attachment_limit/);
+  assert.equal((await db.query(`select count(*)::int c from messages m join message_attachments a on a.message_id=m.id where m.sender_id=$1`, [P])).rows[0].c, 5);
+  // Per person: another sender is unaffected. Idempotent retry of a sent key is not blocked.
+  assert.equal(await used(Q), 0);
+  const dup = await svc(`select * from commit_attachment_message(gen_random_uuid(),$1,$2,'x','key-quota-1','image/png','a.png',null,null,'\\x89504e470d0a1a0a01'::bytea)`, [P, cv]);
+  assert.equal(dup[0].duplicate, true);
+  // Rolling window: attachments older than 24h stop counting.
+  await db.query(`update messages set created_at = now() - interval '25 hours' where id in (select m.id from messages m join message_attachments a on a.message_id=m.id where m.sender_id=$1 order by m.created_at limit 2)`, [P]);
+  assert.equal(await used(P), 3);
+  await svc(`select reserve_attachment_slot($1,'key-quota-8')`, [P]); assert.equal(await used(P), 4);
+  // Stale reservations (> 3 min) do not count; clients cannot call the functions or read slots.
+  await db.query(`update attachment_slots set created_at = now() - interval '4 minutes' where user_id=$1`, [P]);
+  assert.equal(await used(P), 3);
+  await rejects(as(P, `select attachment_daily_used($1)`, [P]), /permission|denied/);
+  await rejects(as(P, `select reserve_attachment_slot($1,'k')`, [P]), /permission|denied/);
+  await rejects(as(P, `select * from attachment_slots`), /permission|denied/);
+});
+
 // ---------- Person limits + invite plan ----------
 const mkConv = async (a, b) => { const cv = (await db.query(`insert into conversations(created_by) values ($1) returning id`, [a])).rows[0].id; await db.query(`insert into memberships(conversation_id,user_id,role) values ($1,$2,'parent'),($1,$3,'parent')`, [cv, a, b]); return cv; };
 const sendIn = async (cv, from, text, key) => { const id = (await svc(`select test_issue_current_approval($1,$2,$3,'test','m') id`, [from, cv, await hash(text)]))[0].id; return svc(`select * from commit_message($1,$2,$3,$4,$5)`, [id, from, cv, text, key]); };
