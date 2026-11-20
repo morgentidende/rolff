@@ -27,6 +27,7 @@ async function getSession() {
 export const inv = '50000000-0000-4000-8000-000000000001';
 export const inv2 = '50000000-0000-4000-8000-000000000002';
 const pendingAliases = new Map<string, string | null>();
+const cancelledInvites = new Set<string>();
 const pendingConv = () => ({ id: cid, role: 'parent', members: 1, others: [], color: 'teal',
     pending_invitee: (globalThis as any).__QA_PENDING === 'nomail' ? null : 'afventer@example.invalid',
     pending_invitation_id: inv, pending_alias: pendingAliases.get(inv) ?? null });
@@ -108,6 +109,12 @@ function rpc(name: string, args: any) {
             data = { muted: true, mute_until: until, always: until === null };
         } else data = null;
     }
+    if ((name === 'list_my_conversations' || name === 'list_my_conversations_v2') && cancelledInvites.size)
+        data = (data as any[]).filter((c: any) => !cancelledInvites.has(c.pending_invitation_id));
+    if (name === 'cancel_pending_invitation' && !(globalThis as any).__QA_CANCEL_ERROR)
+        cancelledInvites.add(String(args.inv));
+    if (name === 'cancel_pending_invitation' && (globalThis as any).__QA_CANCEL_ERROR)
+        return Promise.resolve({ data: null, error: { message: 'synthetic failure' } });
     if (name === 'list_pending_invitations')
         data = qa?.invites ?? [];
     if (name === 'my_pending_count')
