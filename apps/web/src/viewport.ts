@@ -5,6 +5,7 @@
  *   --vv-h       visible viewport height (px)
  *   --kbd-inset  part of the layout viewport covered at the bottom (keyboard), px
  *  and `data-keyboard` on <html> while the keyboard is (most likely) open. */
+import { afterSettle } from "./viewportSettle";
 export function viewportVars(w: Pick<Window, "innerHeight" | "visualViewport">): { vh: number; inset: number } {
   const v = w.visualViewport;
   if (!v) return { vh: Math.round(w.innerHeight), inset: 0 };
@@ -34,9 +35,10 @@ export function installViewportVars(w: Window = window): () => void {
       }
     }
   };
-  const schedule = () => { if (!raf) raf = (w.requestAnimationFrame ?? ((f: FrameRequestCallback) => setTimeout(f, 0) as unknown as number))(apply); };
+  // Coalesced across app switches (see viewportSettle.ts): transient resume sizes never reach the CSS variables.
+  const schedule = afterSettle(() => { if (!raf) raf = (w.requestAnimationFrame ?? ((f: FrameRequestCallback) => setTimeout(f, 0) as unknown as number))(apply); });
   apply();
   const v = w.visualViewport;
   v?.addEventListener("resize", schedule); v?.addEventListener("scroll", schedule); w.addEventListener("resize", schedule);
-  return () => { v?.removeEventListener("resize", schedule); v?.removeEventListener("scroll", schedule); w.removeEventListener("resize", schedule); };
+  return () => { schedule.cancel(); v?.removeEventListener("resize", schedule); v?.removeEventListener("scroll", schedule); w.removeEventListener("resize", schedule); };
 }

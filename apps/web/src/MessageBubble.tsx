@@ -3,6 +3,7 @@ import { showToast } from "./toast";
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { rectOf, useAnchoredPlacement } from "./anchoredPosition";
+import { useBackdropDismiss, useModalLayer } from "./modalLayer";
 const ActionIcon = ({ d }: { d: React.ReactNode }) => <svg className="message-action-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">{d}</svg>;
 const icons = {
   reply: <><path d="M9 14L4 9l5-5" /><path d="M4 9h10a6 6 0 0 1 6 6v4" /></>,
@@ -54,6 +55,9 @@ export function MessageBubble({ m, lang, children, onReply, canReply = true, onT
     return r;
   }, dialog, { align: m.mine ? "end" : "start", gap: 8, margin: 12, minVisible: 140 }, panel);
   const isOpen = panel !== null;
+  const overlay = useRef<HTMLDivElement>(null);
+  useModalLayer(isOpen, overlay);
+  const backdrop = useBackdropDismiss(() => close(), () => armed);
   useLayoutEffect(() => {
     if (!isOpen || !bubble.current || !lifted.current) return;
     const copy = bubble.current.cloneNode(true) as HTMLElement;
@@ -170,7 +174,7 @@ export function MessageBubble({ m, lang, children, onReply, canReply = true, onT
       {onDelete && <button type="button" className="ghost danger" onClick={() => onDelete(m)}>{da ? "Slet" : "Delete"}</button>}
     </div>}
     </div>
-    {panel && createPortal(<div className="message-overlay" onPointerDown={e => { if (armed) { e.preventDefault(); return; } if (e.target === e.currentTarget) close(); }} onContextMenu={e => e.preventDefault()}>
+    {panel && createPortal(<div className="message-overlay" ref={overlay} {...backdrop} onPointerDown={e => { if (armed) { e.preventDefault(); return; } backdrop.onPointerDown(e); }} onContextMenu={e => e.preventDefault()}>
       <div className="message-lifted" ref={lifted} aria-hidden="true" />
       <div className={`message-panel${panel === "info" ? " message-info" : ""}${pos ? " placed-" + pos.placement : ""}${armed ? " is-armed" : ""}`} ref={dialog} data-placement={pos?.placement} data-armed={armed ? "true" : undefined}
         role={panel === "info" ? "dialog" : "menu"} aria-modal={panel === "info" ? true : undefined} aria-orientation={panel === "actions" ? "vertical" : undefined}

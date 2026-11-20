@@ -68,7 +68,7 @@ test('Rapportér: fixed textarea + counter, contained list newest first with nic
   const f = await env(); const { w, d } = f; try {
     await openChat(d);
     await click((await menu(d)).find(b => b.textContent === 'Rapportér')); await delay(30);
-    const sheet = d.querySelector('.sheet'); assert.ok(sheet.classList.contains('anchored-card'), 'opens at the top like the other ⋮ sheets');
+    const sheet = d.querySelector('.sheet'); assert.ok(sheet.closest('.overlay.top-overlay'), 'opens at the top, directly under the chat header, like the other ⋮ sheets');
     assert.equal(sheet.querySelector('h2').textContent, 'Rapportér');
     const ta = d.getElementById('rb'); assert.ok(ta.classList.contains('fixed-text')); assert.equal(ta.maxLength, 2000);
     assert.equal(d.getElementById('rb-count').textContent, '0/2000');

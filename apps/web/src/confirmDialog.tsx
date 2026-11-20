@@ -1,6 +1,7 @@
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { useBackLayer } from "./backNavigation";
+import { useBackdropDismiss, useModalLayer } from "./modalLayer";
 
 // In-app replacement for window.confirm: Rolff-styled, aria-modal, focus-trapped,
 // Esc / Android back = cancel. Promise-based so callers read like confirm().
@@ -26,7 +27,10 @@ export function ConfirmHost() {
 function ConfirmView({ req, done }: { req: Req; done: (ok: boolean) => void }) {
   const box = useRef<HTMLDivElement>(null), cancelRef = useRef<HTMLButtonElement>(null);
   const prev = useRef<Element | null>(typeof document !== "undefined" ? document.activeElement : null);
+  const layer = useRef<HTMLDivElement>(null);
   useBackLayer(true, () => done(false));
+  useModalLayer(true, layer);
+  const backdrop = useBackdropDismiss(() => done(false));
   useEffect(() => {
     cancelRef.current?.focus({ preventScroll: true });
     const back = prev.current;
@@ -41,7 +45,7 @@ function ConfirmView({ req, done }: { req: Req; done: (ok: boolean) => void }) {
     e.preventDefault(); f[next].focus();
   };
   return (
-    <div className="overlay confirm-overlay" onPointerDown={(e) => { if (e.target === e.currentTarget) done(false); }}>
+    <div className="overlay confirm-overlay" ref={layer} {...backdrop}>
       <div className="confirm-card" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby={req.body ? "confirm-body" : undefined} ref={box} onKeyDown={trap}>
         <h2 id="confirm-title">{req.title}</h2>
         {req.body && <p id="confirm-body">{req.body}</p>}
