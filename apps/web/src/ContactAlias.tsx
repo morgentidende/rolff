@@ -67,8 +67,6 @@ export function ContactAliasDialog({ lang, contacts, save, saved, close }: {
       if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) dismiss();
     }}>
     <div className="sheethead"><h2 id="contact-alias-title">{da ? "Kontaktens kaldenavn" : "Contact nickname"}</h2><button type="button" className="icon" aria-label={da ? "Luk" : "Close"} disabled={busy} onClick={dismiss}>✕</button></div>
-    <p className="meta">{da ? "Kun du kan se dette navn. Personens profil og navn hos andre ændres ikke." : "Only you can see this name. Their profile and name for others are unchanged."}</p>
-    {selected?.pending && <p className="meta" id="contact-alias-pending">{da ? "Personen har ikke accepteret endnu. Kaldenavnet følger med, når invitationen tages imod, og personen kan aldrig se det." : "They have not accepted yet. The nickname carries over once the invitation is accepted, and they can never see it."}</p>}
     {!contacts.length ? null : <>
       {contacts.length > 1 && <label>{da ? "Vælg person" : "Choose person"}<select value={id} disabled={busy} onChange={e => { const c = contacts.find(c => c.user_id === e.target.value); setId(c?.user_id ?? ""); setValue(c?.alias ?? ""); setErr(""); }}><option value="">{da ? "Vælg person…" : "Choose person…"}</option>{contacts.map(c => <option key={c.user_id} value={c.user_id}>{c.alias || c.email}</option>)}</select></label>}
       {selected && <form onSubmit={e => { e.preventDefault(); void submit(value); }}>

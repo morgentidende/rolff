@@ -32,7 +32,17 @@ test('service worker message opens the conversation while the app is on the fron
     await post(w, sw, { type: 'ROLFF_OPEN_CONVERSATION', c: MOR }); await delay(60);
     assert.ok(chatOpen(d)); assert.ok(/^Mor/.test(title(d)));
     await post(w, sw, { type: 'ROLFF_OPEN_CONVERSATION', c: FAR }); await delay(80);
-    assert.ok(chatOpen(d), 'still a chat'); assert.ok(/far@example\.invalid/.test(title(d)) && !/^Mor/.test(title(d)), 'switched to the other conversation (fresh chat, not the old one)');
+    assert.ok(!chatOpen(d), 'a conversation nobody has accepted yet has no chat: back on the front page');
+    assert.ok(d.querySelector('.convrow'), 'front page');
+    await e.close();
+});
+
+test('a push/link to a pending (not yet accepted) conversation lands on the front page, on cold start too', async () => {
+    const e = await env(false, false, (w) => { list(w); fakeWorker(w); w.history.replaceState(null, '', '#open=' + FAR); });
+    await delay(120);
+    assert.ok(!chatOpen(e.d), 'no empty conversation');
+    assert.ok(e.d.querySelector('.convrow'));
+    assert.equal(e.w.location.hash, '');
     await e.close();
 });
 
