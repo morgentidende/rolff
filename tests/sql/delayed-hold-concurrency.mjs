@@ -47,7 +47,8 @@ try{
   const one=async(sql)=>{const c=await client();await auth(c,S);try{const r=await c.query(sql,[mid]);await c.query('commit');return r.rows[0];}catch(e){await c.query('rollback');throw e;}};
   await Promise.all([one('select hold_delayed_message($1) ok'),one('select hold_delayed_message($1) ok')]);
   assert.equal((await db.query('select deliver_after=\'infinity\' h from messages where id=$1',[mid])).rows[0].h,true);
-  await Promise.all([one('select resume_delayed_message($1) due'),one('select hold_delayed_message($1) ok')]);
+  const resumeOnce=async()=>{const h=(await db.query(`select encode(extensions.digest($1,'sha256'),'hex') h`,['Race C'])).rows[0].h;const a=(await db.query(`select test_issue_current_approval($1,$2,$3,'test','hold',null) id`,[S,conv,h])).rows[0].id;const c=await client();await c.query('begin');try{await c.query('select * from resume_held_message($1,$2,$3)',[a,S,mid]);await c.query('commit');}catch(e){await c.query('rollback');throw e;}};
+  await Promise.all([resumeOnce(),one('select hold_delayed_message($1) ok')]);
   const st=(await db.query(`select deliver_after>clock_timestamp() pending from messages where id=$1`,[mid])).rows[0];
   assert.equal(st.pending,true);assert.equal(await released(mid),0);
  });

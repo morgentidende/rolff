@@ -59,16 +59,20 @@ Deno.test("Ret pauses a delayed message on the server; Send saves, X/Genoptag re
   const bubble = await Deno.readTextFile("apps/web/src/MessageBubble.tsx");
   const banner = await Deno.readTextFile("apps/web/src/EditComposer.tsx");
   const mig = await Deno.readTextFile("supabase/migrations/20261120160000_delayed_edit_hold.sql");
-  assert(app.includes("hold_delayed_message") && app.includes("resume_delayed_message"), "client holds on Ret and resumes on cancel");
+  assert(app.includes("hold_delayed_message") && app.includes("resume_message_id"), "client holds on Ret and resumes through send-message");
+  assert(!app.includes("resume_delayed_message") && !mig.includes("resume_delayed_message"), "no client-callable un-pause without moderation");
   assert(app.indexOf("hold_delayed_message") < app.indexOf("setEditId(selected.id)"), "hold is requested before the editor opens");
   assert(app.includes("Beskeden er allerede sendt, så den kan ikke rettes.") && app.includes("has already been sent"), "race message da + en");
   assert(bubble.includes("sat på pause") && bubble.includes('"paused"') && bubble.includes("Genoptag") && bubble.includes('"Resume"'), "paused label da + en");
   assert(banner.includes("sat på pause") && banner.includes("paused"), "editor banner mentions the pause");
   assert(mig.includes("'infinity'::timestamptz"), "held = deliver_after infinity, so every existing release path refuses it");
   assert(mig.includes("pg_advisory_xact_lock(hashtextextended('rolff:receive:'"), "hold serialises with the release path");
+  assert(mig.includes("get_resumable_message") && mig.includes("resume_held_message") && mig.includes("to service_role"), "resume is service-role only and needs an approval");
   assert(!/pg_cron|cron\.schedule|interval '[0-9]+ (hour|day|minute)/.test(mig), "no automatic resume");
   assert(mig.includes("raise exception 'held'"), "send-now cannot override a hold");
   // The edit text is moderated exactly as before: send-message is unchanged and still re-moderates edits.
   const fn = await Deno.readTextFile("supabase/functions/send-message/index.ts");
   assert(fn.includes("update_delayed_message") && fn.includes("issue_reply_approval_v3"), "edit goes through moderation approval");
+  assert(fn.includes("resume_message_id") && fn.includes("resume_held_message") && fn.includes("get_resumable_message"), "resume re-runs the pipeline on the stored text");
+  assert(fn.indexOf("get_resumable_message") < fn.indexOf("recipient_filter_snapshot") && fn.indexOf("recipient_filter_snapshot") < fn.indexOf("resume_held_message"), "rules and model run before the hold can end");
 });

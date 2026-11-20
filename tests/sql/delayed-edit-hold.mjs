@@ -16,6 +16,9 @@ export async function testDelayedEditHold({ db, as, svc, hash, t, assert, reject
     const aid = (await svc(`select test_issue_current_approval($1,$2,$3,'test','hold',null) id`, [S, conv, await hash(body)]))[0].id;
     return svc(`select * from update_delayed_message($1,$2,$3,$4)`, [aid, S, mid, body]);
   };
+  const approve = async (body) => (await svc(`select test_issue_current_approval($1,$2,$3,'test','hold',null) id`, [S, conv, await hash(body)]))[0].id;
+  // Resume = fresh moderation approval for exactly the stored text (send-message issues it only if the full pipeline allows).
+  const resume = async (mid, body, who = S) => svc(`select * from resume_held_message($1,$2,$3)`, [await approve(body), who, mid]);
   const row = async (mid) => (await db.query(`select body, deliver_after, deliver_after = 'infinity' as held, deliver_after > clock_timestamp() as pending, extract(epoch from (deliver_after - clock_timestamp())) as secs from messages where id=$1`, [mid])).rows[0];
   const recvBodies = async () => (await as(R, `select body from get_messages_v3($1)`, [conv])).map((m) => m.body);
   const jobs = async () => (await db.query(`select count(*)::int n from notification_jobs where user_id=$1`, [R])).rows[0].n;
@@ -72,7 +75,8 @@ export async function testDelayedEditHold({ db, as, svc, hash, t, assert, reject
     const mid = await send('Kun min', 'hold-key-004');
     await rejects(as(R, `select hold_delayed_message($1)`, [mid]), /not_found/);
     await rejects(as(Z, `select hold_delayed_message($1)`, [mid]), /not_found/);
-    await rejects(as(R, `select resume_delayed_message($1)`, [mid]), /not_found/);
+    await rejects(svc(`select * from resume_held_message(gen_random_uuid(),$1,$2)`, [R, mid]), /not_found/);
+    await rejects(svc(`select * from get_resumable_message($1,$2)`, [R, mid]), /not_found/);
     assert.equal((await row(mid)).held, false);
     await as(S, `select cancel_delayed_message($1)`, [mid]);
   });
@@ -83,7 +87,8 @@ export async function testDelayedEditHold({ db, as, svc, hash, t, assert, reject
     assert.ok((await recvBodies()).includes('Allerede sendt'));
     await rejects(as(S, `select hold_delayed_message($1)`, [mid]), /no_longer_pending/);
     await rejects(edit(mid, 'Rettet efter levering'), /no_longer_pending/);
-    await rejects(as(S, `select resume_delayed_message($1)`, [mid]), /no_longer_pending/);
+    await rejects(resume(mid, 'Allerede sendt'), /no_longer_pending/);
+    await rejects(svc(`select * from get_resumable_message($1,$2)`, [S, mid]), /no_longer_pending/);
     assert.equal((await row(mid)).body, 'Allerede sendt');
     assert.equal((await row(mid)).held, false);
   });
@@ -136,27 +141,58 @@ export async function testDelayedEditHold({ db, as, svc, hash, t, assert, reject
     await as(S, `select cancel_delayed_message($1)`, [mid]);
   });
 
-  await t('Annullér rettelse (X): genoptag giver en ny fuld forsinkelse med den uændrede original', async () => {
+  await t('Annullér rettelse (X)/Genoptag: kun med ny godkendelse; så ny fuld forsinkelse med den uændrede original', async () => {
     const mid = await send('Uændret original', 'hold-key-009');
     await as(S, `select hold_delayed_message($1)`, [mid]);
     await tryEveryDeliveryPath();
     assert.equal(await released(mid), 0);
-    const due = (await as(S, `select resume_delayed_message($1) due`, [mid]))[0].due;
+    // The stored text is what gets re-moderated.
+    const stored = (await svc(`select * from get_resumable_message($1,$2)`, [S, mid]))[0];
+    assert.equal(stored.body, 'Uændret original'); assert.equal(stored.held, true); assert.equal(stored.conversation_id, conv);
+    // Fail strict: no approval (the pipeline blocked now) / approval for other text / foreign sender -> stays held.
+    await rejects(svc(`select * from resume_held_message(gen_random_uuid(),$1,$2)`, [S, mid]), /approval_invalid/);
+    await rejects(svc(`select * from resume_held_message($1,$2,$3)`, [await approve('Helt anden tekst'), S, mid]), /approval_invalid/);
+    await rejects(resume(mid, 'Uændret original', R), /not_found/);
+    assert.equal((await row(mid)).held, true);
+    await tryEveryDeliveryPath();
+    assert.equal(await released(mid), 0);
+    // An approval is single-use.
+    const aid = await approve('Uændret original');
+    const due = (await svc(`select * from resume_held_message($1,$2,$3)`, [aid, S, mid]))[0].due;
     const r = await row(mid);
     assert.equal(r.held, false);
     assert.equal(r.body, 'Uændret original');
+    assert.equal((await db.query(`select edited_at from messages where id=$1`, [mid])).rows[0].edited_at, null, 'resume is not an edit');
     assert.ok(r.secs > 28 && r.secs <= 30.5, 'fresh full delay, got ' + r.secs);
     assert.ok(new Date(due) > new Date());
-    // Still hidden during the fresh delay; idempotent resume keeps the same deadline.
+    // Still hidden during the fresh delay; a second resume is idempotent and keeps the same deadline.
     await tryEveryDeliveryPath();
     assert.equal(await released(mid), 0);
-    assert.equal(new Date((await as(S, `select resume_delayed_message($1) due`, [mid]))[0].due).getTime(), new Date(due).getTime());
+    assert.equal(new Date((await svc(`select * from resume_held_message($1,$2,$3)`, [aid, S, mid]))[0].due).getTime(), new Date(due).getTime());
     const mine = (await as(S, `select * from get_messages_v3($1)`, [conv])).find((m) => m.id === mid);
     assert.equal(mine.held, false);
     assert.ok(mine.deliver_after);
     await db.query(`update messages set deliver_after = clock_timestamp() - interval '1 second' where id=$1`, [mid]);
     await as(R, `select receive_now()`);
     assert.ok((await recvBodies()).includes('Uændret original'));
+  });
+
+  await t('Genoptag kan ikke kaldes direkte af klienten (ingen vej uden moderering)', async () => {
+    const mid = await send('Kun via moderering', 'hold-key-013');
+    await as(S, `select hold_delayed_message($1)`, [mid]);
+    await rejects(as(S, `select * from resume_held_message(gen_random_uuid(),$1,$2)`, [S, mid]), /permission denied/);
+    await rejects(as(S, `select * from get_resumable_message($1,$2)`, [S, mid]), /permission denied/);
+    await rejects(as(S, `select resume_delayed_message($1)`, [mid]), /does not exist/);
+    assert.equal((await row(mid)).held, true);
+    await as(S, `select cancel_delayed_message($1)`, [mid]);
+  });
+
+  await t('Vedhæftninger kan ikke sættes på pause (kun tekst kan rettes og gen-modereres)', async () => {
+    const mid = await send('Med fil', 'hold-key-014');
+    await db.query(`insert into message_attachments(message_id,mime,name,size,pages,data) values ($1,'image/png','x.png',4,null,'\\x89504e47')`, [mid]);
+    await rejects(as(S, `select hold_delayed_message($1)`, [mid]), /not_editable/);
+    assert.equal((await row(mid)).held, false);
+    await as(S, `select cancel_delayed_message($1)`, [mid]);
   });
 
   await t('Slet virker mens beskeden er holdt; modtageren ser aldrig noget', async () => {

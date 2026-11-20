@@ -15,7 +15,7 @@ const mine = (over = {}) => ({
     ...over,
 });
 const hold = (w) => w.QA.calls.filter((c) => c.name === 'hold_delayed_message');
-const resume = (w) => w.QA.calls.filter((c) => c.name === 'resume_delayed_message');
+const resume = (w) => w.QA.calls.filter((c) => c.function === 'send-message' && c.args.resume_message_id);
 async function open(w, d, messages) {
     w.__QA_FIXTURE = { messages };
     await click(d.querySelector('.convbtn'));
@@ -82,5 +82,62 @@ test('A message that is still paused (app was closed while editing) shows "sat p
     await click(button(d, 'Genoptag')); await delay(100);
     assert.equal(resume(w).length, 1);
     assert.match(d.querySelector('.msg-pending-sec').textContent, /\d+ s/);
+    await e.close();
+});
+
+const notDelivered = (w) => assert.equal(w.QA.calls.filter((c) => c.name === 'release_delayed_message').length, 0);
+
+test('Resume (X) re-moderates the stored text on the server first: the request is a full send-message call with resume_message_id', async () => {
+    const e = await env(); const { w, d } = e;
+    await open(w, d, [mine()]);
+    await click(button(d, 'Ret')); await delay(80);
+    await click(label(d, 'Annullér rettelse')); await delay(100);
+    assert.equal(resume(w).length, 1);
+    assert.equal(resume(w)[0].args.resume_message_id, '40000000-0000-4000-8000-0000000000aa');
+    assert.equal(w.QA.calls.filter((c) => /^resume_delayed_message$/.test(c.name || '')).length, 0, 'no client-side un-pause RPC exists');
+    await e.close();
+});
+
+for (const [mode, re] of [['blocked', /anklagende/], ['blocked_word', /blokeret ordet\/sætningen "syntetisk"/], ['private_boundary', /blokeret et emne|privat modtagerindstilling/], ['technical', /./]]) {
+    test(`Resume that now hits a block (${mode}): stays paused, normal block reply is shown, editor opens, nothing is sent`, async () => {
+        const e = await env(); const { w, d } = e;
+        w.__QA_RESUME_RESULT = mode;
+        await open(w, d, [mine({ held: true, deliver_after: null })]);
+        await click(button(d, 'Genoptag')); await delay(120);
+        assert.equal(resume(w).length, 1);
+        assert.match(d.querySelector('.msg-pending-sec').textContent, /sat på pause/, 'still paused');
+        assert.equal(d.querySelector('.composer-send.is-countdown'), null);
+        assert.match(banner(d).textContent, /sat på pause/, 'editor open on the held text');
+        assert.equal(composer(d).value, 'Godmorgen hej');
+        if (mode !== 'technical') assert.match(d.body.textContent, re);
+        notDelivered(w);
+        await e.close();
+    });
+}
+
+test('Blocked on resume from the X button: editor stays open with the sender\'s own text; X again retries the check', async () => {
+    const e = await env(); const { w, d } = e;
+    await open(w, d, [mine()]);
+    await click(button(d, 'Ret')); await delay(80);
+    w.__QA_RESUME_RESULT = 'blocked';
+    await click(label(d, 'Annullér rettelse')); await delay(100);
+    assert.ok(banner(d), 'editor still open');
+    assert.match(d.body.textContent, /anklagende/);
+    assert.match(d.querySelector('.msg-pending-sec').textContent, /sat på pause/);
+    w.__QA_RESUME_RESULT = 'accepted';
+    await click(label(d, 'Annullér rettelse')); await delay(100);
+    assert.equal(resume(w).length, 2);
+    assert.equal(banner(d), null);
+    assert.match(d.querySelector('.msg-pending-sec').textContent, /\d+ s/, 'countdown is back');
+    await e.close();
+});
+
+test('Resume when the message is already gone: clear toast, editor closes', async () => {
+    const e = await env(); const { w, d } = e;
+    await open(w, d, [mine({ held: true, deliver_after: null })]);
+    w.__QA_RESUME_RESULT = 'gone';
+    await click(button(d, 'Genoptag')); await delay(100);
+    assert.match(d.body.textContent, /findes ikke længere som ventende/);
+    assert.equal(banner(d), null);
     await e.close();
 });

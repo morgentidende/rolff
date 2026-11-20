@@ -787,6 +787,7 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
   };
   const [editId, setEditId] = useState<string | null>(null);
   const editBusy = useRef(false);
+  const resumeBusy = useRef(false);
   const [tickNow, setTickNow] = useState(() => Date.now());
   // Never auto-reload for a new app version mid-send or with an attachment picked (text drafts survive a reload).
   useEffect(() => { const k = `composer:${conv.id}`; setReloadBlocked(k, sending || !!file || !!editId); return () => setReloadBlocked(k, false); }, [sending, file, editId, conv.id]);
@@ -917,8 +918,12 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
     let r; try { r = await callFn("send-message", { conversation_id: conv.id, body: text, reply_to_id: editId ? null : (reply?.id ?? null), idempotency_key: saved.key, lang, ...(editId ? { edit_message_id: editId } : {}) }); } catch { r = { status: 0, data: null }; }
     setBusy(false);
     if (r.status === 200 && r.data?.status === "accepted") { setText(""); setReply(null); setEditId(null); localStorage.removeItem(draftKey); localStorage.removeItem(replyKey); localStorage.removeItem(keyStore); setStatus({ kind: "accepted" }); setAcceptedSeq((x) => x + 1); armFlash(r.data?.message_id); load(); }
-    else if (r.status === 200 && r.data?.status === "clarification_required") setStatus({ kind: "clarification" });
-    else if (r.status === 200 && r.data?.status === "blocked") setStatus({ kind: "blocked", spans: r.data.spans ?? [], blockedText: text, suggestion: typeof r.data.suggestion === "string" ? r.data.suggestion : "", reason: r.data.reason_code, explanation: cleanExplanation(r.data.explanation), house: cleanHouse(r.data.house) });
+    else showSendFailure(r, text);
+  };
+  // Same replies for every send-message outcome that is not "accepted" (send, edit-save and resume).
+  const showSendFailure = (r: { status: number; data: any }, shown: string) => {
+    if (r.status === 200 && r.data?.status === "clarification_required") setStatus({ kind: "clarification" });
+    else if (r.status === 200 && r.data?.status === "blocked") setStatus({ kind: "blocked", spans: r.data.spans ?? [], blockedText: shown, suggestion: typeof r.data.suggestion === "string" ? r.data.suggestion : "", reason: r.data.reason_code, explanation: cleanExplanation(r.data.explanation), house: cleanHouse(r.data.house) });
     else if (r.status === 200 && r.data?.status === "private_boundary") setStatus({ kind: "note", blockedText: da ? "Beskeden kan ikke sendes på grund af en privat modtagerindstilling. Ret beskeden og prøv igen." : "Not sent due to a private recipient setting. Edit your message and retry." });
     else if (r.status === 200 && r.data?.status === "blocked_word") setStatus({ kind: "note", blockedText: da ? `Beskeden blev ikke sendt: Modtageren har blokeret ordet/sætningen "${r.data.word}". Ret beskeden og prøv igen.` : `The message was not sent: the recipient has blocked the word/phrase "${r.data.word}". Edit the message and try again.` });
     else if (r.status === 200 && r.data?.status === "rule") setStatus({ kind: "note", blockedText: ({ emoji: da ? "Beskeden blev ikke sendt: Emojis er ikke tilladt i Rolff. Skriv det med ord." : "Not sent: emojis are not allowed in Rolff. Use words.", caps: da ? "Beskeden blev ikke sendt: Den er skrevet med store bogstaver, som kan opfattes som råb." : "Not sent: all caps can read as shouting.", repeat: da ? "Beskeden blev ikke sendt: Du har lige sendt den samme besked." : "Not sent: you just sent the same message." } as Record<string, string>)[r.data.rule] ?? "" });
@@ -995,17 +1000,32 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
       load();
     } finally { editBusy.current = false; }
   };
-  // X on the edit banner, or "Genoptag" on a paused message: fresh full delay with the unchanged original.
+  // X on the edit banner, or "Genoptag" on a paused message. Never a plain "un-pause": the stored text goes through
+  // the full moderation pipeline again (house rules, blocked words/topics, model) against the CURRENT recipient
+  // lists, in send-message. Only if it still passes does a fresh full delay start. Otherwise it stays paused, the
+  // normal block reply is shown and the editor opens on the text so it can be changed or deleted (fail strict).
   const resumeHeld = async (selected: Message | string) => {
     const id = typeof selected === "string" ? selected : selected.id;
-    const { error } = await supabase.rpc("resume_delayed_message", { p_id: id });
-    if (error) {
-      const gone = /no_longer_pending|not_found/.test(error.message ?? "");
-      showToast(gone ? (da ? "Beskeden findes ikke længere som ventende." : "The message is no longer waiting to be sent.") : (da ? "Kunne ikke genoptage. Prøv igen." : "Could not resume. Try again."), { at: "top", ms: 3000 });
+    const msg = msgs.find((x) => x.id === id);
+    if (resumeBusy.current) return false;
+    resumeBusy.current = true; setBusy(true); setStatus(null);
+    let r: { status: number; data: any }; try { r = await callFn("send-message", { conversation_id: conv.id, body: msg?.body ?? "", idempotency_key: crypto.randomUUID(), lang, resume_message_id: id }); } catch { r = { status: 0, data: null }; }
+    resumeBusy.current = false; setBusy(false);
+    if (r.status === 200 && r.data?.status === "accepted") {
+      if (editId === id) { setEditId(null); setText(""); }
+      load();
+      return true;
     }
-    if (editId === id || (error && /no_longer_pending|not_found/.test(error.message ?? ""))) { setEditId(null); setText(""); }
+    if (r.data?.error === "no_longer_pending") {
+      setEditId(null); setText("");
+      showToast(da ? "Beskeden findes ikke længere som ventende." : "The message is no longer waiting to be sent.", { at: "top", ms: 3000 });
+      load();
+      return false;
+    }
+    if (msg && editId !== id) { setReply(null); setEditId(id); setText(msg.body); }
+    showSendFailure(r, msg?.body ?? "");
     load();
-    return !error;
+    return false;
   };
   const askCancelDelayed = async (selected: Message) => {
     const ok = await confirmDialog({
@@ -1091,7 +1111,7 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
       <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">{status?.kind === "accepted" && <span key={acceptedSeq}>{t.accepted}</span>}</div>
       {conv.role !== "reader" ? (
         <div className="card composer" ref={composerRootRef}><fieldset className="composer-fields" disabled={sending}>
-          <ComposerInput lang={lang} text={text} onText={setText} textareaRef={composerRef} plan={plan} cap={cap} busy={sending} file={file} onFile={setFile} openPlans={openPlans} retry={!!retryKey} canSend={!!file || !!text.trim()} onSend={() => { if (file) attachmentSend.current?.(); else send(); }} countdownUntil={!file && !text.trim() && !editId && pendingSend ? pendingSend.deliver_after : null} onSendNow={() => { if (pendingSend) void releaseNow(pendingSend.id); }} leading={editId ? <EditComposer lang={lang} onCancel={() => { const id = editId; void (id ? resumeHeld(id) : Promise.resolve()).finally(() => { setEditId(null); setText(""); composerRef.current?.focus(); }); }} /> : reply ? <ReplyComposer who={replyWho(reply)} body={reply.body} unavailable={reply.body == null} lang={lang} onCancel={() => { setReply(null); composerRef.current?.focus(); }} /> : null} statusSlot={<LunaIndicator checking={sending} accepted={status?.kind === "accepted"} label={t.sending} pendingText={sending ? (file ? (text.trim() || file.name) : text) : undefined} />} recipientBlocks={recipientBlocks} />
+          <ComposerInput lang={lang} text={text} onText={setText} textareaRef={composerRef} plan={plan} cap={cap} busy={sending} file={file} onFile={setFile} openPlans={openPlans} retry={!!retryKey} canSend={!!file || !!text.trim()} onSend={() => { if (file) attachmentSend.current?.(); else send(); }} countdownUntil={!file && !text.trim() && !editId && pendingSend ? pendingSend.deliver_after : null} onSendNow={() => { if (pendingSend) void releaseNow(pendingSend.id); }} leading={editId ? <EditComposer lang={lang} onCancel={() => { const id = editId; if (!id) return; void resumeHeld(id).then((ok) => { if (ok) composerRef.current?.focus(); }); }} /> : reply ? <ReplyComposer who={replyWho(reply)} body={reply.body} unavailable={reply.body == null} lang={lang} onCancel={() => { setReply(null); composerRef.current?.focus(); }} /> : null} statusSlot={<LunaIndicator checking={sending} accepted={status?.kind === "accepted"} label={t.sending} pendingText={sending ? (file ? (text.trim() || file.name) : text) : undefined} />} recipientBlocks={recipientBlocks} />
           <AttachBar lang={lang} conv={conv.id} plan={plan} openPlans={openPlans} caption={text} file={file} setFile={setFile} sendRef={attachmentSend} cap={cap} replyTo={reply?.id ?? null} onBusy={setAttachmentBusy} limitMsg={limitMsg} sent={(messageId) => { setText(""); setReply(null); localStorage.removeItem(draftKey); localStorage.removeItem(replyKey); setStatus({ kind: "accepted" }); setAcceptedSeq((x) => x + 1); armFlash(messageId); load(); loadLim(); }} />
           {(() => { const wait = lim?.next_at ? Math.ceil((new Date(lim.next_at).getTime() - Date.now()) / 1000) : 0; return wait > 0 ? <p className="meta" role="status">{da ? `Du kan sende igen ${waitText(wait, true)}.` : `You can send again ${waitText(wait, false)}.`}</p> : null; })()}
         </fieldset></div>) : <div className="notice" role="note">{t.readOnly}</div>}
