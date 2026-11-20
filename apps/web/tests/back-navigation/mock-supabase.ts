@@ -63,7 +63,19 @@ function rpc(name: string, args: any) {
         data = [{ next_at: null }];
     const qa = (globalThis as any).__QA_FIXTURE as { messages?: any[]; invites?: any[] } | undefined;
     if (name === 'get_messages_v2' || name === 'get_messages_v3')
-        data = qa?.messages ?? [{ id: '40000000-0000-4000-8000-000000000001', sender_id: uid, sender_email: 'tester@example.invalid', body: 'Kun en opdigtet testbesked.', created_at: '2026-11-07T08:00:00Z', mine: true }];
+        data = qa?.messages?.map((m: any) => ({ ...m })) ?? [{ id: '40000000-0000-4000-8000-000000000001', sender_id: uid, sender_email: 'tester@example.invalid', body: 'Kun en opdigtet testbesked.', created_at: '2026-11-07T08:00:00Z', mine: true }];
+    // Delayed-message edit-hold (fabricated). __QA_HOLD_RESULT = 'sent' simulates "already delivered".
+    if (name === 'hold_delayed_message' || name === 'resume_delayed_message' || name === 'cancel_delayed_message') {
+        const m = qa?.messages?.find((x: any) => x.id === args?.p_id);
+        if (name === 'hold_delayed_message' && (globalThis as any).__QA_HOLD_RESULT === 'sent') {
+            const failed: any = Promise.resolve({ data: null, error: { message: 'no_longer_pending' } });
+            failed.setHeader = () => failed;
+            return failed;
+        }
+        if (m && name === 'hold_delayed_message') { m.held = true; m.deliver_after = null; data = true; }
+        if (m && name === 'resume_delayed_message') { m.held = false; m.deliver_after = new Date(Date.now() + 30000).toISOString(); data = m.deliver_after; }
+        if (m && name === 'cancel_delayed_message') qa!.messages = qa!.messages!.filter((x: any) => x !== m);
+    }
     if (name === 'toggle_message_thumb') {
         const msgs = qa?.messages;
         const m = msgs?.find((x: any) => x.id === args?.p_message);

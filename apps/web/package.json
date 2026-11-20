@@ -13,7 +13,9 @@
     "test:blocking": "node --test tests/blocking-lists/*.test.cjs",
     "test:court-export": "node --test tests/court-export/*.test.cjs",
     "test:native": "node --test tests/native-ready/*.test.cjs",
-    "test:dialogs": "node --test tests/dialog-polish/*.test.cjs"
+    "test:dialogs": "node --test tests/dialog-polish/*.test.cjs",
+    "test:hold": "node --test tests/delayed-hold/*.test.cjs",
+    "test:ring": "node --test tests/composer-ring/*.test.cjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2",

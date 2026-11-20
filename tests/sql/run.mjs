@@ -649,6 +649,8 @@ const {testMessageThumbs}=await import('./message-thumbs.mjs');
 await testMessageThumbs({db,as,svc,hash,t,assert,rejects});
 const {testDelayedMessages}=await import('./delayed-messages.mjs');
 await testDelayedMessages({db,as,svc,hash,t,assert,rejects});
+const {testDelayedEditHold}=await import('./delayed-edit-hold.mjs');
+await testDelayedEditHold({db,as,svc,hash,t,assert,rejects});
 const {testBlockAttachments}=await import('./block-attachments.mjs');
 await testBlockAttachments({db,as,svc,hash,t,assert,rejects});
 const {testMailLogInvites}=await import('./mail-log-invites.mjs');

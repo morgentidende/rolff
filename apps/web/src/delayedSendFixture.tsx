@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { EditComposer } from "./EditComposer";
 import { ComposerInput } from "./ComposerInput";
 import { MessageBubble, type Message } from "./MessageBubble";
 import { countdownAria } from "./delayedSend";
@@ -8,7 +9,7 @@ import "./styles.css";
 const params = new URLSearchParams(location.search);
 const lang = params.get("lang") === "en" ? "en" : "da";
 const theme = params.get("theme") === "dark" ? "dark" : "light";
-const view = params.get("view") === "menu" || params.get("view") === "pending" ? params.get("view")! : "countdown";
+const view = ["menu", "pending", "held"].includes(params.get("view") ?? "") ? params.get("view")! : "countdown";
 document.documentElement.lang = lang;
 document.documentElement.dataset.theme = theme;
 document.documentElement.style.setProperty("--app-h", "844px");
@@ -26,6 +27,9 @@ const pending: Message = {
   body: lang === "da" ? "Ja, jeg er der kl. 16." : "Yes, I will be there at 4.",
   created_at: "2026-11-13T08:00:00.000Z", mine: true, deliver_after: deliverAfter,
 };
+
+// Paused state: Ret was tapped, the server holds the message (no countdown), the editor banner is open.
+const held: Message = { ...pending, id: "h1", deliver_after: null, held: true };
 
 function MenuOpen() {
   const da = lang === "da";
@@ -67,12 +71,14 @@ function Fixture() {
       </header>
       <div className="msgs">
         <MessageBubble m={theirs} lang={lang} tailed onReply={() => {}} />
-        <MessageBubble m={pending} lang={lang} tailed pendingSec={27} onReply={() => {}} onEdit={() => {}} onDelete={() => {}} />
+        {view === "held"
+          ? <MessageBubble m={held} lang={lang} tailed pendingSec={null} onReply={() => {}} onEdit={() => {}} onDelete={() => {}} onResume={() => {}} />
+          : <MessageBubble m={pending} lang={lang} tailed pendingSec={27} onReply={() => {}} onEdit={() => {}} onDelete={() => {}} />}
       </div>
       <div className="card composer">
         <ComposerInput
           lang={lang}
-          text={text}
+          text={view === "held" ? held.body : text}
           onText={setText}
           textareaRef={ref}
           plan="text"
@@ -81,8 +87,9 @@ function Fixture() {
           file={null}
           onFile={() => {}}
           openPlans={() => {}}
-          canSend={!!text.trim()}
-          countdownUntil={view === "menu" ? null : deliverAfter}
+          canSend={view === "held" || !!text.trim()}
+          leading={view === "held" ? <EditComposer lang={lang} onCancel={() => {}} /> : null}
+          countdownUntil={view === "menu" || view === "held" ? null : deliverAfter}
           onSend={() => {}}
           onSendNow={() => {}}
         />

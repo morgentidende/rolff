@@ -11,6 +11,7 @@ import { ComposerInput } from "./ComposerInput";
 import { blockedAttachmentNotice, type RecipientAttachmentBlocks } from "./attachmentBlocks";
 import { effectiveCharLimit, textRetryKey } from "./composerLimits";
 import { MessageBubble, ReplyComposer, type Message } from "./MessageBubble";
+import { EditComposer } from "./EditComposer";
 import { isPendingSend, pendingSeconds, soonestPending } from "./delayedSend";
 import { invActions, invText, invitePoints, type PendingInv } from "./inviteText";
 import { Toast, showToast } from "./toast";
@@ -688,20 +689,6 @@ function markAll(text: string, q: string, current: boolean): (string | React.Rea
   out.push(text.slice(i)); return out;
 }
 
-function EditComposer({ lang, onCancel }: { lang: Lang; onCancel: () => void }) {
-  const da = lang === "da";
-  return (
-    <div className="reply-composer" role="status">
-      <div className="reply-composer-main">
-        <span className="reply-composer-who">{da ? "Retter forsinket besked" : "Editing delayed message"}</span>
-        <p className="reply-composer-text">{da ? "Send gemmer rettelsen og starter 30 sekunder forfra." : "Send saves the edit and restarts the 30-second delay."}</p>
-      </div>
-      <button type="button" className="reply-composer-close" aria-label={da ? "Annullér rettelse" : "Cancel edit"} onClick={onCancel}>
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
-      </button>
-    </div>
-  );
-}
 
 const Icon = ({ d }: { d: React.ReactNode }) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">{d}</svg>;
 
@@ -778,9 +765,10 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
     showToast(da ? "Lyden er slået til" : "Unmuted", { tone: "success", ms: 3000, at: "top" });
   };
   const [editId, setEditId] = useState<string | null>(null);
+  const editBusy = useRef(false);
   const [tickNow, setTickNow] = useState(() => Date.now());
   // Never auto-reload for a new app version mid-send or with an attachment picked (text drafts survive a reload).
-  useEffect(() => { const k = `composer:${conv.id}`; setReloadBlocked(k, sending || !!file); return () => setReloadBlocked(k, false); }, [sending, file, conv.id]);
+  useEffect(() => { const k = `composer:${conv.id}`; setReloadBlocked(k, sending || !!file || !!editId); return () => setReloadBlocked(k, false); }, [sending, file, editId, conv.id]);
   const retryKey = !file ? textRetryKey(localStorage.getItem(`idem:${conv.id}`), text, reply?.id ?? null) : null;
   const attachmentSend = useRef<(() => void) | null>(null);
   const loadLim = useCallback(async () => { const { data } = await supabase.rpc("get_my_send_limits", { conv: conv.id }); setLim((data as SendLimits[])?.[0] ?? null); }, [conv.id]);
@@ -834,6 +822,7 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
   }, [msgs]);
   const releaseNow = useCallback(async (id: string) => {
     const { error } = await supabase.rpc("release_delayed_message", { p_id: id });
+    if (error && /held/.test(error.message ?? "")) { load(); return false; }
     if (error) { showToast(lang === "da" ? "Beskeden kunne ikke sendes nu. Prøv igen." : "Could not send the message now. Try again.", { at: "top", ms: 3000 }); return false; }
     setEditId((cur) => cur === id ? null : cur);
     load();
@@ -961,12 +950,41 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
     return m.sender_name || m.sender_email || (da ? "Modtageren" : "The recipient");
   };
   const sameSender = (a: Msg, b: Msg) => a.mine === b.mine && ((a.sender_id && b.sender_id) ? a.sender_id === b.sender_id : true);
-  const beginEdit = (selected: Message) => {
-    setReply(null);
-    setEditId(selected.id);
-    setText(selected.body);
-    setStatus(null);
-    setReplyFocus((n) => n + 1);
+  // Ret: first pause the message on the server (it must never be delivered while it is being edited,
+  // even if the app is closed). If it was already delivered, say so and do not open the editor.
+  const beginEdit = async (selected: Message) => {
+    if (editBusy.current) return;
+    editBusy.current = true;
+    try {
+      const { error } = await supabase.rpc("hold_delayed_message", { p_id: selected.id });
+      if (error) {
+        const gone = /no_longer_pending|not_found/.test(error.message ?? "");
+        if (editId === selected.id) setEditId(null);
+        if (gone) setStatus({ kind: "note", blockedText: da ? "Beskeden er allerede sendt, så den kan ikke rettes." : "The message has already been sent, so it cannot be edited." });
+        else showToast(da ? "Beskeden kunne ikke sættes på pause. Prøv igen." : "Could not pause the message. Try again.", { at: "top", ms: 3000 });
+        load();
+        return;
+      }
+      setMsgs((cur) => cur.map((x) => x.id === selected.id ? { ...x, held: true, deliver_after: null } : x));
+      setReply(null);
+      setEditId(selected.id);
+      setText(selected.body);
+      setStatus(null);
+      setReplyFocus((n) => n + 1);
+      load();
+    } finally { editBusy.current = false; }
+  };
+  // X on the edit banner, or "Genoptag" on a paused message: fresh full delay with the unchanged original.
+  const resumeHeld = async (selected: Message | string) => {
+    const id = typeof selected === "string" ? selected : selected.id;
+    const { error } = await supabase.rpc("resume_delayed_message", { p_id: id });
+    if (error) {
+      const gone = /no_longer_pending|not_found/.test(error.message ?? "");
+      showToast(gone ? (da ? "Beskeden findes ikke længere som ventende." : "The message is no longer waiting to be sent.") : (da ? "Kunne ikke genoptage. Prøv igen." : "Could not resume. Try again."), { at: "top", ms: 3000 });
+    }
+    if (editId === id || (error && /no_longer_pending|not_found/.test(error.message ?? ""))) { setEditId(null); setText(""); }
+    load();
+    return !error;
   };
   const askCancelDelayed = async (selected: Message) => {
     const ok = await confirmDialog({
@@ -1039,7 +1057,7 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
         {msgs.length === 0 && <p className="meta">{t.empty}</p>}
         {groupMessagesByDay(msgs).map((g) => <section className="day-group" key={g.key}>
           <div className="day-sep" role="separator" aria-label={dayLabel(g.msgs[0].created_at, lang)}><span>{dayLabel(g.msgs[0].created_at, lang)}</span></div>
-          {g.msgs.map((m, j) => { const i = g.start + j; const newDay = j === 0; return <Fragment key={m.id}>{eventsBefore(events, msgs, i).map((e) => <EventNotice key={e.id} e={e} lang={lang} />)}<MessageBubble m={m} lang={lang} index={i} hit={i === curIdx} tailed={newDay || !sameSender(msgs[i - 1], m)} flash={m.mine && m.id === flashId} canReply={conv.role !== "reader" && !sending} canReact={conv.role !== "reader" && !isPendingSend(m.deliver_after, tickNow)} onReply={beginReply} onThumb={toggleThumb} pendingSec={pendingSeconds(m.deliver_after, tickNow)} onEdit={m.mine && isPendingSend(m.deliver_after, tickNow) && !m.att_mime ? beginEdit : undefined} onDelete={m.mine && isPendingSend(m.deliver_after, tickNow) ? askCancelDelayed : undefined}>{q ? markAll(m.body, q, i === curIdx) : m.body}{m.att_mime && <AttachmentView lang={lang} m={m} />}</MessageBubble></Fragment>; })}
+          {g.msgs.map((m, j) => { const i = g.start + j; const newDay = j === 0; return <Fragment key={m.id}>{eventsBefore(events, msgs, i).map((e) => <EventNotice key={e.id} e={e} lang={lang} />)}<MessageBubble m={m} lang={lang} index={i} hit={i === curIdx} tailed={newDay || !sameSender(msgs[i - 1], m)} flash={m.mine && m.id === flashId} canReply={conv.role !== "reader" && !sending} canReact={conv.role !== "reader" && !isPendingSend(m.deliver_after, tickNow) && !m.held} onReply={beginReply} onThumb={toggleThumb} pendingSec={pendingSeconds(m.deliver_after, tickNow)} onEdit={m.mine && (isPendingSend(m.deliver_after, tickNow) || m.held) && !m.att_mime ? beginEdit : undefined} onDelete={m.mine && (isPendingSend(m.deliver_after, tickNow) || m.held) ? askCancelDelayed : undefined} onResume={m.mine && m.held ? resumeHeld : undefined}>{q ? markAll(m.body, q, i === curIdx) : m.body}{m.att_mime && <AttachmentView lang={lang} m={m} />}</MessageBubble></Fragment>; })}
         </section>)}
         {eventsBefore(events, msgs, msgs.length).map((e) => <EventNotice key={e.id} e={e} lang={lang} />)}
         <div ref={endRef} />
@@ -1052,7 +1070,7 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
       <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">{status?.kind === "accepted" && <span key={acceptedSeq}>{t.accepted}</span>}</div>
       {conv.role !== "reader" ? (
         <div className="card composer" ref={composerRootRef}><fieldset className="composer-fields" disabled={sending}>
-          <ComposerInput lang={lang} text={text} onText={setText} textareaRef={composerRef} plan={plan} cap={cap} busy={sending} file={file} onFile={setFile} openPlans={openPlans} retry={!!retryKey} canSend={!!file || !!text.trim()} onSend={() => { if (file) attachmentSend.current?.(); else send(); }} countdownUntil={!file && !text.trim() && !editId && pendingSend ? pendingSend.deliver_after : null} onSendNow={() => { if (pendingSend) void releaseNow(pendingSend.id); }} leading={editId ? <EditComposer lang={lang} onCancel={() => { setEditId(null); setText(""); composerRef.current?.focus(); }} /> : reply ? <ReplyComposer who={replyWho(reply)} body={reply.body} unavailable={reply.body == null} lang={lang} onCancel={() => { setReply(null); composerRef.current?.focus(); }} /> : null} statusSlot={<LunaIndicator checking={sending} accepted={status?.kind === "accepted"} label={t.sending} pendingText={sending ? (file ? (text.trim() || file.name) : text) : undefined} />} recipientBlocks={recipientBlocks} />
+          <ComposerInput lang={lang} text={text} onText={setText} textareaRef={composerRef} plan={plan} cap={cap} busy={sending} file={file} onFile={setFile} openPlans={openPlans} retry={!!retryKey} canSend={!!file || !!text.trim()} onSend={() => { if (file) attachmentSend.current?.(); else send(); }} countdownUntil={!file && !text.trim() && !editId && pendingSend ? pendingSend.deliver_after : null} onSendNow={() => { if (pendingSend) void releaseNow(pendingSend.id); }} leading={editId ? <EditComposer lang={lang} onCancel={() => { const id = editId; void (id ? resumeHeld(id) : Promise.resolve()).finally(() => { setEditId(null); setText(""); composerRef.current?.focus(); }); }} /> : reply ? <ReplyComposer who={replyWho(reply)} body={reply.body} unavailable={reply.body == null} lang={lang} onCancel={() => { setReply(null); composerRef.current?.focus(); }} /> : null} statusSlot={<LunaIndicator checking={sending} accepted={status?.kind === "accepted"} label={t.sending} pendingText={sending ? (file ? (text.trim() || file.name) : text) : undefined} />} recipientBlocks={recipientBlocks} />
           <AttachBar lang={lang} conv={conv.id} plan={plan} openPlans={openPlans} caption={text} file={file} setFile={setFile} sendRef={attachmentSend} cap={cap} replyTo={reply?.id ?? null} onBusy={setAttachmentBusy} limitMsg={limitMsg} sent={(messageId) => { setText(""); setReply(null); localStorage.removeItem(draftKey); localStorage.removeItem(replyKey); setStatus({ kind: "accepted" }); setAcceptedSeq((x) => x + 1); armFlash(messageId); load(); loadLim(); }} />
           {(() => { const wait = lim?.next_at ? Math.ceil((new Date(lim.next_at).getTime() - Date.now()) / 1000) : 0; return wait > 0 ? <p className="meta" role="status">{da ? `Du kan sende igen ${waitText(wait, true)}.` : `You can send again ${waitText(wait, false)}.`}</p> : null; })()}
         </fieldset></div>) : <div className="notice" role="note">{t.readOnly}</div>}

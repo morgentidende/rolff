@@ -53,3 +53,22 @@ Deno.test("Edits of delayed messages are re-moderated in send-message; delivery 
   assert(mig.includes("m.deliver_after is null or m.deliver_after <= clock_timestamp()"), "release waits for due time");
   assert(mig.includes("release_delayed_message") && mig.includes("cancel_delayed_message"), "send-now and delete");
 });
+
+Deno.test("Ret pauses a delayed message on the server; Send saves, X/Genoptag resumes; no auto-resume; da + en", async () => {
+  const app = await Deno.readTextFile("apps/web/src/App.tsx");
+  const bubble = await Deno.readTextFile("apps/web/src/MessageBubble.tsx");
+  const banner = await Deno.readTextFile("apps/web/src/EditComposer.tsx");
+  const mig = await Deno.readTextFile("supabase/migrations/20261120150000_delayed_edit_hold.sql");
+  assert(app.includes("hold_delayed_message") && app.includes("resume_delayed_message"), "client holds on Ret and resumes on cancel");
+  assert(app.indexOf("hold_delayed_message") < app.indexOf("setEditId(selected.id)"), "hold is requested before the editor opens");
+  assert(app.includes("Beskeden er allerede sendt, så den kan ikke rettes.") && app.includes("has already been sent"), "race message da + en");
+  assert(bubble.includes("sat på pause") && bubble.includes('"paused"') && bubble.includes("Genoptag") && bubble.includes('"Resume"'), "paused label da + en");
+  assert(banner.includes("sat på pause") && banner.includes("paused"), "editor banner mentions the pause");
+  assert(mig.includes("'infinity'::timestamptz"), "held = deliver_after infinity, so every existing release path refuses it");
+  assert(mig.includes("pg_advisory_xact_lock(hashtextextended('rolff:receive:'"), "hold serialises with the release path");
+  assert(!/pg_cron|cron\.schedule|interval '[0-9]+ (hour|day|minute)/.test(mig), "no automatic resume");
+  assert(mig.includes("raise exception 'held'"), "send-now cannot override a hold");
+  // The edit text is moderated exactly as before: send-message is unchanged and still re-moderates edits.
+  const fn = await Deno.readTextFile("supabase/functions/send-message/index.ts");
+  assert(fn.includes("update_delayed_message") && fn.includes("issue_reply_approval_v3"), "edit goes through moderation approval");
+});
