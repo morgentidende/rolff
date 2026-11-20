@@ -1,3 +1,4 @@
+import { afterSettle } from "./viewportSettle";
 import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from "react";
 
 export type AnchorRect = { top: number; bottom: number; left: number; right: number };
@@ -63,11 +64,12 @@ export function useAnchoredPlacement(open: boolean, getAnchor: () => AnchorRect 
     if (!open) { setPos(null); return; }
     update();
     const v = window.visualViewport;
-    window.addEventListener("resize", update); window.addEventListener("scroll", update, true);
-    v?.addEventListener("resize", update); v?.addEventListener("scroll", update);
+    const onViewport = afterSettle(update); // resize bursts of an app switch are coalesced (viewportSettle.ts)
+    window.addEventListener("resize", onViewport); window.addEventListener("scroll", update, true);
+    v?.addEventListener("resize", onViewport); v?.addEventListener("scroll", update);
     const ro = typeof ResizeObserver === "function" && panel.current ? new ResizeObserver(() => update()) : null;
     if (ro && panel.current) ro.observe(panel.current);
-    return () => { window.removeEventListener("resize", update); window.removeEventListener("scroll", update, true); v?.removeEventListener("resize", update); v?.removeEventListener("scroll", update); ro?.disconnect(); };
+    return () => { onViewport.cancel(); window.removeEventListener("resize", onViewport); window.removeEventListener("scroll", update, true); v?.removeEventListener("resize", onViewport); v?.removeEventListener("scroll", update); ro?.disconnect(); };
   }, [open, update, key]);
   return { pos, update };
 }

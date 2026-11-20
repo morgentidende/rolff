@@ -11,6 +11,9 @@ const blockers = new Set<string>();
 /** While a message/attachment is being sent we never reload. */
 export const setReloadBlocked = (key: string, on: boolean) => { if (on) blockers.add(key); else blockers.delete(key); };
 
+/** A reload on resume would wipe an open card (and flash the whole screen); wait for the next check instead. */
+const modalOpen = () => typeof document !== "undefined" && (document.documentElement.classList.contains("modal-open") || !!document.querySelector("dialog[open]"));
+
 let inFlight = false; let last = 0;
 export async function checkForUpdate(opts: { fetchImpl?: typeof fetch; reload?: () => void; minGapMs?: number } = {}): Promise<boolean> {
   const now = Date.now();
@@ -21,7 +24,7 @@ export async function checkForUpdate(opts: { fetchImpl?: typeof fetch; reload?: 
     if (!r.ok) return false;
     const live = (await r.json())?.build;
     let store: Store | null = null; try { store = sessionStorage; } catch { /* private mode */ }
-    if (!shouldReload(BUILD_ID, live, store, blockers.size > 0)) return false;
+    if (!shouldReload(BUILD_ID, live, store, blockers.size > 0 || modalOpen())) return false;
     try { store?.setItem(RELOADED_KEY, live); } catch { /* ignore */ }
     (opts.reload ?? (() => location.reload()))();
     return true;

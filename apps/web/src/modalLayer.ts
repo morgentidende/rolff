@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type React from "react";
+import { afterSettle } from "./viewportSettle";
 
 /**
  * Shared behaviour for every modal surface (sheets, confirm/mute dialogs, native <dialog>s,
@@ -155,9 +156,9 @@ export function chatHeaderBottom(): number | null {
 export function useUnderChatHeader(): number | null {
   const [top, setTop] = useState<number | null>(() => chatHeaderBottom());
   useEffect(() => {
-    const update = () => setTop(chatHeaderBottom());
+    const update = afterSettle(() => setTop(chatHeaderBottom()));
     window.addEventListener("resize", update); window.visualViewport?.addEventListener("resize", update);
-    return () => { window.removeEventListener("resize", update); window.visualViewport?.removeEventListener("resize", update); };
+    return () => { update.cancel(); window.removeEventListener("resize", update); window.visualViewport?.removeEventListener("resize", update); };
   }, []);
   return top;
 }

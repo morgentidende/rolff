@@ -20,6 +20,7 @@ import { MuteDialog } from "./MuteDialog";
 import { activeMute, muteMenuLabel, muteUntilText, unmuteLabel, type MuteDuration, type MuteRow } from "./muteModel";
 import { onDeepLink } from "./native/deepLinks";
 import { isNative } from "./native/platform";
+import { afterSettle } from "./viewportSettle";
 import { useBackdropDismiss, useModalLayer, useUnderChatHeader } from "./modalLayer";
 import { rectOf, useAnchoredPlacement, visibleViewport } from "./anchoredPosition";
 import type React from "react";
@@ -757,7 +758,7 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
         const { data, error } = await supabase.rpc("recipient_attachment_blocks", { conv: conv.id });
         if (!live || error || data == null) return;
         const o = typeof data === "string" ? JSON.parse(data) : data;
-        setRecipientBlocks({ photos: o.block_photos === true, files: o.block_files === true });
+        { const photos = o.block_photos === true, files = o.block_files === true; setRecipientBlocks(p => p.photos === photos && p.files === files ? p : { photos, files }); } // same values: no re-render on every focus
       } catch { /* Server still rejects a blocked type. */ }
     };
     void load();
@@ -873,8 +874,9 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
     const v = window.visualViewport, root = document.documentElement;
     let full = window.innerHeight, width = window.innerWidth;
     const fit = () => { if (window.innerWidth !== width) { width = window.innerWidth; full = window.innerHeight; } full = Math.max(full, window.innerHeight); const h = Math.round(v ? v.height : window.innerHeight); root.style.setProperty("--app-h", `${h}px`); if (h < full * 0.75) root.dataset.kbd = ""; else delete root.dataset.kbd; if (window.scrollY && !v?.offsetTop) window.scrollTo(0, 0); };
-    fit(); v?.addEventListener("resize", fit); window.addEventListener("resize", fit);
-    return () => { v?.removeEventListener("resize", fit); window.removeEventListener("resize", fit); root.style.removeProperty("--app-h"); delete root.dataset.kbd; };
+    const onChange = afterSettle(fit); // not on the transient sizes of an app switch (viewportSettle.ts)
+    fit(); v?.addEventListener("resize", onChange); window.addEventListener("resize", onChange);
+    return () => { onChange.cancel(); v?.removeEventListener("resize", onChange); window.removeEventListener("resize", onChange); root.style.removeProperty("--app-h"); delete root.dataset.kbd; };
   }, []);
   // Every Besvar must bring the composer into view and focus it — even when
   // the same message is already selected, the keyboard is open, or focus was kept.
