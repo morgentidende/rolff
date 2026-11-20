@@ -25,15 +25,18 @@ type Props = {
   onSendNow?: () => void;
 };
 const Glyph = ({ children }: { children: React.ReactNode }) => <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{children}</svg>;
-const RING_R = 21.5;
+// Ring geometry in a 48x48 viewBox that fills the 48px Send button exactly (centre 24,24, stroke fully inside it).
+export const RING_VIEWBOX = 48;
+export const RING_STROKE = 3;
+export const RING_R = 21;
 const RING_C = 2 * Math.PI * RING_R;
 function SendCountdown({ sec, frac }: { sec: number; frac: number }) {
   return (
     <span className="send-now-face">
-      <svg className="send-now-ring" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
-        <circle className="send-now-ring-track" cx="24" cy="24" r={RING_R} fill="none" />
-        <circle className="send-now-ring-value" cx="24" cy="24" r={RING_R} fill="none"
-          strokeDasharray={RING_C} strokeDashoffset={RING_C * (1 - frac)} transform="rotate(-90 24 24)" />
+      <svg className="send-now-ring" viewBox={`0 0 ${RING_VIEWBOX} ${RING_VIEWBOX}`} aria-hidden="true" focusable="false">
+        <circle className="send-now-ring-track" cx={RING_VIEWBOX / 2} cy={RING_VIEWBOX / 2} r={RING_R} fill="none" />
+        <circle className="send-now-ring-value" cx={RING_VIEWBOX / 2} cy={RING_VIEWBOX / 2} r={RING_R} fill="none"
+          strokeDasharray={RING_C} strokeDashoffset={RING_C * (1 - frac)} transform={`rotate(-90 ${RING_VIEWBOX / 2} ${RING_VIEWBOX / 2})`} />
       </svg>
       <span className="send-now-stack">
         <Glyph><path d="m22 2-7 20-4-9-9-4Z" /><path d="m22 2-11 11" /></Glyph>

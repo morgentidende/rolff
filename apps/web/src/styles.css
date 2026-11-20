@@ -582,18 +582,22 @@ html[data-keyboard] .blockbox{max-height:calc(var(--vv-h,100dvh) * .34)}
 .menu-label{flex:1;min-width:0;text-align:left}
 .menu-check{flex:none;color:var(--accent)}
 .composer-input-row{overflow:visible}
-.composer-send.is-countdown{position:relative;overflow:visible;background:var(--accent);color:var(--accent-text)}
+.composer-send.is-countdown{position:relative;padding:0;overflow:visible;background:var(--accent);color:var(--accent-text)}
 .composer-send.is-countdown:disabled{opacity:1;background:var(--accent);color:var(--accent-text)}
-.send-now-face{position:relative;display:flex;align-items:center;justify-content:center;width:48px;height:48px}
-.send-now-ring{position:absolute;inset:-4px;width:56px;height:56px;overflow:visible}
+/* Ring and label are laid out against the button's own box (inset:0), never against its padding or
+   flex alignment, so the ring is always exactly concentric with the round button: same centre, a fixed
+   1.5px inset (r 21 + half the 3px stroke in a 48px box), no transform or offset. */
+.send-now-face{position:absolute;inset:0;display:block;border-radius:50%}
+.send-now-ring{position:absolute;inset:0;display:block;width:100%;height:100%;overflow:visible}
 .send-now-ring-track,.send-now-ring-value{stroke-width:3;stroke-linecap:round}
 .send-now-ring-track{stroke:color-mix(in srgb,var(--accent-text) 35%,transparent)}
 .send-now-ring-value{stroke:var(--accent-text);transition:stroke-dashoffset .1s linear}
-.send-now-stack{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;margin-top:1px}
-.composer-send.is-countdown .send-now-stack svg{width:18px;height:18px}
-.send-now-count{display:block;margin-top:1px;font-size:10px;font-weight:700;letter-spacing:0;font-variant-numeric:tabular-nums;line-height:1}
+.send-now-stack{position:absolute;inset:0;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;line-height:1}
+.composer-send.is-countdown .send-now-stack svg{width:18px;height:18px;flex:none}
+.send-now-count{display:block;font-size:10px;font-weight:700;letter-spacing:0;font-variant-numeric:tabular-nums;line-height:1}
 .composer-send.is-countdown{animation:send-now-pulse 1.8s ease-in-out infinite}
-@keyframes send-now-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+/* Pulse without any transform, so the ring can never drift against the button. */
+@keyframes send-now-pulse{0%,100%{box-shadow:0 0 0 0 color-mix(in srgb,var(--accent) 0%,transparent)}50%{box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 22%,transparent)}}
 @media (prefers-reduced-motion:reduce){
   .composer-send.is-countdown{animation:none}
   .send-now-ring-value{transition:none}
@@ -606,6 +610,7 @@ html[data-keyboard] .blockbox{max-height:calc(var(--vv-h,100dvh) * .34)}
 .msg-pending-actions{display:flex;gap:6px;margin:4px 1px 2px}
 .msg-pending-actions .ghost{min-height:36px;padding:6px 12px;font-size:14px}
 .msg.pending-send .msg-meta-spacer{width:68px}
+.msg.pending-send.is-held .msg-meta-spacer{width:128px}
 /* Pending invitations: resend / copy link / expired */
 .pendrow{flex-wrap:wrap}
 .pendrow-act-wide{flex-basis:100%;justify-content:flex-end;flex-wrap:wrap;gap:4px}
