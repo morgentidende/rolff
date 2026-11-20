@@ -8,21 +8,27 @@ export async function testBlockingTopics({db,as,svc,hash,t,assert}) {
  const snapshot=async()=> (await svc(`select recipient_filter_snapshot($1,$2) s`,[cv,A]))[0].s;
  const issue=async(revision,text='Kalender vedlagt')=>(await svc(`select issue_reply_approval_v3($1,$2,$3,'test','synthetic',$4,null) id`,[A,cv,await hash(text),revision]))[0].id;
  let topic;
+ await t('Topics: adding requires the explicit confirmation (like words); nothing is stored without it',async()=>{
+  await assert.rejects(as(B,`select add_blocked_topic($1,'omtaler mit udseende')`,[cv]),/ack_required/);
+  await assert.rejects(as(B,`select add_blocked_topic($1,'omtaler mit udseende',false)`,[cv]),/ack_required/);
+  await assert.rejects(as(B,`select add_blocked_topic($1,'omtaler mit udseende',null)`,[cv]),/ack_required/);
+  assert.equal((await as(B,`select * from conversation_blocked_topics where conversation_id=$1`,[cv])).length,0);
+ });
  await t('Topics: arbitrary bounded private criteria, creation timestamps, own-only RLS',async()=>{
-  topic=(await as(B,`select add_blocked_topic($1,'omtaler mine forældre') id`,[cv]))[0].id;
+  topic=(await as(B,`select add_blocked_topic($1,'omtaler mine forældre',true) id`,[cv]))[0].id;
   assert.equal((await as(B,`select word from conversation_blocked_topics where id=$1`,[topic]))[0].word,'omtaler mine forældre');
   assert.equal((await as(A,`select * from conversation_blocked_topics`)).length,0);
   assert.equal((await as(X,`select * from conversation_blocked_topics`)).length,0);
   await assert.rejects(as(A,`delete from conversation_blocked_topics where id=$1 returning id`,[topic]),/permission denied/);
   await as(A,`select remove_blocked_topic($1,$2)`,[cv,topic]);
   assert.equal((await as(B,`select * from conversation_blocked_topics where id=$1`,[topic])).length,1);
-  await assert.rejects(as(X,`select add_blocked_topic($1,'mit udseende')`,[cv]),/not_member/);
-  await assert.rejects(as(B,`select add_blocked_topic($1,$2)`,[cv,'x'.repeat(241)]),/length/);
+  await assert.rejects(as(X,`select add_blocked_topic($1,'mit udseende',true)`,[cv]),/not_member/);
+  await assert.rejects(as(B,`select add_blocked_topic($1,$2,true)`,[cv,'x'.repeat(241)]),/length/);
   await assert.rejects(as(B,`select recipient_filter_snapshot($1,$2)`,[cv,A]),/permission denied/);
   assert.ok((await as(B,`select created_at from conversation_blocked_topics where id=$1`,[topic]))[0].created_at);
  });
  await t('Topics: snapshot excludes sender rules and includes neutral free-form recipient criteria',async()=>{
-  await as(A,`select add_blocked_topic($1,'omtaler min cykel')`,[cv]);
+  await as(A,`select add_blocked_topic($1,'omtaler min cykel',true)`,[cv]);
   assert.deepEqual((await snapshot()).topics,['omtaler mine forældre']);
  });
  await t('Topics: word reset owner-scoped, topic list untouched, creation provenance retained',async()=>{
@@ -48,7 +54,7 @@ export async function testBlockingTopics({db,as,svc,hash,t,assert}) {
   assert.equal((await as(B,`select * from conversation_blocked_topics where id=$1`,[topic])).length,1);
  });
  await t('Topics: change between snapshot/AI and issuer rejects stale evaluation',async()=>{
-  const old=await snapshot();await as(B,`select add_blocked_topic($1,'omtaler mit udseende')`,[cv]);
+  const old=await snapshot();await as(B,`select add_blocked_topic($1,'omtaler mit udseende',true)`,[cv]);
   await assert.rejects(issue(old.revision),/recipient_policy_changed/);
   assert.equal((await db.query(`select count(*)::int n from moderation_approvals where conversation_id=$1`,[cv])).rows[0].n,0);
  });
@@ -86,9 +92,9 @@ export async function testBlockingTopics({db,as,svc,hash,t,assert}) {
   assert.deepEqual(other.own_blocked_topics,[]);
  });
  await t('Topics: 20-item bound rejects twenty-first criterion without changing revision',async()=>{
-  for(let i=0;i<19;i++)await as(B,`select add_blocked_topic($1,$2)`,[cv,`opdigtet emne ${i}`]);
+  for(let i=0;i<19;i++)await as(B,`select add_blocked_topic($1,$2,true)`,[cv,`opdigtet emne ${i}`]);
   const rev=(await snapshot()).revision;
-  await assert.rejects(as(B,`select add_blocked_topic($1,'et emne for meget')`,[cv]),/too_many/);
+  await assert.rejects(as(B,`select add_blocked_topic($1,'et emne for meget',true)`,[cv]),/too_many/);
   assert.equal((await snapshot()).revision,rev);
  });
  await t('Topics: active-recipient membership changes invalidate pending ticket',async()=>{
