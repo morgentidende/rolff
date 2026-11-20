@@ -633,5 +633,39 @@ details.more .sheet-danger-zone{margin-top:12px;margin-bottom:6px}
 .mute-unmute{align-self:flex-start;margin:0 0 12px -6px}
 .convmuted{flex:none;display:inline-flex;align-items:center;color:var(--muted);line-height:1}
 .convmuted + .convtime{margin-left:0}
+
+/* Modal backdrops (sheets, dialogs, menus): the page behind is inactive (inert, see modalLayer.ts), dimmed and blurred.
+   A light 6px blur keeps it cheap on Android; browsers without backdrop-filter, or users who ask for reduced
+   transparency, get a stronger plain dim instead. */
+.overlay,.message-overlay,.menu-scrim{-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);overscroll-behavior:contain}
+.overlay,.menu-scrim{touch-action:none}.overlay>*{touch-action:pan-x pan-y}
+.menu-scrim{position:fixed;inset:0;z-index:19;background:rgba(0,0,0,.18);-webkit-tap-highlight-color:transparent}
+[data-theme=dark] .menu-scrim{background:rgba(0,0,0,.32)}
+.topbar.chat:has(.menu){z-index:21}
+.contact-alias-dialog::backdrop,.composer-upgrade::backdrop,.blocking-dialog::backdrop{-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+html.modal-open,html.modal-open body,:root:has(dialog[open]),:root:has(dialog[open]) body{overflow:hidden;overscroll-behavior:none}
+@supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
+  :root:root:root .overlay.overlay{background:rgba(0,0,0,.66)}
+  .message-overlay{background:rgba(0,0,0,.7)}.menu-scrim{background:rgba(0,0,0,.4)}
+  .contact-alias-dialog::backdrop,.composer-upgrade::backdrop,.blocking-dialog::backdrop{background:#000d}
+}
+@media (prefers-reduced-transparency:reduce){
+  .overlay,.message-overlay,.menu-scrim,.contact-alias-dialog::backdrop,.composer-upgrade::backdrop,.blocking-dialog::backdrop{-webkit-backdrop-filter:none;backdrop-filter:none}
+  :root:root:root .overlay.overlay{background:rgba(0,0,0,.66)}
+  .message-overlay{background:rgba(0,0,0,.7)}.menu-scrim{background:rgba(0,0,0,.4)}
+  .contact-alias-dialog::backdrop,.composer-upgrade::backdrop,.blocking-dialog::backdrop{background:#000d}
+}
+.topbar.chat:has(.menu){pointer-events:none}.topbar.chat:has(.menu) .menu{pointer-events:auto}
+
+/* Cards opened from inside a conversation: anchored top, directly under the chat header (padding-top is the header's
+   bottom edge, set from JS), scrollable, never taller than the visible area above the keyboard (the overlay ends at
+   --kbd-inset). Front-page cards keep their usual position. */
+.overlay.top-overlay{align-items:flex-start;justify-content:center;padding:56px max(12px,env(safe-area-inset-right)) 12px max(12px,env(safe-area-inset-left));box-sizing:border-box}
+.overlay.top-overlay .sheet{width:100%;max-width:560px;max-height:100%;border:1px solid var(--border);border-radius:16px;padding:8px 16px 16px;box-shadow:0 12px 36px rgba(0,0,0,.3);overflow-y:auto;overscroll-behavior:contain;animation:anchored-in .14s ease-out}
+.overlay.top-overlay .confirm-card{max-height:100%;overflow-y:auto;overscroll-behavior:contain}
+.overlay.top-overlay .sheethead{top:-8px}
+@media (prefers-reduced-motion:reduce){.overlay.top-overlay .sheet{animation:none}}
+/* Nickname card (native <dialog>) inside a conversation: same place, under the header. */
+:root:has(.topbar.chat) .contact-alias-dialog{inset:calc(env(safe-area-inset-top,0px) + 60px) auto auto 50%;bottom:auto;transform:translateX(-50%);width:min(calc(100% - 24px),560px);max-height:calc(var(--vv-h,100dvh) - env(safe-area-inset-top,0px) - 72px - var(--kbd-inset,0px));border-radius:16px;box-shadow:0 12px 36px rgba(0,0,0,.3);padding-bottom:max(16px,0px)}
 .pending-invite-actions{display:grid;gap:10px;margin-top:10px}.pending-invite-actions button{width:100%;min-height:48px;justify-content:center;border-color:var(--border);color:var(--text)}
 .pending-invite-actions button.pending-invite-cancel{color:#c0392b}[data-theme=dark] .pending-invite-actions button.pending-invite-cancel{color:#ff8a80}

@@ -110,7 +110,7 @@ for (const strict of [false, true])
             assert.equal(lifted.style.top, '300px');
             assert.equal(lifted.querySelectorAll('[tabindex],[aria-label]').length, 0, 'copy is not interactive');
             // Outside tap closes.
-            d.querySelector('.message-overlay').dispatchEvent(new w.Event('pointerdown', { bubbles: true }));
+            { const o = d.querySelector('.message-overlay'); o.dispatchEvent(new w.Event('pointerdown', { bubbles: true })); o.dispatchEvent(new w.Event('pointerup', { bubbles: true })); o.click(); } // a full tap: closing happens at click time
             await delay(30);
             assert.ok(!d.querySelector('.message-panel'));
             assert.equal(d.querySelector('textarea').value, 'En syntetisk kladde');
@@ -193,27 +193,22 @@ for (const strict of [false, true])
             const icon = label(d, 'Tilføj person');
             assert.equal(icon.getAttribute('aria-expanded'), 'false');
             await click(icon);
-            const card = d.querySelector('.sheet.anchored-card');
-            assert.ok(card, 'anchored card');
-            assert.ok(d.querySelector('.overlay.anchored-overlay'));
+            // Inside a conversation the card hangs directly under the chat header (anchored top), not at the bottom.
+            const card = d.querySelector('.overlay.top-overlay .sheet');
+            assert.ok(card, 'card under the chat header');
+            assert.ok(!d.querySelector('.anchored-card') && !d.querySelector('.anchored-overlay'));
+            assert.equal(d.querySelector('.overlay.top-overlay').style.paddingTop, '56px', "starts at the header's bottom edge");
             assert.equal(icon.getAttribute('aria-expanded'), 'true');
             assert.equal(card.getAttribute('role'), 'dialog');
             assert.equal(card.querySelector('h2').textContent, 'Tilføj person');
-            assert.equal(px(card, 'top'), 50 + 6, 'directly under the icon');
-            assert.equal(px(card, 'left'), 12, 'right-aligned, clamped to margin');
-            assert.equal(px(card, 'maxHeight'), 844 - 12 - 56);
             assert.ok(card.querySelector('input[type=email]'));
             assert.ok(button(d, 'Send til godkendelse'));
             assert.ok(card.textContent.includes('Kun læse') && card.textContent.includes('Læse og skrive'));
-            // Keyboard opens on the email field.
+            // Keyboard opens on the email field: the field keeps focus and the card stays in place (it scrolls inside).
             card.querySelector('input[type=email]').focus();
             geo.vv.height = 420; geo.vv.dispatchEvent(new w.Event('resize'));
             await delay(30);
-            assert.equal(px(card, 'top'), 56);
-            assert.equal(px(card, 'maxHeight'), 420 - 12 - 56, 'card ends above the keyboard and scrolls inside');
-            geo.vv.offsetTop = 100; geo.vv.dispatchEvent(new w.Event('scroll'));
-            await delay(30);
-            assert.equal(px(card, 'top'), 112, 'follows a panned visual viewport');
+            assert.ok(d.querySelector('.overlay.top-overlay .sheet') === card && d.activeElement === card.querySelector('input[type=email]'));
             geo.vv.offsetTop = 0; geo.vv.height = 844; geo.vv.dispatchEvent(new w.Event('resize'));
             await back(w);
             assert.ok(!d.querySelector('.sheet'));
@@ -230,7 +225,7 @@ for (const strict of [false, true])
             await delay(30);
             assert.ok(!d.querySelector('.sheet'));
             await click(label(d, 'Tilføj person'));
-            d.querySelector('.overlay.anchored-overlay').dispatchEvent(new w.Event('pointerdown', { bubbles: true }));
+            { const o = d.querySelector('.overlay.top-overlay'); o.dispatchEvent(new w.Event('pointerdown', { bubbles: true })); o.dispatchEvent(new w.Event('pointerup', { bubbles: true })); o.click(); } // a full tap: closing happens at click time
             await delay(30);
             assert.ok(!d.querySelector('.sheet'), 'outside tap closes');
             assert.equal(d.querySelector('textarea').value, 'En syntetisk kladde');

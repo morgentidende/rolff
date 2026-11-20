@@ -55,7 +55,7 @@ export function Toast() {
     return () => { window.removeEventListener(EVENT, on); window.clearTimeout(hide.current); window.clearTimeout(clear.current); };
   }, []);
   // The live region is always mounted so screen readers announce each new text.
-  return <div className="toast-region" role="status" aria-live="polite" aria-atomic="true" style={pos}>
+  return <div className="toast-region" data-modal-exempt="" role="status" aria-live="polite" aria-atomic="true" style={pos}>
     {text && <div key={nonce} className={`toast-pill${tone === "success" ? " is-success" : ""}${shown ? " is-shown" : ""}`}>{text}</div>}
   </div>;
 }

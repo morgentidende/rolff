@@ -20,8 +20,11 @@ import { MuteDialog } from "./MuteDialog";
 import { activeMute, muteMenuLabel, muteUntilText, unmuteLabel, type MuteDuration, type MuteRow } from "./muteModel";
 import { onDeepLink } from "./native/deepLinks";
 import { isNative } from "./native/platform";
+import { afterSettle } from "./viewportSettle";
+import { useBackdropDismiss, useModalLayer, useUnderChatHeader } from "./modalLayer";
 import { rectOf, useAnchoredPlacement, visibleViewport } from "./anchoredPosition";
 import type React from "react";
+import { createPortal } from "react-dom";
 import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { callFn, supabase } from "./supabase";
@@ -219,46 +222,52 @@ export function App() {
 }
 
 function Menu({ lang, items, buttonRef }: { lang: Lang; items: MenuItem[]; buttonRef?: React.RefObject<HTMLButtonElement | null> }) {
-  const [open, setOpen] = useState(false); const ref = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false); const ref = useRef<HTMLDivElement>(null), menuRef = useRef<HTMLDivElement>(null);
   useBackLayer(open,()=>setOpen(false));
+  // Everything outside the open menu is inactive; a tap outside only closes it (see modalLayer.ts).
+  useModalLayer(open, menuRef);
+  const scrim = useBackdropDismiss(() => setOpen(false));
   useEffect(() => {
     if (!open) return;
-    const off = (e: Event) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
-    document.addEventListener("pointerdown", off);
     ref.current?.querySelector<HTMLButtonElement>("[role=menuitem]")?.focus();
-    return () => { document.removeEventListener("pointerdown", off); };
   }, [open]);
   return (
     <div className="menuwrap" ref={ref}>
       <button type="button" ref={buttonRef} className="icon" aria-label={lang === "da" ? "Menu" : "Menu"} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
         <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><circle cx="12" cy="5" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="12" cy="19" r="2" /></svg>
       </button>
-      {open && <div className="menu" role="menu">{items.map((it) => <Fragment key={it.label}>{it.divider && <div className="menu-sep" role="separator" />}<button type="button" role={it.checked === undefined ? "menuitem" : "menuitemcheckbox"} aria-checked={it.checked} className={it.danger ? "danger" : ""} onClick={() => { setOpen(false); it.run(); }}><span className="menu-label">{it.label}</span>{it.checked ? <svg className="menu-check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12.5 10 17.5 19 7" /></svg> : null}</button></Fragment>)}</div>}
+      {open && createPortal(<div className="menu-scrim" data-modal-exempt="" {...scrim} />, document.body)}
+      {open && <div className="menu" role="menu" ref={menuRef}>{items.map((it) => <Fragment key={it.label}>{it.divider && <div className="menu-sep" role="separator" />}<button type="button" role={it.checked === undefined ? "menuitem" : "menuitemcheckbox"} aria-checked={it.checked} className={it.danger ? "danger" : ""} onClick={() => { setOpen(false); it.run(); }}><span className="menu-label">{it.label}</span>{it.checked ? <svg className="menu-check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12.5 10 17.5 19 7" /></svg> : null}</button></Fragment>)}</div>}
     </div>
   );
 }
 
 function SheetView({ title, close, lang, children, anchor }: { title: string; close: () => void; lang: Lang; children: React.ReactNode; anchor?: React.RefObject<HTMLElement | null> }) {
-  const ref = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLDivElement>(null), layer = useRef<HTMLDivElement>(null);
   useBackLayer(true,close);
+  useModalLayer(true, layer);
+  const backdrop = useBackdropDismiss(close);
+  // Inside a conversation every card hangs directly under the chat header (see useUnderChatHeader).
+  const underHeader = useUnderChatHeader();
+  const top = underHeader !== null;
   useEffect(() => { ref.current?.focus({ preventScroll: true }); }, []);
   // Anchored variant: a dropdown card right under its top-bar icon, kept inside
   // the visible viewport (visualViewport shrinks when the mobile keyboard opens).
-  const { pos } = useAnchoredPlacement(!!anchor, () => {
+  const { pos } = useAnchoredPlacement(!!anchor && !top, () => {
     const r = rectOf(anchor?.current);
     if (r && r.right > r.left) return r;
     const v = visibleViewport(); return { top: v.top + 48, bottom: v.top + 48, left: v.left + v.width - 12, right: v.left + v.width - 12 };
   }, ref, { align: "end", flip: false, gap: 6, margin: 12, minVisible: 120 });
   useEffect(() => {
     const v = window.visualViewport;
-    if (!anchor || !v) return;
+    if (!v || !(anchor || top)) return;
     const keep = () => { const a = document.activeElement as HTMLElement | null; if (a && a !== ref.current && ref.current?.contains(a)) requestAnimationFrame(() => a.scrollIntoView?.({ block: "nearest" })); };
     v.addEventListener("resize", keep); return () => v.removeEventListener("resize", keep);
-  }, [anchor]);
-  const style: React.CSSProperties | undefined = !anchor ? undefined : pos ? { top: pos.top, left: pos.left, maxHeight: pos.maxHeight, maxWidth: pos.maxWidth } : { top: 0, left: 0, visibility: "hidden" };
+  }, [anchor, top]);
+  const style: React.CSSProperties | undefined = !anchor || top ? undefined : pos ? { top: pos.top, left: pos.left, maxHeight: pos.maxHeight, maxWidth: pos.maxWidth } : { top: 0, left: 0, visibility: "hidden" };
   return (
-    <div className={anchor ? "overlay anchored-overlay" : "overlay"} onPointerDown={(e) => { if (e.target === e.currentTarget) close(); }}>
-      <div className={anchor ? "sheet anchored-card" : "sheet"} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} ref={ref} style={style} onScroll={(e) => { const el = e.currentTarget; if (el.scrollTop > 2) el.dataset.scrolled = ""; else delete el.dataset.scrolled; }}>
+    <div className={top ? "overlay top-overlay" : anchor ? "overlay anchored-overlay" : "overlay"} ref={layer} style={top ? { paddingTop: underHeader } : undefined} {...backdrop}>
+      <div className={anchor && !top ? "sheet anchored-card" : "sheet"} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} ref={ref} style={style} onScroll={(e) => { const el = e.currentTarget; if (el.scrollTop > 2) el.dataset.scrolled = ""; else delete el.dataset.scrolled; }}>
         <div className="sheethead"><h2>{title}</h2><button type="button" className="icon" aria-label={lang === "da" ? "Luk" : "Close"} onClick={close}>✕</button></div>
         {children}
       </div>
@@ -770,7 +779,7 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
         const { data, error } = await supabase.rpc("recipient_attachment_blocks", { conv: conv.id });
         if (!live || error || data == null) return;
         const o = typeof data === "string" ? JSON.parse(data) : data;
-        setRecipientBlocks({ photos: o.block_photos === true, files: o.block_files === true });
+        { const photos = o.block_photos === true, files = o.block_files === true; setRecipientBlocks(p => p.photos === photos && p.files === files ? p : { photos, files }); } // same values: no re-render on every focus
       } catch { /* Server still rejects a blocked type. */ }
     };
     void load();
@@ -886,8 +895,9 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
     const v = window.visualViewport, root = document.documentElement;
     let full = window.innerHeight, width = window.innerWidth;
     const fit = () => { if (window.innerWidth !== width) { width = window.innerWidth; full = window.innerHeight; } full = Math.max(full, window.innerHeight); const h = Math.round(v ? v.height : window.innerHeight); root.style.setProperty("--app-h", `${h}px`); if (h < full * 0.75) root.dataset.kbd = ""; else delete root.dataset.kbd; if (window.scrollY && !v?.offsetTop) window.scrollTo(0, 0); };
-    fit(); v?.addEventListener("resize", fit); window.addEventListener("resize", fit);
-    return () => { v?.removeEventListener("resize", fit); window.removeEventListener("resize", fit); root.style.removeProperty("--app-h"); delete root.dataset.kbd; };
+    const onChange = afterSettle(fit); // not on the transient sizes of an app switch (viewportSettle.ts)
+    fit(); v?.addEventListener("resize", onChange); window.addEventListener("resize", onChange);
+    return () => { onChange.cancel(); v?.removeEventListener("resize", onChange); window.removeEventListener("resize", onChange); root.style.removeProperty("--app-h"); delete root.dataset.kbd; };
   }, []);
   // Every Besvar must bring the composer into view and focus it — even when
   // the same message is already selected, the keyboard is open, or focus was kept.
