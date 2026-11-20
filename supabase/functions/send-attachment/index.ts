@@ -13,13 +13,23 @@ import { planLengthError } from "../_shared/planLimits.ts";
 import { checkPersonLimits } from "../_shared/limits.ts";
 import { checkRules, findBlockedWord } from "../_shared/rules.ts";
 import { charCount, ModerationTechnicalError, prefilter, resolveSenderLang, timeoutFromEnv, UNCERTAIN_EXPLANATION } from "../_shared/moderation.ts";
-import { attachmentKind, blockedAttachmentStatus, checkFile, cleanName, filePromptForLang, MAX_BYTES, openaiFileModerate, parseAttachmentBlocks, validateFileResult } from "../_shared/attachments.ts";
+import { ATTACHMENT_DAILY_LIMIT, attachmentKind, blockedAttachmentStatus, checkFile, cleanName, filePromptForLang, MAX_BYTES, openaiFileModerate, parseAttachmentBlocks, validateFileResult } from "../_shared/attachments.ts";
 
 const hex = (b: ArrayBuffer) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, "0")).join("");
 const sha = async (d: Uint8Array | string) => hex(await crypto.subtle.digest("SHA-256", (typeof d === "string" ? new TextEncoder().encode(d) : d) as BufferSource));
 const isProd = () => (Deno.env.get("APP_ENV") ?? "test") === "production";
 
+// A slot reserved right before the model call is always released when the request ends (a sent message
+// no longer needs it; blocked/failed uploads must not keep using up the daily allowance).
+type Ctx = { release: (() => PromiseLike<unknown>) | null };
 Deno.serve(async (req) => {
+  const slotCtx: Ctx = { release: null };
+  try { return await handle(req, slotCtx); }
+  finally { if (slotCtx.release) { try { await slotCtx.release(); } catch { /* slot expires by itself after 3 minutes */ } } }
+});
+const limitReached = () => json({ error: "daily_attachment_limit", limit: ATTACHMENT_DAILY_LIMIT, window: "rolling_24h" }, 429);
+
+async function handle(req: Request, slotCtx: Ctx): Promise<Response> {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   if (req.method !== "POST") return json({ error: "method" }, 405);
   const a = await authed(req); if (a instanceof Response) return a;
@@ -71,6 +81,10 @@ Deno.serve(async (req) => {
   if (plan.data !== "text_attachments") return json({ error: "plan_required", plan: plan.data }, 402);
   const fc = checkFile(bytes);
   if (!fc.ok) return json({ error: fc.error }, fc.error === "too_large" ? 413 : 415);
+  // Daily cap (5 per sender per rolling 24h) BEFORE any context lookup or model call: an over-limit upload costs no tokens.
+  const used = await admin.rpc("attachment_daily_used", { p_sender: uid });
+  if (used.error || typeof used.data !== "number") return json({ status: "technical_error" }, 503);
+  if (used.data >= ATTACHMENT_DAILY_LIMIT) return limitReached();
 
   const ctx = (prep.data ?? []).map((r: any) => ({ mine: r.ctx_mine, body: r.ctx_body }));
   // Replies: Luna always sees the replied-to message as context (server-fetched, visibility re-checked).
@@ -120,6 +134,10 @@ Deno.serve(async (req) => {
     await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "error", p_reason: "config" });
     return json({ status: "technical_error", detail: "unavailable" }, 503);
   }
+  // Reserve a slot (race-safe, under a per-sender lock) so parallel uploads cannot all reach the model.
+  const slot = await admin.rpc("reserve_attachment_slot", { p_sender: uid, p_key: key });
+  if (slot.error) return /daily_attachment_limit/.test(slot.error.message) ? limitReached() : json({ status: "technical_error" }, 503);
+  slotCtx.release = () => admin.rpc("release_attachment_slot", { p_sender: uid, p_key: key });
   const t0 = Date.now(); const ac = new AbortController(); const timer = setTimeout(() => ac.abort(), Math.max(timeoutFromEnv({ get: (k) => Deno.env.get(k) }), 30000));
   let res, usage;
   try {
@@ -179,7 +197,8 @@ Deno.serve(async (req) => {
   if (c.error && /blocked_files/.test(c.error.message)) { await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "block", p_reason: "blocked_files" }); return json({ status: "blocked_files" }, 200); }
   if (c.error && /person_frequency/.test(c.error.message)) { const again = await checkPersonLimits(admin, conv, uid, 0); return json(again && again !== "error" ? again : { status: "frequency_limit" }, 200); }
   if (c.error && /plan_required/.test(c.error.message)) return json({ error: "plan_required" }, 402);
+  if (c.error && /daily_attachment_limit/.test(c.error.message)) return limitReached();
   if (c.error && /rate_limited/.test(c.error.message)) return json({ error: "rate_limited" }, 429);
   if (c.error || !c.data?.[0]) return json({ status: "technical_error" }, 503);
   return json({ status: "accepted", message_id: c.data[0].message_id, duplicate: c.data[0].duplicate, meta });
-});
+}
