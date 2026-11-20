@@ -74,8 +74,8 @@ const COPY: Record<PermissionKind, Record<Lang, { title: string; body: string; a
     en: { title: "Choose a photo or file", body: "You choose which photo or file to send. Rolff only sees the file you pick – never the rest of your photos or files.", allow: "Continue" },
   },
   notifications: {
-    da: { title: "Vil du have besked, når der kommer en ny besked?", body: "Notifikationen siger kun, at der er en ny besked i Rolff – aldrig hvem den er fra eller hvad der står. Du kan slå det fra igen når som helst.", allow: "Slå til" },
-    en: { title: "Get notified about new messages?", body: "The notification only says there is a new message in Rolff – never who it is from or what it says. You can turn it off at any time.", allow: "Turn on" },
+    da: { title: "Vil du have besked, når der kommer en ny besked?", body: "Notifikationen viser afsenderens navn, men aldrig beskedteksten. Du kan slå det fra igen når som helst.", allow: "Slå til" },
+    en: { title: "Get notified about new messages?", body: "The notification shows the sender's name, but never the message text. You can turn it off at any time.", allow: "Turn on" },
   },
 };
 export const permissionCopy = (k: PermissionKind, lang: Lang) => ({ ...COPY[k][lang], later: lang === "da" ? "Ikke nu" : "Not now" });

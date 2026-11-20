@@ -56,7 +56,7 @@ Dato: 2026-11-02. Status: UDKAST til beslutning (Nicolai).
 | Push (FCM; APNs via FCM) | `firebase_messaging` + `flutter_local_notifications` | 17.0.1 / 2026-10-23; 22.3.3 / 2026-10-25 |
 | Deep links | `app_links` | 7.2.2 / 2026-10-06 |
 | Del/eksport | `share_plus`, `archive` (ZIP), `csv` | 13.3.1; 4.6.0; 8.0.0 |
-Firebase (FCM) er gratis, men er en ny underdatabehandler (Google) → privatlivspolitik. Push-indhold altid indholdsfrit.
+Firebase (FCM) er gratis, men er en ny underdatabehandler (Google) → privatlivspolitik. Push viser afsenderens navn men aldrig beskedtekst (besluttet 2026-11-19).
 
 ## 7. AGPL og offentlige moduler
 - AGPL-3.0-planen står ved magt. Offentlige moduler bliver: SQL (retention/sletning), Edge Function-moderation (TS) **og** en ny Dart-pakke `rolff_trust` (lokal kryptering, retention-regler, eksport-format) med SPDX-headers.
@@ -88,7 +88,7 @@ I alt groft 6–9 uger. Usikkert estimat.
 2. Lokal krypteret lagring bag et interface (`LocalStore`): web = IndexedDB + WebCrypto; native = SQLite + nøgle i Keychain/Keystore.
 3. Capacitor: `npx cap add android ios`; plugins: push, secure storage, SQLite, share, app links.
 4. Deep links: `assetlinks.json` + `apple-app-site-association` på domænet; invitationslink `https://…/invite/<token>` i stedet for `#invite`.
-5. Push: FCM (Android) + APNs (iOS) via Supabase Edge Function; indholdsfri notifikation ("Du har nye beskeder i Rolff").
+5. Push: FCM (Android) + APNs (iOS) via Supabase Edge Function; notifikation uden beskedtekst ("Ny besked fra Far – Åbn Rolff for at læse den").
 6. Butikskrav: brugsvilkår + accept, kontaktinfo i appen, beslutning om rapportering, privatlivspolitik-URL, App Privacy/Data safety.
 7. Konti (betalt – kræver godkendelse), intern test (TestFlight / lukket test i Play), indsendelse.
 
