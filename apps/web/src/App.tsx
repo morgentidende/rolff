@@ -37,7 +37,8 @@ import { ConversationExport, fetchMyPlan, PLAN_TIMEOUT_MS, withTimeout } from ".
 import { EventNotice, eventsBefore, useConversationEvents } from "./ConversationEvents";
 import { dayLabel, groupMessagesByDay } from "./daySeparator";
 
-import { labelOf, convDisplay } from "./convDisplay";
+import { labelOf, convDisplay, isPendingOnly } from "./convDisplay";
+import { PendingInviteMenu } from "./PendingInviteMenu";
 import { listTime, previewText, type ConvPreview } from "./convList";
 import { cleanExplanation } from "./blockExplanation";
 
@@ -80,7 +81,11 @@ export function App() {
   const [lang, setLang] = useState<Lang>(detectLang());
   const [theme, setTheme] = useState(localStorage.getItem("theme") || "system");
   const [session, setSession] = useState<Session | null>(null);
-  const [conv, setConv] = useState<Conv | null>(null);
+  const [rawConv, setConv] = useState<Conv | null>(null);
+  // A conversation nobody has accepted yet has no chat: whatever route asks for it (list, #open=, push tap, accept link)
+  // ends on the front page, where the row offers "change nickname" / "cancel invitation".
+  const conv = isPendingOnly(rawConv) ? null : rawConv;
+  useEffect(() => { if (rawConv && !conv) setConv(null); }, [rawConv, conv]);
   const [sheet, setSheet, resetSheet] = usePanelState<Sheet>(null);
   const [homeKey, setHomeKey] = useState(0);
   const [renameContacts, setRenameContacts] = useState<Other[] | null>(null);
@@ -274,6 +279,7 @@ function Faq({ lang }: { lang: Lang }) {
     ["Kan jeg få notifikationer?", "Notifikationer er slået fra, indtil du selv slår dem til. Du kan vælge Ja eller Ikke nu på oversigten og ændre valget under ⋮ → Notifikationer. Notifikationen viser afsenderens navn (det du selv har kaldt personen, ellers personens e-mail), men aldrig beskedteksten. På iPhone/iPad kræves iOS/iPadOS 16.4+ og hjemmeskærm-installation. Aktuelle modtagetider kontrolleres, når afsendelsen sættes i gang. En afsendelse, der allerede er sat i gang, kan stadig nå frem efter ændring af tider eller fravalg. Telefon og netværk kan forsinke eller undlade visning. Ingen garanti for præcist tidspunkt."],
     ["Hvad er modtagetider?", "I hver samtale kan du under ⋮ → Modtagetider vælge, hvornår på ugen nye beskeder i den samtale når frem til dig. Tiderne gælder kun den samtale. Beskeder uden for tiderne venter, til næste modtagetid – eller til du i samtalen trykker “Modtag beskeder nu”."],
     ["Hvordan kommer man ind i en samtale?", "Kun via invitation på e-mail. Ekstra deltagere (fx advokat eller sagsbehandler) får først adgang, når alle i samtalen har godkendt, og de ser ingen beskeder fra før, de kom med."],
+    ["Hvad er et kaldenavn?", "Et kaldenavn er et navn, du selv giver en person, så du kan genkende vedkommende. Kun du kan se det – personens profil og navn hos andre ændres ikke. Hold fingeren på en samtale for at ændre det. Du kan også give et kaldenavn, før personen har accepteret din invitation: det følger med, når invitationen tages imod, og personen kan aldrig se det. En invitation, der venter på accept, har ingen samtale at åbne endnu. Tryk eller hold fingeren på den for at ændre kaldenavn eller annullere invitationen."],
     ["Hvem kan se og skrive i samtalen?", "Under ⋮ → “Deltagere og roller” ser du alle deltagere og deres rolle: Part, Læse og skrive eller Kun læse. Parterne kan fjerne ekstra deltagere eller gøre en skrivende deltager til kun læse. Skriveadgang kræver en ny invitation, som alle parter godkender. Alle kan forlade samtalen."],
     ["Hvad bliver blokeret?", "Rolff stopper beskeder, der kan opfattes som sårende eller unødigt kan provokere til vrede (tjekket af AI), beskeder med emojis (de misforstås let – skriv det med ord; et 👍 på en besked er et fast svar, ikke tekst, og er tilladt), beskeder skrevet med store bogstaver (opleves som råb) og den samme besked sendt igen. Ved AI-/tone-afvisning kan du få et valgfrit forslag, hvis beskeden indeholder et konkret, legitimt praktisk ønske («Brug forslaget» kopierer det til skrivefeltet; du redigerer og sender selv, og det tjekkes igen). Ren kritik, trusler uden praktisk kerne eller lignende kan ikke omformuleres — så får du kun vejledning (ikke en sendbar tekst). Forslag erstatter ikke ordblokliste, længde- eller frekvensgrænser. Stavefejl og ukendte egenavne er ikke i sig selv et problem. Hvis AI er usikker på beskedens afgørende mening, bliver du bedt om at præcisere den, før den kan sendes. Store begyndelsesbogstaver gør ikke krænkende ord til tilladte navne."],
     ["Hvordan blokerer jeg en samtale?", "Tryk ⋮ i samtalen → “Blokér samtale”. Så kan de andre ikke længere sende beskeder i samtalen; de får kun at vide, at beskeden ikke kan sendes – ikke hvem eller hvornår. Blokeringen udløber aldrig af sig selv. Den ophører kun, når du selv trykker “Afblokér”."],
@@ -293,6 +299,7 @@ function Faq({ lang }: { lang: Lang }) {
     ["Can I get notifications?", "Notifications are off unless you turn them on. You can choose Yes or Not now on the overview and change this under ⋮ → Notifications. The notification shows the sender's name (the nickname you gave them, otherwise their email), but never the message text. iPhone/iPad requires iOS/iPadOS 16.4+ and a Home Screen installation. Current receive times are checked when dispatch is started. A dispatch already started may still arrive after changing times or opting out. Phone and network may delay or omit display. Exact timing is not guaranteed."],
     ["What are receive times?", "In each conversation you can choose, under ⋮ → Receive times, when during the week new messages in that conversation reach you. The times apply only to that conversation. Messages arriving outside your times wait until the next receive time – or until you tap “Receive messages now” in the conversation."],
     ["How do people join a conversation?", "Only by e-mail invitation. Extra participants (e.g. a lawyer or caseworker) only get access when everyone in the conversation has approved, and they see no messages from before they joined."],
+    ["What is a nickname?", "A nickname is a name you give a person so you can recognise them. Only you can see it – their profile and their name for others are unchanged. Press and hold a conversation to change it. You can also give a nickname before the person has accepted your invitation: it carries over when the invitation is accepted, and the person can never see it. An invitation that is waiting for acceptance has no conversation to open yet. Tap or press and hold it to change the nickname or cancel the invitation."],
     ["Who can read and write in the conversation?", "Under ⋮ → “Participants and roles” you see everyone and their role: Party, Read and write or Read only. Parties can remove extra participants or make a writer read only. Write access needs a new invitation approved by all parties. Anyone can leave."],
     ["What gets blocked?", "Rolff stops messages that may come across as hurtful or needlessly provoke anger (checked by AI), messages with emojis (easily misread – use words; a 👍 on a message is a fixed reply, not text, and is allowed), messages in all caps (reads as shouting) and the same message sent twice. On AI/tone blocks you may get an optional rephrase only if the message contains a concrete legitimate practical wish (“Use suggestion” copies it into the composer; you edit and send yourself, and it is checked again). Pure criticism, threats without a practical core, and similar cannot be rewritten — you then get guidance only (not sendable text). Suggestions do not override blocked words, length or frequency limits. Spelling errors and unfamiliar proper names alone are not a problem. If AI cannot understand the core meaning sufficiently, you are asked to clarify before sending. Capitalizing offensive words does not exempt them as names."],
     ["How do I block a conversation?", "Tap ⋮ in the conversation → “Block conversation”. The others can then no longer send messages there; they are only told the message cannot be sent – not who or when. A block never expires by itself. It only ends when you tap “Unblock”."],
@@ -607,6 +614,7 @@ function Home({ lang, open, invite, rename, refreshKey }: { lang: Lang; open: (c
   // Own mutes only: shows a small muted icon on the row (nobody else can see it).
   const [mutes, setMutes] = useState<MuteRow[]>([]);
   // The press-and-hold tip is shown until it is dismissed or the gesture has been used once.
+  const [pendingMenu, setPendingMenu] = useState<ConvRow | null>(null);
   const [hintGone, setHintGone] = useState(() => { try { return localStorage.getItem(CONV_HINT_KEY) === "1"; } catch { return false; } });
   const dropHint = () => { setHintGone(true); try { localStorage.setItem(CONV_HINT_KEY, "1"); } catch { /* private mode */ } };
   // v2 adds the latest visible message (server-filtered: own or released to me) and sorts by it.
@@ -619,6 +627,16 @@ function Home({ lang, open, invite, rename, refreshKey }: { lang: Lang; open: (c
   }, []);
   useEffect(() => { load(); }, [load, refreshKey]);
   useEffect(() => { const f = () => { if (document.visibilityState === "visible") load(); }; document.addEventListener("visibilitychange", f); return () => document.removeEventListener("visibilitychange", f); }, [load]);
+  /** "Annullér invitation": confirm, then revoke the open invitation and drop the empty row (nothing is sent to the invitee). */
+  const cancelInvite = async (c: ConvRow) => {
+    const who = convDisplay(c, da).title;
+    const ok = await confirmDialog({ title: da ? "Annullér invitationen?" : "Cancel the invitation?", body: da ? `${who} bliver ikke inviteret. Du kan sende en ny senere.` : `${who} will not be invited. You can send a new one later.`,
+      confirm: da ? "Annullér invitation" : "Cancel invitation", cancel: da ? "Behold" : "Keep", danger: true });
+    if (!ok || !c.pending_invitation_id) return;
+    const { error } = await supabase.rpc("cancel_pending_invitation", { inv: c.pending_invitation_id });
+    void load();
+    showToast(error ? (da ? "Det lykkedes ikke. Prøv igen." : "That didn't work. Try again.") : (da ? "Invitationen er annulleret" : "Invitation cancelled"), { tone: error ? "neutral" : "success", at: "top", ms: 3000 });
+  };
   const now = new Date();
   return (
     <section className="convlist" aria-labelledby="convlist-title">
@@ -633,12 +651,15 @@ function Home({ lang, open, invite, rename, refreshKey }: { lang: Lang; open: (c
         {convs.map((c) => { const d = convDisplay(c, da); const prev = previewText(c, da); const time = listTime(c.last_at, lang, now); return (
           <li key={c.id} className="convrow">
             <ColorDot lang={lang} conv={c} label={d.title} initial={d.initial} changed={(col) => setConvs((convs ?? []).map((x) => x.id === c.id ? { ...x, color: col } : x))} />
-            <ContactButton open={() => open(c)} rename={() => { dropHint(); rename(renameTargets(c)); }}>
+            <ContactButton open={() => (isPendingOnly(c) ? setPendingMenu(c) : open(c))} rename={() => { dropHint(); if (isPendingOnly(c)) setPendingMenu(c); else rename(renameTargets(c)); }}>
               <span className="convtop"><span className="convname">{d.title}</span>{activeMute(mutes, c.id) && <span className="convmuted" role="img" aria-label={da ? "Lydløs" : "Muted"}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8.7 3A6 6 0 0 1 18 8c0 2.4.5 4.1 1.1 5.2M6.3 6.3C6.1 6.8 6 7.4 6 8c0 7-3 9-3 9h14M10.3 21a1.9 1.9 0 0 0 3.4 0M2 2l20 20" /></svg></span>}{time && <span className="convtime">{time}</span>}</span>
               <span className={prev ? "convprev" : "convprev empty"}>{prev ?? d.status ?? (c.last_at === undefined ? "" : (da ? "Ingen beskeder endnu" : "No messages yet"))}</span>
             </ContactButton>
           </li>); })}
       </ul>}
+      {pendingMenu && <PendingInviteMenu lang={lang} title={convDisplay(pendingMenu, da).title} close={() => setPendingMenu(null)}
+        rename={() => { const c = pendingMenu; setPendingMenu(null); dropHint(); rename(renameTargets(c)); }}
+        cancelInvite={() => { const c = pendingMenu; setPendingMenu(null); void cancelInvite(c); }} />}
       {!hintGone && convs?.some((c) => c.others.length) && <div className="convhint" role="note">
         <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></svg>
         <p>{da ? "Hold fingeren på en samtale for at give personen et privat kaldenavn, som kun du ser." : "Press and hold a conversation to give the person a private nickname only you see."}</p>

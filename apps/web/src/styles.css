@@ -633,3 +633,5 @@ details.more .sheet-danger-zone{margin-top:12px;margin-bottom:6px}
 .mute-unmute{align-self:flex-start;margin:0 0 12px -6px}
 .convmuted{flex:none;display:inline-flex;align-items:center;color:var(--muted);line-height:1}
 .convmuted + .convtime{margin-left:0}
+.pending-invite-actions{display:grid;gap:10px;margin-top:10px}.pending-invite-actions button{width:100%;min-height:48px;justify-content:center;border-color:var(--border);color:var(--text)}
+.pending-invite-actions button.pending-invite-cancel{color:#c0392b}[data-theme=dark] .pending-invite-actions button.pending-invite-cancel{color:#ff8a80}
