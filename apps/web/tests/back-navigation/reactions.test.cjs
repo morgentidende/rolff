@@ -88,7 +88,7 @@ test('English labels, and tapping your own 👍 removes it', { timeout: 10000 },
         const items = [...d.querySelectorAll('.message-panel [role=menuitem]')].map((b) => (b.querySelector('span:last-child') || b).textContent.trim());
         assert.deepEqual(items, ['Remove', 'Reply', 'Copy', 'Information']);
         assert.equal(menuButton(d, 'Remove').getAttribute('aria-label'), 'Remove your 👍');
-        d.querySelector('.message-overlay').dispatchEvent(new w.Event('pointerdown', { bubbles: true }));
+        { const o = d.querySelector('.message-overlay'); o.dispatchEvent(new w.Event('pointerdown', { bubbles: true })); o.dispatchEvent(new w.Event('pointerup', { bubbles: true })); o.click(); } // a full tap: closing happens at click time
         await delay(30);
         await click(d.querySelector('.msg-thumb'));
         await delay(40);
