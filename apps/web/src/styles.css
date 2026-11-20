@@ -667,3 +667,5 @@ html.modal-open,html.modal-open body,:root:has(dialog[open]),:root:has(dialog[op
 @media (prefers-reduced-motion:reduce){.overlay.top-overlay .sheet{animation:none}}
 /* Nickname card (native <dialog>) inside a conversation: same place, under the header. */
 :root:has(.topbar.chat) .contact-alias-dialog{inset:calc(env(safe-area-inset-top,0px) + 60px) auto auto 50%;bottom:auto;transform:translateX(-50%);width:min(calc(100% - 24px),560px);max-height:calc(var(--vv-h,100dvh) - env(safe-area-inset-top,0px) - 72px - var(--kbd-inset,0px));border-radius:16px;box-shadow:0 12px 36px rgba(0,0,0,.3);padding-bottom:max(16px,0px)}
+.pending-invite-actions{display:grid;gap:10px;margin-top:10px}.pending-invite-actions button{width:100%;min-height:48px;justify-content:center;border-color:var(--border);color:var(--text)}
+.pending-invite-actions button.pending-invite-cancel{color:#c0392b}[data-theme=dark] .pending-invite-actions button.pending-invite-cancel{color:#ff8a80}

@@ -3,6 +3,10 @@
 import { ContextMsg, ModerationTechnicalError, REASON_CODES, systemPromptForLang, appLang, type AppLang, contextFields, sanitizeSuggestion, sanitizeExplanation, DECISIONS, RESPONSE_SCHEMA, validateDecisionContract, type Decision } from "./moderation.ts";
 
 export const MAX_BYTES = 4 * 1024 * 1024, MAX_PAGES = 5;
+/** Max attachments per sender in any rolling 24 hours. Must equal _attachment_daily_limit() in the database (a test checks). */
+export const ATTACHMENT_DAILY_LIMIT = 5;
+/** Image detail for moderation. Keep "high": "low" shrinks to 512px (text unreadable) and "auto" can mean full size on newer models. */
+export const IMAGE_DETAIL = "high" as const;
 export type AttMime = "image/png" | "image/jpeg" | "image/webp" | "image/gif" | "application/pdf";
 
 const ascii = (b: Uint8Array, from: number, to: number) => String.fromCharCode(...b.subarray(from, to));
@@ -114,7 +118,7 @@ export function b64(b: Uint8Array): string {
 export async function openaiFileModerate(o: { apiKey: string; model: string; baseUrl: string; prompt?: string }, f: { mime: AttMime; bytes: Uint8Array; name: string },
   caption: string, ctx: ContextMsg[], signal: AbortSignal): Promise<{ raw: string; usage: { input: number; output: number } }> {
   const dataUrl = `data:${f.mime};base64,${b64(f.bytes)}`;
-  const part = f.mime === "application/pdf" ? { type: "input_file", filename: "document.pdf", file_data: dataUrl } : { type: "input_image", image_url: dataUrl, detail: "high" };
+  const part = f.mime === "application/pdf" ? { type: "input_file", filename: "document.pdf", file_data: dataUrl } : { type: "input_image", image_url: dataUrl, detail: IMAGE_DETAIL };
   const r = await fetch(`${o.baseUrl.replace(/\/+$/, "")}/responses`, {
     method: "POST", signal, headers: { "content-type": "application/json", authorization: `Bearer ${o.apiKey}` },
     body: JSON.stringify({
