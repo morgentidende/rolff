@@ -32,8 +32,9 @@ const chrome = findChrome();
 if (!chrome && process.env.CI === 'true') throw new Error('Chrome is required in CI for the ring geometry test');
 
 test('ring geometry in a real browser: centre, inset and size match the button (DPR 1-3, widths, font scale, themes)', { skip: !chrome && 'no Chrome available', timeout: 120000 }, async () => {
-  const vite = await startVite(); const br = await startChrome(chrome);
+  const vite = await startVite(); let br = null;
   try {
+    br = await startChrome(chrome);
     const cases = [];
     for (const theme of ['light', 'dark']) for (const dpr of [1, 2, 2.625, 3]) for (const width of [360, 390]) cases.push({ theme, dpr, width, scale: 1 });
     cases.push({ theme: 'light', dpr: 2.75, width: 390, scale: 1.3 }, { theme: 'dark', dpr: 3, width: 360, scale: 1.5 });
@@ -76,5 +77,5 @@ test('ring geometry in a real browser: centre, inset and size match the button (
       assert.ok(ins.every((v) => v / k >= 0.9 && v / k <= 2.4), `inset should be ~1.5 css px, got ${ins.map((v) => (v / k).toFixed(2))} ${tag}`);
       void ox; void oy;
     }
-  } finally { br.close(); await vite.close(); }
+  } finally { if (br) br.close(); await vite.close(); }
 });

@@ -34,11 +34,28 @@ async function waitJson(url, tries = 80) {
   throw new Error('CDP not ready');
 }
 
+async function launchChrome(chromePath) {
+  // A cold CI runner can be slow to open the debug port: wait up to 30 s per attempt and retry,
+  // and never leave a half-started Chrome behind (it would keep the test process alive).
+  let lastErr;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const port = await freePort();
+    const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'rolff-ring-chrome-'));
+    const proc = spawn(chromePath, ['--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run', '--no-default-browser-check', '--disable-dev-shm-usage', '--disable-extensions', '--disable-background-networking', '--disable-crash-reporter', '--hide-scrollbars', `--user-data-dir=${userData}`, `--remote-debugging-port=${port}`, 'about:blank'], { stdio: 'ignore' });
+    proc.unref();
+    const cleanup = () => { try { proc.kill('SIGKILL'); } catch {} try { fs.rmSync(userData, { recursive: true, force: true }); } catch {} };
+    try { const pages = await waitJson(`http://127.0.0.1:${port}/json/list`, 300); return { pages, proc, userData, cleanup }; }
+    catch (e) { lastErr = e; cleanup(); }
+  }
+  throw lastErr;
+}
+
 async function startChrome(chromePath) {
-  const port = await freePort();
-  const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'rolff-ring-chrome-'));
-  const proc = spawn(chromePath, ['--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run', '--no-default-browser-check', '--disable-dev-shm-usage', '--hide-scrollbars', `--user-data-dir=${userData}`, `--remote-debugging-port=${port}`, 'about:blank'], { stdio: 'ignore' });
-  const pages = await waitJson(`http://127.0.0.1:${port}/json/list`);
+  const launched = await launchChrome(chromePath);
+  try { return await attachChrome(launched); } catch (e) { launched.cleanup(); throw e; }
+}
+
+async function attachChrome({ pages, cleanup }) {
   const page = pages.find((t) => t.type === 'page') || pages[0];
   const ws = new WebSocket(page.webSocketDebuggerUrl);
   await new Promise((res, rej) => { ws.addEventListener('open', res); ws.addEventListener('error', rej); });
@@ -59,7 +76,7 @@ async function startChrome(chromePath) {
       await new Promise((r) => setTimeout(r, 300));
     },
     async shot(clip) { const r = await send('Page.captureScreenshot', { format: 'png', fromSurface: true, ...(clip ? { clip: { ...clip, scale: 1 } } : {}) }); return Buffer.from(r.data, 'base64'); },
-    close() { try { ws.close(); } catch {} proc.kill('SIGKILL'); try { fs.rmSync(userData, { recursive: true, force: true }); } catch {} },
+    close() { try { ws.close(); } catch {} cleanup(); },
   };
 }
 
