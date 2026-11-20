@@ -58,7 +58,7 @@ Deno.test("Ret pauses a delayed message on the server; Send saves, X/Genoptag re
   const app = await Deno.readTextFile("apps/web/src/App.tsx");
   const bubble = await Deno.readTextFile("apps/web/src/MessageBubble.tsx");
   const banner = await Deno.readTextFile("apps/web/src/EditComposer.tsx");
-  const mig = await Deno.readTextFile("supabase/migrations/20261120150000_delayed_edit_hold.sql");
+  const mig = await Deno.readTextFile("supabase/migrations/20261120160000_delayed_edit_hold.sql");
   assert(app.includes("hold_delayed_message") && app.includes("resume_delayed_message"), "client holds on Ret and resumes on cancel");
   assert(app.indexOf("hold_delayed_message") < app.indexOf("setEditId(selected.id)"), "hold is requested before the editor opens");
   assert(app.includes("Beskeden er allerede sendt, så den kan ikke rettes.") && app.includes("has already been sent"), "race message da + en");
