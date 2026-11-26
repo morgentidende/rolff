@@ -79,11 +79,12 @@ test('Privatliv og sletning: equal headings, themed checkboxes, no account-delet
   const f = await env(); const { d } = f; try {
     const s = await openItem(d, 'Privatliv og sletning'); await delay(60);
     const heads = [...s.querySelectorAll('.privacy h3')];
-    assert.deepEqual(heads.map(h => h.textContent), ['Opbevaring og synkronisering', 'Download mine data', 'Automatisk sletning ved inaktivitet']);
+    assert.deepEqual(heads.map(h => h.textContent), ['Opbevaring og synkronisering', 'Download mine data']);
+    assert.ok(!/Automatisk sletning ved inaktivitet/.test(s.textContent));
     assert.ok(heads.every(h => h.classList.contains('psec-h')));
     assert.equal(s.querySelector('.danger-card'), null, 'delete moved to Konto');
     assert.ok(!s.querySelector('#delpw') && !s.querySelector('button.danger'));
-    assert.equal(s.querySelectorAll('input[type=checkbox]').length, 2); assert.ok([...s.querySelectorAll('input[type=checkbox]')].every(c => c.classList.contains('check') && c.closest('label.check-row')));
+    assert.equal(s.querySelectorAll('input[type=checkbox]').length, 1); assert.ok([...s.querySelectorAll('input[type=checkbox]')].every(c => c.classList.contains('check') && c.closest('label.check-row')));
     assert.match(s.textContent, /Hent en kopi af dine data/);
   } finally { await f.close(); }
 });
@@ -155,5 +156,35 @@ test('Konto: Opsig abonnement is visible on a paid plan and confirms with a warn
     assert.match(d.body.textContent, /Dit abonnement udløber 9\. december 2026/);
     const resume = [...d.querySelectorAll('button')].find(b => b.textContent.trim() === 'Genoptag abonnement');
     assert.ok(resume, 'undo after cancel');
+  } finally { await f.close(); }
+});
+
+test('Privatliv: on Premium sky-synk can be turned on; no inactivity section', async () => {
+  const f = await env(); const { d } = f; try {
+    const s = await openItem(d, 'Privatliv og sletning'); await delay(80);
+    const sync = [...s.querySelectorAll('label, .check-row')].find(el => /Sky-synk \(brug Rolff på flere enheder\)/.test(el.textContent));
+    assert.ok(sync, 'sync row');
+    const box = sync.querySelector('input[type=checkbox]');
+    assert.equal(box.disabled, false);
+    assert.ok(!s.querySelector('.sync-premium-note'));
+    assert.ok(!/Kun Premium/.test(s.textContent));
+    assert.ok(!/Automatisk sletning ved inaktivitet/.test(s.textContent));
+    assert.ok(!/Slet min konto, hvis jeg ikke logger ind/.test(s.textContent));
+  } finally { await f.close(); }
+});
+
+test('Privatliv: on Standard sky-synk is locked with Kun Premium and opens Abonnement', async () => {
+  const f = await env(); const { d, w } = f; try {
+    w.QA.setCurrentPlan('text');
+    const s = await openItem(d, 'Privatliv og sletning'); await delay(80);
+    const sync = [...s.querySelectorAll('label, .check-row')].find(el => /Sky-synk \(brug Rolff på flere enheder\)/.test(el.textContent));
+    assert.ok(sync, 'sync row');
+    const box = sync.querySelector('input[type=checkbox]');
+    assert.equal(box.disabled, true);
+    assert.equal(box.checked, false);
+    assert.match(s.textContent, /Kun Premium/);
+    const up = [...s.querySelectorAll('button')].find(b => b.textContent.trim() === 'Opgradér til Premium');
+    assert.ok(up); await click(up); await delay(80);
+    assert.ok(d.querySelector('.plans'), 'Abonnement sheet opened');
   } finally { await f.close(); }
 });

@@ -263,6 +263,9 @@ button.danger{background:#c0392b;color:#fff;border-color:#c0392b}button.danger:d
 /* Privacy and account: equal section headings, themed checkboxes, delete in its own danger card. */
 .privacy .psec{margin:0 0 18px}
 .privacy .psec-h{font-size:17px;font-weight:650;line-height:1.3;margin:6px 0 8px}
+.check-row.is-disabled{opacity:.65;cursor:default}
+.privacy .sync-premium-note{margin-top:2px}
+.privacy .sync-premium-note .textbtn{margin-left:0}
 .privacy form{margin:0}
 .danger-card{border:1.5px solid #c0392b;border-radius:14px;padding:12px 14px 14px;background:color-mix(in srgb,#c0392b 5%,var(--card))}
 [data-theme=dark] .danger-card{border-color:#ff8a80;background:color-mix(in srgb,#ff8a80 6%,var(--card))}
