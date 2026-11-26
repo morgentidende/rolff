@@ -12,13 +12,14 @@ import { blockedAttachmentNotice, type RecipientAttachmentBlocks } from "./attac
 import { effectiveCharLimit, textRetryKey } from "./composerLimits";
 import { MessageBubble, ReplyComposer, type Message } from "./MessageBubble";
 import { EditComposer } from "./EditComposer";
-import { isPendingSend, pendingSeconds, soonestPending } from "./delayedSend";
+import { DELAYED_SEND_SECONDS, isHeldMessage, isPendingSend, pendingSeconds, soonestPending } from "./delayedSend";
 import { invActions, invText, invitePoints, type PendingInv } from "./inviteText";
 import { Toast, showToast } from "./toast";
 import { ConfirmHost, confirmDialog } from "./confirmDialog";
 import { PolicyView } from "./PolicyView";
 import { MuteDialog } from "./MuteDialog";
-import { activeMute, muteMenuLabel, muteUntilText, unmuteLabel, type MuteDuration, type MuteRow } from "./muteModel";
+import { MutedBellIcon } from "./icons";
+import { activeMute, muteMenuLabel, muteUntilText, type MuteDuration, type MuteRow } from "./muteModel";
 import { onDeepLink } from "./native/deepLinks";
 import { isNative } from "./native/platform";
 import { afterSettle } from "./viewportSettle";
@@ -209,7 +210,7 @@ export function App() {
       {session && renameContacts && <ContactAliasDialog key={`alias:${session.user.id}`} lang={lang} contacts={renameContacts}
         close={() => setRenameContacts(null)} save={async (id, alias, pending) => { const uid=session.user.id; const { error } = await (pending ? supabase.rpc("set_invitation_alias", { p_invitation: id, p_alias: alias }) : supabase.rpc("set_contact_alias", { p_contact: id, p_alias: alias })).setHeader("Authorization", `Bearer ${session.access_token}`); if (error) throw error; if((await supabase.auth.getSession()).data.session?.user.id!==uid)return; const name=alias.trim()||null; setConv(c => c ? (pending ? (c.pending_invitation_id === id ? { ...c, pending_alias: name } : c) : { ...c, others: c.others.map(o => o.user_id === id ? { ...o, alias:name } : o) }) : c); setHomeKey(k => k + 1); }}
         saved={() => setRenameContacts(null)} />}
-      {sheet === "account" && <SheetView title={da ? "Konto" : "Account"} close={close} lang={lang} anchor={menuButtonRef}><AccountPanel lang={lang} /></SheetView>}
+      {sheet === "account" && <SheetView title={da ? "Konto" : "Account"} close={close} lang={lang} anchor={menuButtonRef}><AccountPanel lang={lang} openPrivacy={() => setSheet("privacy")} /></SheetView>}
       {sheet === "newpw" && session && <SheetView title={da ? "Vælg ny adgangskode" : "Choose a new password"} close={close} lang={lang} anchor={menuButtonRef}><NewPassword lang={lang} done={close} /></SheetView>}
       {sheet === "privacy" && <SheetView title={da ? "Privatliv og sletning" : "Privacy and deletion"} close={close} lang={lang} anchor={menuButtonRef}><PrivacyPanel lang={lang} /></SheetView>}
       {sheet === "feedback" && <SheetView title={da ? "Kontakt" : "Contact"} close={close} lang={lang} anchor={menuButtonRef}><FeedbackForm lang={lang} /></SheetView>}
@@ -286,46 +287,98 @@ function Faq({ lang }: { lang: Lang }) {
     ["Kan jeg se, om min besked er modtaget eller læst?", "Nej. Rolff viser aldrig, om en besked er modtaget eller læst. Det er for at undgå pres og konflikter. Du ved, at beskeden er nået frem, når du får et svar."],
     ["Kan den anden se, om jeg har læst en besked eller er online?", "Nej. Rolff har ingen læsekvitteringer, ingen online-status og ingen “skriver…”-indikator."],
     ["Hvad gør AI-tonetjekket?", "Før en besked sendes, vurderer en AI-tjeneste tonen. Bliver den afvist, leveres den ikke. Har beskeden et konkret legitimt praktisk ønske, kan du få et valgfrit omformuleringsforslag; ellers kun vejledning (ikke sendbar). Beskeden og korte uddrag (højst 300 tegn) af op til 5 tidligere beskeder sendes til tjenesten. I testen: kun opdigtede beskeder."],
-    ["Kan jeg få notifikationer?", "Notifikationer er slået fra, indtil du selv slår dem til. Du kan vælge Ja eller Ikke nu på oversigten og ændre valget under ⋮ → Notifikationer. Notifikationen viser afsenderens navn (det du selv har kaldt personen, ellers personens e-mail), men aldrig beskedteksten. På iPhone/iPad kræves iOS/iPadOS 16.4+ og hjemmeskærm-installation. Aktuelle modtagetider kontrolleres, når afsendelsen sættes i gang. En afsendelse, der allerede er sat i gang, kan stadig nå frem efter ændring af tider eller fravalg. Telefon og netværk kan forsinke eller undlade visning. Ingen garanti for præcist tidspunkt."],
+    ["Kan jeg få notifikationer?", "Notifikationer er slået fra, indtil du selv slår dem til. Du kan vælge Ja eller Ikke nu på oversigten og ændre valget under ⋮ → Notifikationer. Notifikationen viser afsenderens navn (det du selv har kaldt personen, ellers personens e-mail), men aldrig beskedteksten. Når nogen accepterer din invitation, får du også besked. Du kan gøre en enkelt samtale lydløs i samtalens menu. Tilmeldingen fornyes automatisk, mens du bruger appen; har enheden ikke været brugt i 90 dage, skal du slå notifikationer til igen. Under Enheder kan du fjerne en telefon eller slå fra på alle. På iPhone/iPad kræves iOS/iPadOS 16.4+ og hjemmeskærm-installation. Aktuelle modtagetider kontrolleres, når afsendelsen sættes i gang. En afsendelse, der allerede er sat i gang, kan stadig nå frem efter ændring af tider eller fravalg. Telefon og netværk kan forsinke eller undlade visning. Ingen garanti for præcist tidspunkt."],
     ["Hvad er modtagetider?", "I hver samtale kan du under ⋮ → Modtagetider vælge, hvornår på ugen nye beskeder i den samtale når frem til dig. Tiderne gælder kun den samtale. Beskeder uden for tiderne venter, til næste modtagetid – eller til du i samtalen trykker “Modtag beskeder nu”."],
     ["Hvordan kommer man ind i en samtale?", "Kun via invitation på e-mail. Ekstra deltagere (fx advokat eller sagsbehandler) får først adgang, når alle i samtalen har godkendt, og de ser ingen beskeder fra før, de kom med."],
     ["Hvad er et kaldenavn?", "Et kaldenavn er et navn, du selv giver en person, så du kan genkende vedkommende. Kun du kan se det – personens profil og navn hos andre ændres ikke. Hold fingeren på en samtale for at ændre det. Du kan også give et kaldenavn, før personen har accepteret din invitation: det følger med, når invitationen tages imod, og personen kan aldrig se det. En invitation, der venter på accept, har ingen samtale at åbne endnu. Tryk eller hold fingeren på den for at ændre kaldenavn eller annullere invitationen."],
-    ["Hvem kan se og skrive i samtalen?", "Under ⋮ → “Deltagere og roller” ser du alle deltagere og deres rolle: Part, Læse og skrive eller Kun læse. Parterne kan fjerne ekstra deltagere eller gøre en skrivende deltager til kun læse. Skriveadgang kræver en ny invitation, som alle parter godkender. Alle kan forlade samtalen."],
+    ["Hvem kan se og skrive i samtalen?", "Under ⋮ → “Beskedfrekvens” ser du alle deltagere og deres rolle: Part, Læse og skrive eller Kun læse. Parterne kan fjerne ekstra deltagere eller gøre en skrivende deltager til kun læse. Skriveadgang kræver en ny invitation, som alle parter godkender. Alle kan forlade samtalen."],
     ["Hvad bliver blokeret?", "Rolff stopper beskeder, der kan opfattes som sårende eller unødigt kan provokere til vrede (tjekket af AI), beskeder med emojis (de misforstås let – skriv det med ord; et 👍 på en besked er et fast svar, ikke tekst, og er tilladt), beskeder skrevet med store bogstaver (opleves som råb) og den samme besked sendt igen. Ved AI-/tone-afvisning kan du få et valgfrit forslag, hvis beskeden indeholder et konkret, legitimt praktisk ønske («Brug forslaget» kopierer det til skrivefeltet; du redigerer og sender selv, og det tjekkes igen). Ren kritik, trusler uden praktisk kerne eller lignende kan ikke omformuleres — så får du kun vejledning (ikke en sendbar tekst). Forslag erstatter ikke ordblokliste, længde- eller frekvensgrænser. Stavefejl og ukendte egenavne er ikke i sig selv et problem. Hvis AI er usikker på beskedens afgørende mening, bliver du bedt om at præcisere den, før den kan sendes. Store begyndelsesbogstaver gør ikke krænkende ord til tilladte navne."],
     ["Hvordan blokerer jeg en samtale?", "Tryk ⋮ i samtalen → “Blokér samtale”. Så kan de andre ikke længere sende beskeder i samtalen; de får kun at vide, at beskeden ikke kan sendes – ikke hvem eller hvornår. Blokeringen udløber aldrig af sig selv. Den ophører kun, når du selv trykker “Afblokér”."],
     ["Hvad er “Blokerede ord”?", "Et valgfrit filter (slået fra som standard): Under ⋮ → “Blokerede ord” kan du tilføje enkeltord, udtryk på flere ord eller hele sætninger (op til 120 tegn), som ikke må nå frem til dig. Store/små bogstaver og accenter er ligegyldige (fx matcher “dårlig far” også “DÅRLIG FAR” og “darlig far”), og ordene skal stå i samme rækkefølge. Afslutter du med * (fx “pis*”), rammes også ord, der begynder sådan. Listen gælder den samtale, du står i, og er privat. Rammer en besked noget på listen, bliver den ikke leveret – afsenderen får at vide præcis hvilket ord eller udtryk, og at modtageren har blokeret det, og kan omformulere. Derfor skal du bekræfte det for hvert ord. Du kan fjerne ord igen når som helst."],
-    ["Kan jeg begrænse hvor tit en person skriver?", "Ja. Åbn “Deltagere og roller” og tryk “Indstillinger” ud for personen. Vælg højst 1 besked pr. minut, pr. 5 minutter, pr. time eller et brugerdefineret antal minutter (1 til 1.440 = 24 timer). Standard er ingen grænse. Det regnes fra personens seneste leverede besked til dig i alle jeres samtaler; afviste beskeder tæller ikke, vedhæftninger tæller som en besked. For tidlige beskeder gemmes ikke, og afsenderen får at vide, hvornår der kan sendes igen. Er I flere, gælder den strengeste grænse."],
-    ["Hvem kan tilføje en ekstra person til en samtale?", "At invitere den anden forælder, når du opretter en samtale, kan alle. At tilføje en ekstra person (fx advokat eller bedsteforælder) kræver, at DU som inviterer har planen “Tekst + vedhæftninger” (79 kr./md.). De andre deltagere og den inviterede må gerne have 49-planen. Nedgraderer du senere, bliver de nuværende deltagere."],
-    ["Hvad kan de andre se om mig?", "Du logger ind med din e-mail. Din e-mail er også det navn, de andre i samtalen ser – du kan ikke selv vælge et andet navn. Hver person kan give dig et privat kaldenavn, som kun de selv ser (hold fingeren på samtalen). Glemt adgangskode: brug linket på login-siden. Skift e-mail eller adgangskode: ⋮ → Konto. Sletning af konto: ⋮ → Privatliv og sletning."],
+    ["Kan jeg begrænse hvor tit en person skriver?", "Ja. Åbn “Beskedfrekvens” og tryk “Indstillinger” ud for personen. Vælg højst 1 besked pr. minut, pr. 5 minutter, pr. time eller et brugerdefineret antal minutter (1 til 1.440 = 24 timer). Standard er ingen grænse. Det regnes fra personens seneste leverede besked til dig i alle jeres samtaler; afviste beskeder tæller ikke, vedhæftninger tæller som en besked. For tidlige beskeder gemmes ikke, og afsenderen får at vide, hvornår der kan sendes igen. Er I flere, gælder den strengeste grænse."],
+    ["Hvem kan tilføje en ekstra person til en samtale?", "At invitere den anden forælder, når du opretter en samtale, kan alle. At tilføje en ekstra person (fx advokat eller bedsteforælder) kræver, at DU som inviterer har planen “Premium” (79 kr./md.). De andre deltagere og den inviterede må gerne have Standard-planen. Nedgraderer du senere, bliver de nuværende deltagere."],
+    ["Hvad kan de andre se om mig?", "Du logger ind med din e-mail. Din e-mail er også det navn, de andre i samtalen ser – du kan ikke selv vælge et andet navn. Hver person kan give dig et privat kaldenavn, som kun de selv ser (hold fingeren på samtalen). Glemt adgangskode: brug linket på login-siden. Skift e-mail eller adgangskode: ⋮ → Konto. Sletning af konto: ⋮ → Konto."],
     ["Hvordan kontakter jeg Rolff?", "Tryk ⋮ → “Kontakt”. Du vælger kategorien Feedback eller Problemer med Rolff-appen og skriver din besked. Det er også sådan, du skriver til kundeservice. Skriv ikke samtaleindhold eller personoplysninger, du ikke vil dele. Beskeden sendes til Rolff med dit bruger-id – ikke dine samtaler."],
     ["Hvordan rapporterer jeg noget?", "Tryk ⋮ i samtalen → “Rapportér”. Du vælger kategori, skriver selv hvad der er sket og kan markere de beskeder, du vil vedhæfte. Du ser en forhåndsvisning, og intet sendes før du bekræfter. Rapporten mailes til Rolffs udvikler (kontakt: nicolaipetersen108@gmail.com) med dit bruger-id. Rolff gemmer kun kategori, tidspunkt og antal vedhæftede beskeder (til at begrænse misbrug) – ikke teksten. Der er ingen døgnvagt og ingen garanti for svar eller handling. Ved akut fare: ring 112."],
-    ["Hvor ligger mine data, og hvor længe?", "På Supabase-servere i Frankfurt (EU). Du vælger selv opbevaring (1 år, 5 år eller ubegrænset) og sky-synk under ⋮ → Privatliv og sletning. Der kan du også downloade alle dine data (ZIP med JSON og CSV) og slette din konto. AI-tonetjekket bruger i testen OpenAI (USA/global behandling, ikke EU; ingen Zero Data Retention endnu; store:false). Læs mere i privatlivspolitikken (⋮ → Privatlivspolitik)."],
-    ["Kan jeg sende billeder og PDF'er?", "Ja, med planen “Tekst + vedhæftninger” (79 kr./md.). Brug papirclipsen til filvalg eller kameraikonet til et nyt billede. Telefonen styrer eventuelle kameratilladelser, når funktionen bruges; filvælgeren giver kun adgang til den valgte fil. En valgt fil sendes først, når du trykker på papirflyet. Du kan sende PNG, JPG, WebP, GIF (ikke animeret) og PDF (højst 4 MB og 5 sider). Du kan sende op til 5 vedhæftninger i døgnet (regnet over de seneste 24 timer). Før filen sendes, tjekker Rolff både billedet og al tekst i det – samme regler som beskeder. Er bare én linje sårende, eller er billedet upassende, bliver filen ikke sendt, og du får at vide hvorfor. Modtagerens blokerede ord gælder også tekst i filen. Under Blokeringer kan du slå fra, at den anden må sende dig fotos eller filer; afsenderen får så at vide, at den type ikke tages imod i samtalen – ikke om en besked er læst eller modtaget. Alle i samtalen kan se vedhæftninger, de modtager, uanset plan. Læsere kan ikke sende filer."],
-    ["Hvad koster Rolff?", "Der er to planer: “Tekst” 49 kr./md. med højst 160 tegn pr. besked (én SMS-længde) og “Tekst + vedhæftninger” 79 kr./md. med højst 480 tegn (tre SMS-længder). Planen gælder dig som afsender, så to forældre kan have hver sin plan. Opgradering gælder straks, nedgradering fra næste periode. I testversionen er skiftet en testfunktion uden betaling."],
+    ["Hvor ligger mine data, og hvor længe?", "På Supabase-servere i Frankfurt (EU). Du vælger selv opbevaring (1 år, 5 år eller ubegrænset) og sky-synk under ⋮ → Privatliv og sletning. Der kan du også downloade alle dine data (ZIP med JSON og CSV). Du sletter din konto under ⋮ → Konto (det sletter alle data i appen og opsiger abonnementet; lav en udskrift først, hvis du vil beholde noget). AI-tonetjekket bruger i testen OpenAI (USA/global behandling, ikke EU; ingen Zero Data Retention endnu; store:false). Læs mere i privatlivspolitikken (⋮ → Privatlivspolitik)."],
+    ["Kan jeg sende billeder og PDF'er?", "Ja, med planen “Premium” (79 kr./md.). Brug papirclipsen til filvalg eller kameraikonet til et nyt billede. Telefonen styrer eventuelle kameratilladelser, når funktionen bruges; filvælgeren giver kun adgang til den valgte fil. En valgt fil sendes først, når du trykker på papirflyet. Du kan sende PNG, JPG, WebP, GIF (ikke animeret) og PDF (højst 4 MB og 5 sider). Du kan sende op til 5 vedhæftninger i døgnet (regnet over de seneste 24 timer). Før filen sendes, tjekker Rolff både billedet og al tekst i det – samme regler som beskeder. Er bare én linje sårende, eller er billedet upassende, bliver filen ikke sendt, og du får at vide hvorfor. Modtagerens blokerede ord gælder også tekst i filen. Under Blokeringer kan du slå fra, at den anden må sende dig fotos eller filer; afsenderen får så at vide, at den type ikke tages imod i samtalen – ikke om en besked er læst eller modtaget. Alle i samtalen kan se vedhæftninger, de modtager, uanset plan. Læsere kan ikke sende filer."],
+    ["Hvad koster Rolff?", "Der er to planer: “Standard” 49 kr./md. med højst 160 tegn pr. besked (én SMS-længde) og “Premium” 79 kr./md. med højst 480 tegn (tre SMS-længder). Planen gælder dig som afsender, så to forældre kan have hver sin plan. Opgradering gælder straks, nedgradering fra næste periode. I testversionen er skiftet en testfunktion uden betaling."],
     ["Er det her den rigtige app?", "Nej, det er et testmiljø. Skriv kun opdigtede beskeder. AI-tjekket kører hos OpenAI (se ovenfor)."],
   ] : [
     ["Can I see if my message was received or read?", "No. Rolff never shows whether a message was received or read. That is to protect against pressure and conflicts. You know a message has arrived when you get a reply."],
     ["Can the other person see if I read a message or am online?", "No. Rolff has no read receipts, no online status and no typing indicator."],
     ["What does the AI tone check do?", "Before a message is sent, an AI service assesses the tone. If rejected, it is not delivered. With a concrete legitimate practical wish you may get an optional rewrite; otherwise guidance only (not sendable). The message and short excerpts (max 300 characters) of up to 5 earlier messages are sent to the service. In the test: synthetic messages only."],
-    ["Can I get notifications?", "Notifications are off unless you turn them on. You can choose Yes or Not now on the overview and change this under ⋮ → Notifications. The notification shows the sender's name (the nickname you gave them, otherwise their email), but never the message text. iPhone/iPad requires iOS/iPadOS 16.4+ and a Home Screen installation. Current receive times are checked when dispatch is started. A dispatch already started may still arrive after changing times or opting out. Phone and network may delay or omit display. Exact timing is not guaranteed."],
+    ["Can I get notifications?", "Notifications are off unless you turn them on. You can choose Yes or Not now on the overview and change this under ⋮ → Notifications. The notification shows the sender's name (the nickname you gave them, otherwise their email), but never the message text. When someone accepts your invitation, you are notified too. You can mute a single conversation in its menu. The registration is renewed automatically while you use the app; if the device has not been used for 90 days, turn notifications on again. Under Devices you can remove a phone or turn them off on all devices. iPhone/iPad requires iOS/iPadOS 16.4+ and a Home Screen installation. Current receive times are checked when dispatch is started. A dispatch already started may still arrive after changing times or opting out. Phone and network may delay or omit display. Exact timing is not guaranteed."],
     ["What are receive times?", "In each conversation you can choose, under ⋮ → Receive times, when during the week new messages in that conversation reach you. The times apply only to that conversation. Messages arriving outside your times wait until the next receive time – or until you tap “Receive messages now” in the conversation."],
     ["How do people join a conversation?", "Only by e-mail invitation. Extra participants (e.g. a lawyer or caseworker) only get access when everyone in the conversation has approved, and they see no messages from before they joined."],
     ["What is a nickname?", "A nickname is a name you give a person so you can recognise them. Only you can see it – their profile and their name for others are unchanged. Press and hold a conversation to change it. You can also give a nickname before the person has accepted your invitation: it carries over when the invitation is accepted, and the person can never see it. An invitation that is waiting for acceptance has no conversation to open yet. Tap or press and hold it to change the nickname or cancel the invitation."],
-    ["Who can read and write in the conversation?", "Under ⋮ → “Participants and roles” you see everyone and their role: Party, Read and write or Read only. Parties can remove extra participants or make a writer read only. Write access needs a new invitation approved by all parties. Anyone can leave."],
+    ["Who can read and write in the conversation?", "Under ⋮ → “Message frequency” you see everyone and their role: Party, Read and write or Read only. Parties can remove extra participants or make a writer read only. Write access needs a new invitation approved by all parties. Anyone can leave."],
     ["What gets blocked?", "Rolff stops messages that may come across as hurtful or needlessly provoke anger (checked by AI), messages with emojis (easily misread – use words; a 👍 on a message is a fixed reply, not text, and is allowed), messages in all caps (reads as shouting) and the same message sent twice. On AI/tone blocks you may get an optional rephrase only if the message contains a concrete legitimate practical wish (“Use suggestion” copies it into the composer; you edit and send yourself, and it is checked again). Pure criticism, threats without a practical core, and similar cannot be rewritten — you then get guidance only (not sendable text). Suggestions do not override blocked words, length or frequency limits. Spelling errors and unfamiliar proper names alone are not a problem. If AI cannot understand the core meaning sufficiently, you are asked to clarify before sending. Capitalizing offensive words does not exempt them as names."],
     ["How do I block a conversation?", "Tap ⋮ in the conversation → “Block conversation”. The others can then no longer send messages there; they are only told the message cannot be sent – not who or when. A block never expires by itself. It only ends when you tap “Unblock”."],
     ["What are “Blocked words”?", "An optional filter (off by default): under ⋮ → “Blocked words” you can add single words, multi-word expressions or whole sentences (up to 120 characters) that must not reach you. Case and accents are ignored, and words must appear in the same order. Ending with * (e.g. “pis*”) also matches words starting that way. The list applies to the current conversation and is private. If a message hits it, it is not delivered – the sender is told exactly which word or phrase and that the recipient blocked it, and can rephrase. That is why you confirm each word. You can remove words at any time."],
-    ["Can I limit how often a person writes?", "Yes. Open “Participants and roles”, then tap “Settings” next to the person. Choose at most 1 message per minute, per 5 minutes, per hour, or a custom number of minutes (1 to 1,440 = 24 hours). Default: no limit. It counts from the person's latest delivered message to you in any of your conversations; rejected messages do not count; attachments count as a message. Early messages are not stored and the sender is told when they can send again. With several recipients the strictest applies."],
-    ["Who can add an extra person to a conversation?", "Anyone can invite the other parent when creating a conversation. Adding an extra person (e.g. a lawyer) requires that YOU, the inviter, are on “Text + attachments” (79 DKK/month). Other members and the invitee may be on 49. If you downgrade later, existing members stay."],
-    ["What can others see about me?", "You log in with your e-mail. Your e-mail is also the name others in the conversation see – you cannot choose a different name yourself. Each person can give you a private nickname that only they see (press and hold the conversation). Forgot password: use the link on the login page. Change e-mail or password: ⋮ → Account. Account deletion: ⋮ → Privacy and deletion."],
+    ["Can I limit how often a person writes?", "Yes. Open “Message frequency”, then tap “Settings” next to the person. Choose at most 1 message per minute, per 5 minutes, per hour, or a custom number of minutes (1 to 1,440 = 24 hours). Default: no limit. It counts from the person's latest delivered message to you in any of your conversations; rejected messages do not count; attachments count as a message. Early messages are not stored and the sender is told when they can send again. With several recipients the strictest applies."],
+    ["Who can add an extra person to a conversation?", "Anyone can invite the other parent when creating a conversation. Adding an extra person (e.g. a lawyer) requires that YOU, the inviter, are on “Premium” (79 DKK/month). Other members and the invitee may be on Standard. If you downgrade later, existing members stay."],
+    ["What can others see about me?", "You log in with your e-mail. Your e-mail is also the name others in the conversation see – you cannot choose a different name yourself. Each person can give you a private nickname that only they see (press and hold the conversation). Forgot password: use the link on the login page. Change e-mail or password: ⋮ → Account. Account deletion: ⋮ → Account."],
     ["How do I contact Rolff?", "Tap ⋮ → “Contact”. Choose the category Feedback or Problems with the Rolff app and write your message. This is also how you reach customer service. Do not write conversation content or personal data you do not want to share. The message is sent to Rolff with your user id – not your conversations."],
     ["How do I report something?", "Tap ⋮ in the conversation → “Report”. You choose a category, write what happened and can tick the messages you want to attach. You see a preview and nothing is sent until you confirm. The report is e-mailed to Rolff's developer (contact: nicolaipetersen108@gmail.com) with your user id. Rolff stores only category, time and number of attached messages (to limit abuse) – not the text. There is no 24/7 staff and no guarantee of a reply or action. In an emergency: call 112."],
-    ["Where is my data, and for how long?", "On Supabase servers in Frankfurt (EU). You choose retention (1 year, 5 years or unlimited) and cloud sync under ⋮ → Privacy and deletion, where you can also download all your data (ZIP with JSON and CSV) and delete your account. The AI tone check uses OpenAI during testing (US/global processing, not EU; no Zero Data Retention yet; store:false). See the privacy policy (⋮ → Privacy policy)."],
-    ["Can I send images and PDFs?", "Yes, with the “Text + attachments” plan (79 DKK/month). Use the paperclip to choose a file or the camera to take a photo. Your phone manages any camera permission when used; the file picker grants access only to your chosen file. Nothing is sent until you press the paper plane. PNG, JPG, WebP, GIF (not animated) and PDF (max 4 MB, 5 pages). You can send up to 5 attachments per day (counted over the last 24 hours). Before sending, Rolff checks the image and all text in it with the same rules as messages. If one line is hurtful or the image is inappropriate, it is not sent and you are told why. The recipient's blocked words also apply to text in the file. Under Blocking lists you can decline photos or files from the other person; the sender is then told that that type is not accepted in the conversation — not whether a message was read or delivered. Everyone can view attachments they receive, whatever their plan. Readers cannot send files."],
-    ["What does Rolff cost?", "Two plans: “Text” 49 DKK/month with up to 160 characters per message (one SMS length) and “Text + attachments” 79 DKK/month with up to 480 (three SMS lengths). The plan applies to you as sender, so two parents may have different plans. Upgrades apply immediately, downgrades from the next period. In the test version switching is a test feature without payment."],
+    ["Where is my data, and for how long?", "On Supabase servers in Frankfurt (EU). You choose retention (1 year, 5 years or unlimited) and cloud sync under ⋮ → Privacy and deletion, where you can also download all your data (ZIP with JSON and CSV). You delete your account under ⋮ → Account (this deletes all data in the app and ends your subscription; make a transcript first if you want to keep anything). The AI tone check uses OpenAI during testing (US/global processing, not EU; no Zero Data Retention yet; store:false). See the privacy policy (⋮ → Privacy policy)."],
+    ["Can I send images and PDFs?", "Yes, with the “Premium” plan (79 DKK/month). Use the paperclip to choose a file or the camera to take a photo. Your phone manages any camera permission when used; the file picker grants access only to your chosen file. Nothing is sent until you press the paper plane. PNG, JPG, WebP, GIF (not animated) and PDF (max 4 MB, 5 pages). You can send up to 5 attachments per day (counted over the last 24 hours). Before sending, Rolff checks the image and all text in it with the same rules as messages. If one line is hurtful or the image is inappropriate, it is not sent and you are told why. The recipient's blocked words also apply to text in the file. Under Blocking lists you can decline photos or files from the other person; the sender is then told that that type is not accepted in the conversation — not whether a message was read or delivered. Everyone can view attachments they receive, whatever their plan. Readers cannot send files."],
+    ["What does Rolff cost?", "Two plans: “Standard” 49 DKK/month with up to 160 characters per message (one SMS length) and “Premium” 79 DKK/month with up to 480 (three SMS lengths). The plan applies to you as sender, so two parents may have different plans. Upgrades apply immediately, downgrades from the next period. In the test version switching is a test feature without payment."],
     ["Is this the real app?", "No, this is a test environment. Write made-up messages only. The AI check runs at OpenAI (see above)."],
   ];
-  return <div className="faq">{qa.map(([q, a]) => <details key={q}><summary>{q}</summary><p>{a}</p></details>)}</div>;
+  const [open, setOpen] = useState<string | null>(null);
+  const uid = useId();
+  const hold = useRef<{ btn: HTMLElement; top: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const h = hold.current;
+    if (!h) return;
+    const pin = () => {
+      const sheet = h.btn.closest(".sheet") as HTMLElement | null;
+      if (!sheet) return;
+      const head = sheet.querySelector(".sheethead") as HTMLElement | null;
+      const minTop = head ? head.getBoundingClientRect().bottom + 4 : Number.NEGATIVE_INFINITY;
+      const want = Math.max(h.top, minTop);
+      const now = h.btn.getBoundingClientRect().top;
+      if (now !== want) sheet.scrollTop += now - want;
+    };
+    pin();
+    const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced || typeof requestAnimationFrame !== "function") {
+      hold.current = null;
+      return;
+    }
+    const t0 = performance.now();
+    let raf = 0;
+    const step = () => {
+      pin();
+      if (performance.now() - t0 < 320) raf = requestAnimationFrame(step);
+      else hold.current = null;
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [open]);
+
+  return (
+    <div className="faq">
+      {qa.map(([q, a], i) => {
+        const isOpen = open === q;
+        const btnId = `${uid}-q${i}`;
+        const panelId = `${uid}-p${i}`;
+        return (
+          <div className={isOpen ? "faq-item is-open" : "faq-item"} key={q}>
+            <button type="button" id={btnId} className="faq-q" aria-expanded={isOpen} aria-controls={panelId} onClick={(e) => {
+              hold.current = { btn: e.currentTarget, top: e.currentTarget.getBoundingClientRect().top };
+              setOpen((cur) => (cur === q ? null : q));
+            }}>{q}</button>
+            <div className="faq-a" id={panelId} role="region" aria-labelledby={btnId} inert={!isOpen} aria-hidden={!isOpen}>
+              <div className="faq-a-inner"><p>{a}</p></div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 export const evidenceNote = (lang: Lang) => lang === "da"
@@ -365,21 +418,9 @@ function MyDataExport({ lang }: { lang: Lang }) {
 function PrivacyPanel({ lang }: { lang: Lang }) {
   const da = lang === "da";
   const [p, setP] = useState<{ inactivity_delete: boolean; inactivity_days: number; cloud_sync: boolean; retention: string } | null>(null);
-  const [pw, setPw] = useState(""); const [ok, setOk] = useState(false); const [state, setState] = useState<"" | "busy" | "wrong" | "err" | "nopw" | "noack">("");
   useEffect(() => { supabase.rpc("get_my_privacy").then(({ data }) => setP(((data as any[]) ?? [])[0] ?? null)); }, []);
   const saveData = async (n: NonNullable<typeof p>) => { setP(n); await supabase.rpc("set_my_data_prefs", { p_cloud_sync: n.cloud_sync, p_retention: n.retention }); };
   const save = async (n: NonNullable<typeof p>) => { setP(n); await supabase.rpc("set_my_privacy", { p_inactivity_delete: n.inactivity_delete, p_inactivity_days: n.inactivity_days }); };
-  const del = async (e: React.FormEvent) => {
-    e.preventDefault(); if (state === "busy") return;
-    if (!pw) { setState("nopw"); focusField(document.getElementById("delpw")); return; }
-    if (!ok) { setState("noack"); focusField(document.getElementById("delack")); return; }
-    setState("busy");
-    let r; try { r = await callFn("delete-account", { password: pw }); } catch { r = { status: 0, data: null as any }; }
-    if (r.status !== 200) { setState(r.status === 403 ? "wrong" : "err"); return; }
-    try { localStorage.clear(); sessionStorage.clear(); if ("caches" in window) for (const k of await caches.keys()) await caches.delete(k);
-      const dbs = (indexedDB as any).databases ? await (indexedDB as any).databases() : []; for (const d of dbs) if (d.name) indexedDB.deleteDatabase(d.name); } catch { /* best effort */ }
-    setPushOwner(null); await cacheClear(); await supabase.auth.signOut({ scope: "local" }); location.replace(location.pathname + "?deleted=1");
-  };
   return (
     <div className="privacy">
       <section className="psec" aria-labelledby="data">
@@ -401,9 +442,32 @@ function PrivacyPanel({ lang }: { lang: Lang }) {
           {[30, 60, 90].map((d) => <option key={d} value={d}>{d} {da ? "dage" : "days"}</option>)}</select>
         <p className="meta">{da ? "Du får en mail 14 dage før. Mailen indeholder ingen beskeder." : "You get an email 14 days before. It contains no messages."}</p></>}
       </section>
+    </div>
+  );
+}
+
+function DeleteAccountSection({ lang, openPrivacy }: { lang: Lang; openPrivacy: () => void }) {
+  const da = lang === "da";
+  const [pw, setPw] = useState(""); const [ok, setOk] = useState(false); const [state, setState] = useState<"" | "busy" | "wrong" | "err" | "nopw" | "noack">("");
+  const del = async (e: React.FormEvent) => {
+    e.preventDefault(); if (state === "busy") return;
+    if (!pw) { setState("nopw"); focusField(document.getElementById("delpw")); return; }
+    if (!ok) { setState("noack"); focusField(document.getElementById("delack")); return; }
+    setState("busy");
+    let r; try { r = await callFn("delete-account", { password: pw }); } catch { r = { status: 0, data: null as any }; }
+    if (r.status !== 200) { setState(r.status === 403 ? "wrong" : "err"); return; }
+    try { localStorage.clear(); sessionStorage.clear(); if ("caches" in window) for (const k of await caches.keys()) await caches.delete(k);
+      const dbs = (indexedDB as any).databases ? await (indexedDB as any).databases() : []; for (const d of dbs) if (d.name) indexedDB.deleteDatabase(d.name); } catch { /* best effort */ }
+    setPushOwner(null); await cacheClear(); await supabase.auth.signOut({ scope: "local" }); location.replace(location.pathname + "?deleted=1");
+  };
+  return (
+    <div className="privacy account-delete">
       <section className="psec danger-card" aria-labelledby="delete">
-      <h3 id="delete" className="psec-h">{da ? "Slet min konto" : "Delete my account"}</h3>
-      <p className="meta">{da ? "Sletter din konto, dine indstillinger, kaldenavne, farver og feedback på serveren samt alt, Rolff har gemt på denne enhed. Det kan ikke fortrydes." : "Deletes your account, settings, aliases, colours and feedback on the server, plus everything Rolff stored on this device. This cannot be undone."}</p>
+      <h3 id="delete" className="psec-h">{da ? "Slet konto" : "Delete account"}</h3>
+      <p className="meta">{da
+        ? "Sletningen sker med det samme og fjerner din konto og alle data i appen – blandt andet indstillinger, kaldenavne, farver og feedback på serveren samt alt, Rolff har gemt på denne enhed. Det er ikke kun en deaktivering og kan ikke fortrydes. Hvis du vil beholde noget, skal du først lave en udskrift (i samtalen: ⋮ → Eksportér samtale) eller hente en kopi af dine data. Der er endnu ingen betaling via App Store eller Google Play; testabonnementet ophører med kontoen. Hvis du senere har et abonnement via Apple, skal du selv opsige det hos Apple (Indstillinger eller apps.apple.com/account/subscriptions), ellers kan betalingen fortsætte. Via Google Play: Play Butik → Betalinger og abonnementer."
+        : "Deletion is immediate and removes your account and all data in the app – including settings, nicknames, colours and feedback on the server, plus everything Rolff stored on this device. This is not a mere deactivation and cannot be undone. If you want to keep anything, first make a transcript (in the conversation: ⋮ → Export conversation) or download a copy of your data. There is not yet any App Store or Google Play billing; the test plan ends with the account. If you later have a subscription billed by Apple, you must cancel it with Apple (Settings or apps.apple.com/account/subscriptions), or billing may continue. Via Google Play: Play Store → Payments & subscriptions."}</p>
+      <p className="account-delete-export"><button type="button" className="textbtn strong" onClick={openPrivacy}>{da ? "Hent mine data først" : "Download my data first"}</button></p>
       <p className="notice">{evidenceNote(lang)}</p>
       <form noValidate onSubmit={del}>
         <label htmlFor="delpw">{da ? "Bekræft med din adgangskode" : "Confirm with your password"}</label>
@@ -411,7 +475,7 @@ function PrivacyPanel({ lang }: { lang: Lang }) {
         {state === "nopw" && <p id="delpw-hint" className="field-hint" role="alert">{da ? "Skriv din adgangskode for at slette kontoen." : "Enter your password to delete your account."}</p>}
         <CheckRow id="delack" checked={ok} onChange={(v) => { setOk(v); if (v && state === "noack") setState(""); }} label={da ? "Jeg forstår, at sletningen er endelig." : "I understand that deletion is final."} attention={state === "noack"} describedBy={state === "noack" ? "delack-hint" : undefined} />
         {state === "noack" && <p id="delack-hint" className="field-hint" role="alert">{da ? "Sæt flueben i ”Jeg forstår …” for at slette." : "Tick “I understand …” to delete."}</p>}
-        <div className="row end"><button type="submit" className="danger" disabled={state === "busy"} aria-disabled={!ok || !pw || undefined}>{da ? "Slet min konto permanent" : "Delete my account permanently"}</button></div>
+        <div className="row end"><button type="submit" className="danger" disabled={state === "busy"} aria-disabled={!ok || !pw || undefined}>{da ? "Slet konto, slet alle data og opsig abonnement" : "Delete account, delete all data and cancel subscription"}</button></div>
         {state === "wrong" && <p className="err" role="alert">{da ? "Forkert adgangskode." : "Wrong password."}</p>}
         {state === "err" && <p className="err" role="alert">{da ? "Sletningen mislykkedes. Prøv igen." : "Deletion failed. Please try again."}</p>}
       </form>
@@ -601,11 +665,15 @@ const COLOR_NAMES: Record<string, [string, string]> = { teal: ["Petrol", "Teal"]
 
 function ColorDot({ lang, conv, label, initial, changed }: { lang: Lang; conv: Conv; label: string; initial?: string; changed: (c: string) => void }) {
   const da = lang === "da"; const [open, setOpen] = useState(false); const color = conv.color || "teal";
+  const wrap = useRef<HTMLSpanElement>(null);
   useBackLayer(open,()=>setOpen(false));
+  useModalLayer(open, wrap);
+  const scrim = useBackdropDismiss(() => setOpen(false));
   const letter = (initial || label.trim().match(/[\p{L}\p{N}]/u)?.[0] || "?").toUpperCase();
   const pick = async (c: string) => { const { error } = await supabase.rpc("set_conversation_color", { conv: conv.id, p_color: c }); if (!error) { changed(c); setOpen(false); } };
   return (
-    <span className="dotwrap">
+    <span className="dotwrap" ref={wrap}>
+      {open && createPortal(<div className="menu-scrim" data-modal-exempt="" {...scrim} />, document.body)}
       <button type="button" className={`dot c-${color}`} aria-label={da ? `Vælg farve for samtalen med ${label}` : `Choose colour for conversation with ${label}`} aria-expanded={open} onClick={(e) => { e.stopPropagation(); setOpen(!open); }}>
         <span aria-hidden="true">{letter}</span>
       </button>
@@ -639,6 +707,13 @@ function Home({ lang, open, invite, rename, refreshKey }: { lang: Lang; open: (c
   }, []);
   useEffect(() => { load(); }, [load, refreshKey]);
   useEffect(() => { const f = () => { if (document.visibilityState === "visible") load(); }; document.addEventListener("visibilitychange", f); return () => document.removeEventListener("visibilitychange", f); }, [load]);
+  const [muteNow, setMuteNow] = useState(() => Date.now());
+  useEffect(() => {
+    const next = mutes.map((m) => { const t = m.always || m.mute_until == null ? NaN : Date.parse(m.mute_until); return Number.isFinite(t) && t > Date.now() ? t : null; }).filter((t): t is number => t != null).sort((a, b) => a - b)[0];
+    if (next == null) return;
+    const i = setTimeout(() => setMuteNow(Date.now()), Math.min(Math.max(next - Date.now() + 25, 25), 60_000));
+    return () => clearTimeout(i);
+  }, [mutes, muteNow]);
   /** "Annullér invitation": confirm, then revoke the open invitation and drop the empty row (nothing is sent to the invitee). */
   const cancelInvite = async (c: ConvRow) => {
     const who = convDisplay(c, da).title;
@@ -664,8 +739,8 @@ function Home({ lang, open, invite, rename, refreshKey }: { lang: Lang; open: (c
           <li key={c.id} className="convrow">
             <ColorDot lang={lang} conv={c} label={d.title} initial={d.initial} changed={(col) => setConvs((convs ?? []).map((x) => x.id === c.id ? { ...x, color: col } : x))} />
             <ContactButton open={() => (isPendingOnly(c) ? setPendingMenu(c) : open(c))} rename={() => { dropHint(); if (isPendingOnly(c)) setPendingMenu(c); else rename(renameTargets(c)); }}>
-              <span className="convtop"><span className="convname">{d.title}</span>{activeMute(mutes, c.id) && <span className="convmuted" role="img" aria-label={da ? "Lydløs" : "Muted"}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8.7 3A6 6 0 0 1 18 8c0 2.4.5 4.1 1.1 5.2M6.3 6.3C6.1 6.8 6 7.4 6 8c0 7-3 9-3 9h14M10.3 21a1.9 1.9 0 0 0 3.4 0M2 2l20 20" /></svg></span>}{time && <span className="convtime">{time}</span>}</span>
-              <span className={prev ? "convprev" : "convprev empty"}>{prev ?? d.status ?? (c.last_at === undefined ? "" : (da ? "Ingen beskeder endnu" : "No messages yet"))}</span>
+              <span className="convtop"><span className="convname">{d.title}</span>{time && <span className="convtime">{time}</span>}</span>
+              <span className="convmeta"><span className={prev ? "convprev" : "convprev empty"}>{prev ?? d.status ?? (c.last_at === undefined ? "" : (da ? "Ingen beskeder endnu" : "No messages yet"))}</span>{activeMute(mutes, c.id, muteNow) && <span className="convmuted" role="img" aria-label={da ? "Lydløs" : "Muted"}><MutedBellIcon /></span>}</span>
             </ContactButton>
           </li>); })}
       </ul>}
@@ -794,7 +869,7 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
     const { error } = await supabase.rpc("clear_my_conversation_mute", { conv: conv.id });
     if (error) { showToast(da ? "Kunne ikke slå lyden til. Prøv igen." : "Could not unmute. Try again.", { at: "top", ms: 3000 }); return; }
     setMuteRows((rows) => rows.filter((x) => x.conversation_id !== conv.id));
-    showToast(da ? "Lyden er slået til" : "Unmuted", { tone: "success", ms: 3000, at: "top" });
+    showToast(da ? "Notifikationer er slået til" : "Notifications are on", { tone: "success", ms: 3000, at: "top" });
   };
   const [editId, setEditId] = useState<string | null>(null);
   const editBusy = useRef(false);
@@ -845,6 +920,19 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
     const d = await supabase.rpc("delayed_send_enabled", { conv: conv.id }); if (!d.error) setDelayedOn(!!d.data);
   }, [conv.id]);
   useEffect(() => { load(); const i = setInterval(load, 8000); return () => clearInterval(i); }, [load]);
+  const timelineMsgs = msgs.filter((m) => !isHeldMessage(m));
+  // A paused delayed message lives only in the composer. After a reload (or opening the chat),
+  // restore it from the server hold; do not flash it as a sent bubble.
+  useLayoutEffect(() => {
+    const held = msgs.filter(isHeldMessage);
+    if (!held.length) return;
+    if (editId && held.some((m) => m.id === editId)) return;
+    const latest = held[held.length - 1];
+    setReply(null);
+    setEditId(latest.id);
+    setText(latest.body);
+    setReplyFocus((n) => n + 1);
+  }, [msgs, editId]);
   const pendingSend = soonestPending(msgs, tickNow);
   const pendingLeft = pendingSend ? pendingSeconds(pendingSend.deliver_after, tickNow) : null;
   const releasing = useRef(new Set<string>());
@@ -918,7 +1006,7 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
     if (searchOpen) searchRef.current?.focus({ preventScroll: true });
     else if (refocusSearchBtn.current) { refocusSearchBtn.current = false; searchBtnRef.current?.focus({ preventScroll: true }); }
   }, [searchOpen]);
-  const hits = q ? findHits(msgs.map((m) => m.body), q) : [];
+  const hits = q ? findHits(timelineMsgs.map((m) => m.body), q) : [];
   const curIdx = hits.length ? hits[Math.min(cur, hits.length - 1)] : -1;
   useEffect(() => { if (curIdx >= 0) listRef.current?.querySelector(`[data-i="${curIdx}"]`)?.scrollIntoView({ block: "center" }); }, [curIdx, q]);
   const send = async () => {
@@ -1025,11 +1113,13 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
     resumeBusy.current = false; setBusy(false);
     if (r.status === 200 && r.data?.status === "accepted") {
       if (editId === id) { setEditId(null); setText(""); }
+      setMsgs((cur) => cur.map((x) => x.id === id ? { ...x, held: false, deliver_after: new Date(Date.now() + DELAYED_SEND_SECONDS * 1000).toISOString() } : x));
       load();
       return true;
     }
     if (r.data?.error === "no_longer_pending") {
       setEditId(null); setText("");
+      setMsgs((cur) => cur.filter((x) => x.id !== id));
       showToast(da ? "Beskeden findes ikke længere som ventende." : "The message is no longer waiting to be sent.", { at: "top", ms: 3000 });
       load();
       return false;
@@ -1051,6 +1141,7 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
     const { error } = await supabase.rpc("cancel_delayed_message", { p_id: selected.id });
     if (error) { showToast(da ? "Beskeden kunne ikke slettes. Den er måske allerede sendt." : "The message could not be deleted. It may already have been sent.", { at: "top", ms: 3000 }); load(); return; }
     if (editId === selected.id) { setEditId(null); setText(""); }
+    setMsgs((cur) => cur.filter((x) => x.id !== selected.id));
     showToast(da ? "Beskeden er slettet" : "Message deleted", { tone: "success", at: "top", ms: 2500 });
     load();
   };
@@ -1085,10 +1176,9 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
         {conv.role === "parent" && <button ref={addPersonRef} className="icon" aria-label={da ? "Tilføj person" : "Add person"} aria-haspopup="dialog" aria-expanded={sheet === "addMember"} onClick={() => setSheet("addMember")}><Icon d={<><circle cx="9" cy="8" r="4" /><path d="M2 21c0-4 3-6 7-6s7 2 7 6" /><path d="M19 8v6M16 11h6" /></>} /></button>}
         {/* Conversation-only actions; app-wide settings live on the front-page menu. */}
         <Menu lang={lang} buttonRef={menuButtonRef} items={[{ label: da ? "Forsinkede beskeder" : "Delayed messages", checked: delayedOn, run: () => { void (async () => { const next = !delayedOn; const { error } = await supabase.rpc("set_delayed_send", { conv: conv.id, p_enabled: next }); if (error) { showToast(da ? "Kunne ikke gemme indstillingen. Prøv igen." : "Could not save the setting. Try again.", { at: "top", ms: 3000 }); return; } setDelayedOn(next); showToast(next ? (da ? "Forsinkede beskeder er slået til" : "Delayed messages are on") : (da ? "Forsinkede beskeder er slået fra" : "Delayed messages are off"), { tone: "success", at: "top", ms: 2500 }); })(); } },
-          { label: muteMenuLabel(mute, da), run: () => setMuteOpen(true) },
-          ...(mute ? [{ label: unmuteLabel(da), run: () => { void unmute(); } }] : []),
+          { label: muteMenuLabel(mute, da), run: mute ? () => { void unmute(); } : () => setMuteOpen(true) },
           { label: t.windows, run: () => setSheet("times") },
-          { label: da ? "Deltagere og roller" : "Participants and roles", run: () => setSheet("members") },
+          { label: da ? "Beskedfrekvens" : "Message frequency", run: () => setSheet("members") },
           ...(renameTargets({ ...conv, others }).length ? [{ label: da ? "Kontaktens kaldenavn" : "Contact nickname", run: () => rename(renameTargets({ ...conv, others })) }] : []),
           { label: da ? "Eksportér samtale" : "Export conversation", run: () => setSheet("export") },
           { label: da ? "Blokeringer" : "Blocking lists", run: () => setSheet("words") },
@@ -1108,11 +1198,11 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
       {pending > 0 && <div className="notice row"><span>{t.pending(pending)}</span><span className="spacer" /><button onClick={receiveNow}>{t.receiveNow}</button></div>}
       <div className="msgs" aria-live="polite" ref={listRef}>
         {msgs.length === 0 && <p className="meta">{t.empty}</p>}
-        {groupMessagesByDay(msgs).map((g) => <section className="day-group" key={g.key}>
+        {groupMessagesByDay(timelineMsgs).map((g) => <section className="day-group" key={g.key}>
           <div className="day-sep" role="separator" aria-label={dayLabel(g.msgs[0].created_at, lang)}><span>{dayLabel(g.msgs[0].created_at, lang)}</span></div>
-          {g.msgs.map((m, j) => { const i = g.start + j; const newDay = j === 0; return <Fragment key={m.id}>{eventsBefore(events, msgs, i).map((e) => <EventNotice key={e.id} e={e} lang={lang} />)}<MessageBubble m={m} lang={lang} index={i} hit={i === curIdx} tailed={newDay || !sameSender(msgs[i - 1], m)} flash={m.mine && m.id === flashId} canReply={conv.role !== "reader" && !sending} canReact={conv.role !== "reader" && !isPendingSend(m.deliver_after, tickNow) && !m.held} onReply={beginReply} onThumb={toggleThumb} pendingSec={pendingSeconds(m.deliver_after, tickNow)} onEdit={m.mine && (isPendingSend(m.deliver_after, tickNow) || m.held) && !m.att_mime ? beginEdit : undefined} onDelete={m.mine && (isPendingSend(m.deliver_after, tickNow) || m.held) ? askCancelDelayed : undefined} onResume={m.mine && m.held ? resumeHeld : undefined}>{q ? markAll(m.body, q, i === curIdx) : m.body}{m.att_mime && <AttachmentView lang={lang} m={m} />}</MessageBubble></Fragment>; })}
+          {g.msgs.map((m, j) => { const i = g.start + j; const newDay = j === 0; return <Fragment key={m.id}>{eventsBefore(events, timelineMsgs, i).map((e) => <EventNotice key={e.id} e={e} lang={lang} />)}<MessageBubble m={m} lang={lang} index={i} hit={i === curIdx} tailed={newDay || !sameSender(timelineMsgs[i - 1], m)} flash={m.mine && m.id === flashId} canReply={conv.role !== "reader" && !sending} canReact={conv.role !== "reader" && !isPendingSend(m.deliver_after, tickNow)} onReply={beginReply} onThumb={toggleThumb} pendingSec={pendingSeconds(m.deliver_after, tickNow)} onEdit={m.mine && isPendingSend(m.deliver_after, tickNow) && !m.att_mime ? beginEdit : undefined} onDelete={m.mine && isPendingSend(m.deliver_after, tickNow) ? askCancelDelayed : undefined}>{q ? markAll(m.body, q, i === curIdx) : m.body}{m.att_mime && <AttachmentView lang={lang} m={m} />}</MessageBubble></Fragment>; })}
         </section>)}
-        {eventsBefore(events, msgs, msgs.length).map((e) => <EventNotice key={e.id} e={e} lang={lang} />)}
+        {eventsBefore(events, timelineMsgs, timelineMsgs.length).map((e) => <EventNotice key={e.id} e={e} lang={lang} />)}
         <div ref={endRef} />
       </div>
       {status?.kind === "blocked" && <BlockedNotice key={status.blockedText} lang={lang} reason={status.reason} house={status.house} explanation={status.explanation} spans={status.spans ?? []} blockedText={status.blockedText ?? ""} suggestion={status.suggestion ?? ""} onUse={() => { setText(applySuggestion(text, status.suggestion)); setStatus(null); }} onClose={() => setStatus(null)} />}
@@ -1123,17 +1213,17 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
       <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">{status?.kind === "accepted" && <span key={acceptedSeq}>{t.accepted}</span>}</div>
       {conv.role !== "reader" ? (
         <div className="card composer" ref={composerRootRef}><fieldset className="composer-fields" disabled={sending}>
-          <ComposerInput lang={lang} text={text} onText={setText} textareaRef={composerRef} plan={plan} cap={cap} busy={sending} file={file} onFile={setFile} openPlans={openPlans} retry={!!retryKey} canSend={!!file || !!text.trim()} onSend={() => { if (file) attachmentSend.current?.(); else send(); }} countdownUntil={!file && !text.trim() && !editId && pendingSend ? pendingSend.deliver_after : null} onSendNow={() => { if (pendingSend) void releaseNow(pendingSend.id); }} leading={editId ? <EditComposer lang={lang} onCancel={() => { const id = editId; if (!id) return; void resumeHeld(id).then((ok) => { if (ok) composerRef.current?.focus(); }); }} /> : reply ? <ReplyComposer who={replyWho(reply)} body={reply.body} unavailable={reply.body == null} lang={lang} onCancel={() => { setReply(null); composerRef.current?.focus(); }} /> : null} statusSlot={<LunaIndicator checking={sending} accepted={status?.kind === "accepted"} label={t.sending} pendingText={sending ? (file ? (text.trim() || file.name) : text) : undefined} />} recipientBlocks={recipientBlocks} />
+          <ComposerInput lang={lang} text={text} onText={setText} textareaRef={composerRef} plan={plan} cap={cap} busy={sending} file={file} onFile={setFile} openPlans={openPlans} retry={!!retryKey} canSend={!!file || !!text.trim()} onSend={() => { if (file) attachmentSend.current?.(); else send(); }} countdownUntil={!file && !text.trim() && !editId && pendingSend ? pendingSend.deliver_after : null} onSendNow={() => { if (pendingSend) void releaseNow(pendingSend.id); }} leading={editId ? <EditComposer lang={lang} onResume={() => { const id = editId; if (!id) return; void resumeHeld(id).then((ok) => { if (ok) composerRef.current?.focus(); }); }} onDelete={() => { const m = msgs.find((x) => x.id === editId); if (m) void askCancelDelayed(m); }} /> : reply ? <ReplyComposer who={replyWho(reply)} body={reply.body} unavailable={reply.body == null} lang={lang} onCancel={() => { setReply(null); composerRef.current?.focus(); }} /> : null} statusSlot={<LunaIndicator checking={sending} accepted={status?.kind === "accepted"} label={t.sending} pendingText={sending ? (file ? (text.trim() || file.name) : text) : undefined} />} recipientBlocks={recipientBlocks} />
           <AttachBar lang={lang} conv={conv.id} plan={plan} openPlans={openPlans} caption={text} file={file} setFile={setFile} sendRef={attachmentSend} cap={cap} replyTo={reply?.id ?? null} onBusy={setAttachmentBusy} limitMsg={limitMsg} sent={(messageId) => { setText(""); setReply(null); localStorage.removeItem(draftKey); localStorage.removeItem(replyKey); setStatus({ kind: "accepted" }); setAcceptedSeq((x) => x + 1); armFlash(messageId); load(); loadLim(); }} />
           {(() => { const wait = lim?.next_at ? Math.ceil((new Date(lim.next_at).getTime() - Date.now()) / 1000) : 0; return wait > 0 ? <p className="meta" role="status">{da ? `Du kan sende igen ${waitText(wait, true)}.` : `You can send again ${waitText(wait, false)}.`}</p> : null; })()}
         </fieldset></div>) : <div className="notice" role="note">{t.readOnly}</div>}
       {blocked && <div className="notice" role="status">{da ? "Du har blokeret samtalen. De andre kan ikke sende beskeder her. " : "You blocked this conversation. The others cannot send messages here. "}<button className="ghost" onClick={() => { void askBlock(false); }}>{da ? "Afblokér" : "Unblock"}</button></div>}
       {sheet === "report" && <SheetView title={reportStep === "preview" ? (da ? "Rapportér · Tjek og send" : "Report · Check and send") : (da ? "Rapportér" : "Report")} close={() => { setSheet(null); setReportStep("edit"); }} lang={lang} anchor={menuButtonRef}><ReportForm lang={lang} conv={conv.id} msgs={msgs} who={(m) => m.mine ? (da ? "Dig" : "You") : replyWho(m)} onStep={setReportStep} done={() => { setSheet(null); setReportStep("edit"); }} /></SheetView>}
       {sheet === "words" && <SheetView title={da ? "Blokeringer" : "Blocking lists"} close={() => setSheet(null)} lang={lang}><BlockingLists key={`${session.user.id}:${conv.id}`} session={session} lang={lang} conv={conv.id} /></SheetView>}
-      {sheet === "members" && <SheetView title={da ? "Deltagere og roller" : "Participants and roles"} close={() => setSheet(null)} lang={lang}><Members lang={lang} conv={conv.id} isParent={conv.role === "parent"} left={back} openWords={() => setSheet("words")} /></SheetView>}
+      {sheet === "members" && <SheetView title={da ? "Beskedfrekvens" : "Message frequency"} close={() => setSheet(null)} lang={lang}><Members lang={lang} conv={conv.id} isParent={conv.role === "parent"} left={back} openWords={() => setSheet("words")} /></SheetView>}
       {sheet === "export" && <SheetView title={da ? "Udskrift af samtale" : "Conversation transcript"} close={() => setSheet(null)} lang={lang}><ConversationExport lang={lang} conv={conv.id} plan={plan} onPlan={setPlan} ownEmail={session.user.email ?? ""} openPlans={() => { setSheet(null); openPlans(); }} /></SheetView>}
       {sheet === "addMember" && <SheetView title={da ? "Tilføj person" : "Add person"} close={() => setSheet(null)} lang={lang} anchor={addPersonRef}><AddMember lang={lang} conv={conv.id} done={(toast, tone = "success") => { load(); setSheet(null); showToast(toast, { tone, ms: tone === "success" ? 4000 : 9000, at: "top" }); }} openPlans={openPlans} /></SheetView>}
-      {muteOpen && <MuteDialog lang={lang} current={mute} done={(d) => { setMuteOpen(false); if (d) void applyMute(d); }} onUnmute={() => { setMuteOpen(false); void unmute(); }} />}
+      {muteOpen && <MuteDialog lang={lang} done={(d) => { setMuteOpen(false); if (d) void applyMute(d); }} />}
       {sheet === "times" && <SheetView title={t.windows} close={() => setSheet(null)} lang={lang}><ReceiveSettings key={`${session.user.id}:${conv.id}`} lang={lang} conv={conv.id} onCancel={() => setSheet(null)} /></SheetView>}
     </>
   );
@@ -1239,7 +1329,7 @@ function AddMember({ lang, conv, done, openPlans }: { lang: Lang; conv: string; 
     setBusy(false);
     if (r.status === 200) { blurActive(); done(r.data?.data?.status === "sent" ? (da ? `Invitation sendt til ${addr}.` : `Invitation sent to ${addr}.`) : (da ? `Anmodning sendt for ${addr} – afventer godkendelse.` : `Request sent for ${addr} – awaiting approval.`)); }
     else if (r.status === 502 && r.data?.data?.status === "mail_failed") { blurActive(); done(invText(lang).sendFailed, "neutral"); }
-    else if (r.data?.error === "plan_required") setMsg({ ok: false, text: da ? "Kun brugere på planen Tekst + vedhæftninger (79 kr./md.) kan tilføje ekstra personer. Du kan skifte plan under Abonnement (testfunktion – ingen betaling)." : "Only users on Text + attachments (79 DKK/month) can add extra people. You can switch under Plan (test feature – no payment).", plan: true });
+    else if (r.data?.error === "plan_required") setMsg({ ok: false, text: da ? "Kun brugere på Premium-planen (79 kr./md.) kan tilføje ekstra personer. Du kan skifte plan under Abonnement (testfunktion – ingen betaling)." : "Only users on Premium (79 DKK/month) can add extra people. You can switch under Plan (test feature – no payment).", plan: true });
     else setMsg({ ok: false, text: r.data?.error === "rate_limited" ? (da ? "Du har sendt mange invitationer i dag." : "Too many invitations today.") : r.data?.error === "bad_input" ? (da ? "Tjek e-mailadressen. Personen må ikke allerede være med." : "Check the email. The person must not already be a member.") : (da ? "Invitationen kunne ikke oprettes." : "The invitation could not be created.") });
   };
   return (
@@ -1274,7 +1364,7 @@ function NewPassword({ lang, done }: { lang: Lang; done: () => void }) {
   </form>);
 }
 
-function AccountPanel({ lang }: { lang: Lang }) {
+function AccountPanel({ lang, openPrivacy }: { lang: Lang; openPrivacy: () => void }) {
   const da = lang === "da";
   const [email, setEmail] = useState("");
   useEffect(() => { supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? "")); }, []);
@@ -1323,14 +1413,16 @@ function AccountPanel({ lang }: { lang: Lang }) {
       {eMsg && <p className={eMsg[0] ? "notice" : "err"} role={eMsg[0] ? "status" : "alert"}>{eMsg[1]}</p>}
       <button type="submit" disabled={busy}>{da ? "Skift e-mail" : "Change email"}</button>
     </form>
+    <DeleteAccountSection lang={lang} openPrivacy={openPrivacy} />
   </>);
 }
 
 // ---------- Plans (TEST FEATURE: no payment) ----------
+// Display names are Standard (49) and Premium (79) in da and en. Internal ids stay text / text_attachments.
 const PLAN_TOAST_MS = 3500;
 export const PLANS = [
-  { id: "text", price: 49, da: ["Tekst", "Op til 160 tegn pr. besked med AI-tonetjek og samtale med den anden forælder. Du kan se vedhæftninger og deltage, når andre tilføjer dig."], en: ["Text", "Up to 160 characters per message with AI tone check. You can view attachments others send."] },
-  { id: "text_attachments", price: 79, da: ["Tekst + vedhæftninger", "Op til 480 tegn pr. besked, og du kan sende screenshots, billeder og PDF'er (tjekket af AI før afsendelse) og tilføje ekstra personer til samtaler."], en: ["Text + attachments", "Up to 480 characters per message, plus sending screenshots, images and PDFs (checked by AI before sending) and adding extra people to conversations."] },
+  { id: "text", price: 49, da: ["Standard", "Op til 160 tegn pr. besked med AI-tonetjek og samtale med den anden forælder. Du kan se vedhæftninger og deltage, når andre tilføjer dig."], en: ["Standard", "Up to 160 characters per message with AI tone check. You can view attachments others send."] },
+  { id: "text_attachments", price: 79, da: ["Premium", "Op til 480 tegn pr. besked, og du kan sende screenshots, billeder og PDF'er (tjekket af AI før afsendelse) og tilføje ekstra personer til samtaler."], en: ["Premium", "Up to 480 characters per message, plus sending screenshots, images and PDFs (checked by AI before sending) and adding extra people to conversations."] },
 ] as const;
 function Plans({ lang }: { lang: Lang }) {
   const da = lang === "da";
@@ -1382,8 +1474,8 @@ function AttachBar({ lang, conv, plan, openPlans, caption, file, setFile, sendRe
   useEffect(() => { setOut(null); setAlt(""); }, [file]);
   const reasons: Record<string, string> = da ? { inappropriate_image: "billedet kan opfattes som upassende", controlling_demand: "teksten kan unødigt provokere til vrede", personal_attack: "teksten indeholder et personangreb", sarcasm_or_irony: "teksten er sarkastisk på en sårende måde", humiliation_mockery: "teksten er nedgørende", threat_intimidation: "teksten kan opfattes som en trussel", emotional_blackmail: "teksten lægger pres", false_politeness: "teksten er falsk høflig", slur_discrimination: "teksten er diskriminerende", other_harmful: "teksten kan opfattes som sårende eller aggressiv", uncertain: "Rolff er i tvivl om, hvordan teksten vil blive opfattet" }
     : { inappropriate_image: "the image may be inappropriate", controlling_demand: "the text may needlessly provoke anger", personal_attack: "the text contains a personal attack", sarcasm_or_irony: "the text is hurtfully sarcastic", humiliation_mockery: "the text is belittling", threat_intimidation: "the text may read as a threat", emotional_blackmail: "the text applies pressure", false_politeness: "the text is falsely polite", slur_discrimination: "the text is discriminatory", other_harmful: "the text may come across as hurtful or aggressive", uncertain: "Rolff isn’t sure how the text will come across" };
-  const errs: Record<string, string> = da ? { too_large: "Filen er for stor (højst 4 MB).", bad_type: "Kun PNG, JPG, WebP, GIF (ikke animeret) og PDF.", animated: "Animerede billeder kan ikke sendes.", too_many_pages: "PDF'en må højst have 5 sider.", encrypted_pdf: "Krypterede PDF'er kan ikke sendes.", empty: "Filen er tom.", read_only: "Du har rollen “Kun læse” og kan ikke sende.", rate_limited: "Du har sendt mange filer. Vent lidt og prøv igen.", daily_attachment_limit: "Du kan højst sende 5 vedhæftninger i døgnet. Prøv igen senere.", plan_required: "Vedhæftninger kræver planen Tekst + vedhæftninger (79 kr./md.).", length: "Teksten er for lang (højst 480 tegn med vedhæftning)." }
-    : { too_large: "File too large (max 4 MB).", bad_type: "Only PNG, JPG, WebP, GIF (not animated) and PDF.", animated: "Animated images cannot be sent.", too_many_pages: "PDF max 5 pages.", encrypted_pdf: "Encrypted PDFs cannot be sent.", empty: "The file is empty.", read_only: "You are read-only.", rate_limited: "Too many files. Wait and try again.", daily_attachment_limit: "You can send at most 5 attachments per 24 hours. Try again later.", plan_required: "Attachments require the Text + attachments plan (79 DKK/month).", length: "Text too long (max 480 characters with an attachment)." };
+  const errs: Record<string, string> = da ? { too_large: "Filen er for stor (højst 4 MB).", bad_type: "Kun PNG, JPG, WebP, GIF (ikke animeret) og PDF.", animated: "Animerede billeder kan ikke sendes.", too_many_pages: "PDF'en må højst have 5 sider.", encrypted_pdf: "Krypterede PDF'er kan ikke sendes.", empty: "Filen er tom.", read_only: "Du har rollen “Kun læse” og kan ikke sende.", rate_limited: "Du har sendt mange filer. Vent lidt og prøv igen.", daily_attachment_limit: "Du kan højst sende 5 vedhæftninger i døgnet. Prøv igen senere.", plan_required: "Vedhæftninger kræver Premium-planen (79 kr./md.).", length: "Teksten er for lang (højst 480 tegn med vedhæftning)." }
+    : { too_large: "File too large (max 4 MB).", bad_type: "Only PNG, JPG, WebP, GIF (not animated) and PDF.", animated: "Animated images cannot be sent.", too_many_pages: "PDF max 5 pages.", encrypted_pdf: "Encrypted PDFs cannot be sent.", empty: "The file is empty.", read_only: "You are read-only.", rate_limited: "Too many files. Wait and try again.", daily_attachment_limit: "You can send at most 5 attachments per 24 hours. Try again later.", plan_required: "Attachments require the Premium plan (79 DKK/month).", length: "Text too long (max 480 characters with an attachment)." };
   const send = async () => {
     if (!file || busy || count(caption) > cap) return;
     if (plan !== "text_attachments") { openPlans(); return; }

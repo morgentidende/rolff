@@ -32,17 +32,17 @@ export function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   });
 }
 
-export function ExportUpgrade({ lang, openPlans, close }: { lang: string; openPlans: () => void; close?: () => void }) {
+export function ExportUpgrade({ lang, openPlans }: { lang: string; openPlans: () => void; close?: () => void }) {
   const da = lang === "da";
   return <div className="composer-upgrade export-upgrade" role="region" aria-labelledby="export-upgrade-title">
     <h3 id="export-upgrade-title">{da ? "Vil du have en udskrift til advokat eller myndighed?" : "Need a transcript for a lawyer or authority?"}</h3>
-    <p>{da ? "Med planen til 79 kr./md. kan du få en signeret udskrift af samtalen sendt på e-mail – til dig selv eller fx din advokat. Udskriften kan kontrolleres for ægthed." : "With the 79 DKK/month plan you can have a signed transcript of the conversation e-mailed to yourself or e.g. your lawyer. Its authenticity can be checked."}</p>
-    <div className="row end">{close && <button type="button" className="ghost" onClick={close}>{da ? "Måske senere" : "Maybe later"}</button>}<button type="button" onClick={openPlans}>{da ? "Se planen til 79 kr." : "See the 79 DKK plan"}</button></div>
+    <p>{da ? "Med Premium (79 kr./md.) kan du få en signeret udskrift af samtalen sendt på e-mail – til dig selv eller fx din advokat. Udskriften kan kontrolleres for ægthed." : "With Premium (79 DKK/month) you can have a signed transcript of the conversation e-mailed to yourself or e.g. your lawyer. Its authenticity can be checked."}</p>
+    <div className="row end"><button type="button" onClick={openPlans}>{da ? "Se Premium-planen" : "See the Premium plan"}</button></div>
   </div>;
 }
 
 const ERR: Record<string, [string, string]> = {
-  plan_required: ["Udskrift kræver planen Tekst + vedhæftninger (79 kr./md.).", "Transcripts require the Text + attachments plan."],
+  plan_required: ["Udskrift kræver Premium-planen (79 kr./md.).", "Transcripts require the Premium plan."],
   rate_limited: ["Du har lavet mange udskrifter. Prøv igen senere (højst 3 i timen og 10 i døgnet, heraf 5 til andre).", "Too many transcripts. Try again later."],
   bad_email: ["Tjek e-mailadressen.", "Check the email address."],
   bad_period: ["Tjek perioden: Fra-datoen skal ligge før til-datoen.", "Check the period."],

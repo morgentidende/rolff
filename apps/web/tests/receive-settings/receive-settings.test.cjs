@@ -38,7 +38,8 @@ test('enabling modtagetider prefills Mon-Sun 18-19 as seven fixed day rows', { t
     const times = [...d.querySelectorAll('.dayrow')].map(row => [...row.querySelectorAll('select')].map(s => s.value));
     assert.ok(times.every(t => t[0] === String(18 * 60) && t[1] === String(19 * 60)), 'each day is 18:00–19:00');
     assert.equal(button(d, 'Gem').disabled, false, 'Gem enabled with default windows');
-    assert.ok(button(d, 'Annuller'), 'Cancel is visible');
+    assert.ok(![...d.querySelectorAll('.times-actions button')].some(b => /^(Annuller|Cancel)$/.test(b.textContent.trim())), 'no Annuller; the sheet ✕ closes');
+    assert.ok(d.querySelector('.sheethead button[aria-label="Luk"]'), 'sheet ✕ is present');
   } finally {
     await fixture.close();
   }
@@ -94,17 +95,60 @@ test('start = end is explained on Gem; overnight windows are allowed and explain
   } finally { await fixture.close(); }
 });
 
-test('timezone text says what really happens; Gem saves the zone right away', { timeout: 10000 }, async () => {
+test('timezone picker is always visible; Gem saves the zone right away', { timeout: 10000 }, async () => {
   const fixture = await env(false);
   const { d, w } = fixture;
   try {
     await openTimes(d, w, { enabled: false, mode: 'fixed' });
-    const text = d.querySelector('.timezone-summary').textContent;
-    assert.match(text, /Fast tidszone\. Tryk Skift for at følge telefonen\./);
+    assert.ok(!d.querySelector('.timezone-summary'), 'no redundant current-zone row');
+    assert.ok(![...d.querySelectorAll('button')].some(b => /^(Luk valg|Skift|Close choices|Change)$/.test(b.textContent.trim())));
+    const fieldset = d.querySelector('#timezone-choices');
+    assert.ok(fieldset, 'Vælg tidszone is visible without expanding');
+    assert.match(fieldset.querySelector('legend').textContent, /Vælg tidszone/);
+    const select = d.querySelector('#timezone-results');
+    assert.equal(select.value, 'Europe/Copenhagen');
     assert.ok(!/Opdateres, når du åbner/.test(d.querySelector('.times').textContent));
     await click(button(d, 'Gem'));
     assert.equal(w.__receiveLastSave.timezone, 'Europe/Copenhagen');
     assert.equal(w.__receiveLastConv, '20000000-0000-4000-8000-000000000001');
+  } finally { await fixture.close(); }
+});
+
+test('timezone list starts with UTC, shows UTC offsets, and can save UTC', { timeout: 10000 }, async () => {
+  const fixture = await env(false);
+  const { d, w } = fixture;
+  try {
+    await openTimes(d, w, { enabled: false, mode: 'fixed' });
+    const select = d.querySelector('#timezone-results');
+    const values = [...select.options].map(o => o.value);
+    const labels = [...select.options].map(o => o.textContent);
+    assert.equal(values[0], 'UTC');
+    assert.equal(labels[0], 'UTC');
+    assert.ok(values.length > 300, 'full IANA list, got ' + values.length);
+    assert.ok(values.includes('Europe/Copenhagen'));
+    const cph = labels[values.indexOf('Europe/Copenhagen')];
+    assert.match(cph, /UTC[+-]\d/);
+    assert.match(cph, /København/);
+    select.value = 'UTC';
+    select.dispatchEvent(new w.Event('change', { bubbles: true }));
+    await click(button(d, 'Gem'));
+    assert.equal(w.__receiveLastSave.timezone, 'UTC');
+  } finally { await fixture.close(); }
+});
+
+test('timezone search filters the long list', { timeout: 10000 }, async () => {
+  const fixture = await env(false);
+  const { d, w } = fixture;
+  try {
+    await openTimes(d, w, { enabled: false, mode: 'fixed' });
+    const input = d.querySelector('#timezone-search');
+    Object.getOwnPropertyDescriptor(w.HTMLInputElement.prototype, 'value').set.call(input, 'københavn');
+    input.dispatchEvent(new w.Event('input', { bubbles: true }));
+    await delay(25);
+    const values = [...d.querySelector('#timezone-results').options].map(o => o.value);
+    assert.ok(values.includes('Europe/Copenhagen'));
+    assert.ok(!values.includes('UTC'));
+    assert.ok(values.length < 30, 'search should narrow the list, got ' + values.length);
   } finally { await fixture.close(); }
 });
 

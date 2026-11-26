@@ -75,18 +75,41 @@ test('Kontakt: only Feedback / Problemer med Rolff-appen, fixed-size box with 20
   } finally { await f.close(); }
 });
 
-test('Privatliv og sletning: equal headings, themed checkboxes, delete last in a danger card', async () => {
+test('Privatliv og sletning: equal headings, themed checkboxes, no account-delete card', async () => {
   const f = await env(); const { d } = f; try {
     const s = await openItem(d, 'Privatliv og sletning'); await delay(60);
     const heads = [...s.querySelectorAll('.privacy h3')];
-    assert.deepEqual(heads.map(h => h.textContent), ['Opbevaring og synkronisering', 'Download mine data', 'Automatisk sletning ved inaktivitet', 'Slet min konto']);
+    assert.deepEqual(heads.map(h => h.textContent), ['Opbevaring og synkronisering', 'Download mine data', 'Automatisk sletning ved inaktivitet']);
     assert.ok(heads.every(h => h.classList.contains('psec-h')));
-    const secs = [...s.querySelectorAll('.privacy > section')]; const last = secs[secs.length - 1];
-    assert.ok(last.classList.contains('danger-card')); assert.equal(last.querySelector('h3').textContent, 'Slet min konto');
-    assert.ok(last.querySelector('#delpw') && last.querySelector('input.check') && last.querySelector('button.danger'));
-    assert.ok(last.querySelector('p.meta'), 'delete body uses normal body size');
-    assert.equal(s.querySelectorAll('input[type=checkbox]').length, 3); assert.ok([...s.querySelectorAll('input[type=checkbox]')].every(c => c.classList.contains('check') && c.closest('label.check-row')));
+    assert.equal(s.querySelector('.danger-card'), null, 'delete moved to Konto');
+    assert.ok(!s.querySelector('#delpw') && !s.querySelector('button.danger'));
+    assert.equal(s.querySelectorAll('input[type=checkbox]').length, 2); assert.ok([...s.querySelectorAll('input[type=checkbox]')].every(c => c.classList.contains('check') && c.closest('label.check-row')));
     assert.match(s.textContent, /Hent en kopi af dine data/);
+  } finally { await f.close(); }
+});
+
+test('Konto: delete lives in a danger card with export warning and the long action label', async () => {
+  const f = await env(); const { d } = f; try {
+    const s = await openItem(d, 'Konto (e-mail og adgangskode)'); await delay(60);
+    assert.equal(s.getAttribute('aria-label'), 'Konto');
+    const card = s.querySelector('.danger-card'); assert.ok(card, 'danger card');
+    assert.equal(card.querySelector('h3').textContent, 'Slet konto');
+    assert.ok(card.querySelector('#delpw') && card.querySelector('input.check') && card.querySelector('button.danger'));
+    assert.equal(card.querySelector('button.danger').textContent, 'Slet konto, slet alle data og opsig abonnement');
+    assert.match(card.textContent, /alle data i appen/);
+    assert.match(card.textContent, /udskrift/);
+    assert.match(card.textContent, /med det samme/);
+    assert.match(card.textContent, /ikke kun en deaktivering/);
+    assert.match(card.textContent, /App Store eller Google Play/);
+    assert.match(card.textContent, /apps\.apple\.com\/account\/subscriptions/);
+
+    assert.match(card.textContent, /Eksportér samtale/);
+    const go = [...card.querySelectorAll('button')].find(b => b.textContent.trim() === 'Hent mine data først');
+    assert.ok(go, 'link to download data');
+    await click(go); await delay(60);
+    const priv = d.querySelector('.sheet');
+    assert.equal(priv.getAttribute('aria-label'), 'Privatliv og sletning');
+    assert.match(priv.textContent, /Download mine data/);
   } finally { await f.close(); }
 });
 
