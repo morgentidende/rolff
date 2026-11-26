@@ -8,7 +8,7 @@ const EN = "Rolff isn't quite sure how this will come across. Try rephrasing it.
 const MSG = 'Hvorfor tog du ikke de skodbøger med?';
 const RES = { status: 'blocked', reason_code: 'uncertain', spans: ['skodbøger'], suggestion: 'Hvorfor tog du ikke bøgerne med?' };
 async function setEnglish(d) {
-  await click(label(d, 'Menu')); const it = [...d.querySelectorAll('[role=menuitem]')].find(b => b.textContent.trim() === 'Sprog'); await click(it); await delay(60);
+  await click(label(d, 'Menu')); const it = [...d.querySelectorAll('[role=menuitem]')].find(b => b.textContent.trim() === 'App-sprog'); await click(it); await delay(60);
   const en = [...d.querySelectorAll('.sheet .choice')].find(c => c.textContent.includes('English')); await click(en.querySelector('input')); await delay(40);
   const x = d.querySelector('.sheet [aria-label="Luk"], .sheet [aria-label="Close"]'); if (x) await click(x); await delay(40);
 }

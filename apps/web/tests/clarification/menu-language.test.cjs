@@ -11,7 +11,7 @@ async function closeSheet(d) { const x = d.querySelector('.sheet [aria-label="Lu
 
 test('all front-page menu sheets open as a top card anchored to ⋮ (like "Tilføj person")', async () => {
   const f = await env(); const { d } = f; try {
-    for (const name of ['Sprog', 'Tema', 'FAQ', 'Abonnement', 'Konto (e-mail og adgangskode)', 'Privatliv og sletning', 'Kontakt', 'Inviter person']) {
+    for (const name of ['App-sprog', 'FAQ', 'Abonnement', 'Konto (e-mail og adgangskode)', 'Privatliv og sletning', 'Kontakt', 'Inviter person']) {
       await click(label(d, 'Menu')); const it = items(d).find(b => b.textContent.trim() === name);
       if (!it) { assert.fail(`missing ${name}: ${items(d).map(i => i.textContent).join(', ')}`); }
       await click(it); await delay(60);
@@ -50,13 +50,13 @@ test('language: switching applies at once (menu, html lang, storage) and invitat
       await closeSheet(d); return c.args.lang;
     };
     assert.equal(await inviteLang('Inviter person', /Send|Inviter/), 'da');
-    const s = await openItem(d, 'Sprog');
+    const s = await openItem(d, 'App-sprog');
     const en = [...s.querySelectorAll('.choice')].find(c => c.textContent.includes('English')); await click(en.querySelector('input')); await delay(40);
     assert.equal(d.documentElement.lang, 'en'); assert.equal(w.localStorage.getItem('lang'), 'en');
-    assert.equal(d.querySelector('.sheet h2').textContent, 'Language', 'open sheet re-renders in English without reload');
+    assert.equal(d.querySelector('.sheet h2').textContent, 'App language', 'open sheet re-renders in English without reload');
     await closeSheet(d);
     await click(label(d, 'Menu')); const labels = items(d).map(i => i.textContent.trim()); await click(label(d, 'Menu'));
-    assert.ok(labels.includes('Plan') && labels.includes('Privacy and deletion') && labels.includes('Contact') && labels.includes('Invite person'), labels.join(', '));
+    assert.ok(labels.includes('App language') && labels.includes('Plan') && labels.includes('Privacy and deletion') && labels.includes('Contact') && labels.includes('Invite person'), labels.join(', '));
     assert.equal(await inviteLang('Invite person', /Send|Invite/), 'en');
   } finally { await f.close(); }
 });

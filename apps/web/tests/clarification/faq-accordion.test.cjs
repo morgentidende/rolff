@@ -89,7 +89,7 @@ test('FAQ opens only one topic at a time, and the open topic can be closed (da a
     await click(close); await delay(40);
 
     await click(label(d, 'Menu'));
-    const it = [...d.querySelectorAll('[role=menuitem]')].find(b => b.textContent.includes('Sprog') || b.textContent.includes('Language'));
+    const it = [...d.querySelectorAll('[role=menuitem]')].find(b => b.textContent.includes('App-sprog') || b.textContent.includes('App language'));
     await click(it); await delay(60);
     const langSheet = d.querySelector('.sheet');
     const enChoice = [...langSheet.querySelectorAll('.choice')].find(c => c.textContent.includes('English'));
@@ -109,4 +109,10 @@ test('FAQ opens only one topic at a time, and the open topic can be closed (da a
     assert.equal(e2.getAttribute('aria-expanded'), 'true');
     assert.equal(en.querySelectorAll('button.faq-q[aria-expanded="true"]').length, 1);
   } finally { await f.close(); }
+});
+
+test('FAQ: a question scrolled into view is never hidden under the sticky card header', () => {
+  const css = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../src/styles.css'), 'utf8');
+  require('node:assert/strict').match(css, /\.sheet,\.contact-alias-dialog\{scroll-padding-top:64px\}/);
+  require('node:assert/strict').match(css, /\.faq-item\{scroll-margin-top:64px\}/);
 });

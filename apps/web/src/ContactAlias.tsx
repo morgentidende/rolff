@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useBackLayer } from "./backNavigation";
 import { CardHeader } from "./CardHeader";
 import type { Lang } from "./i18n";
-import { useBackdropDismiss, useModalLayer } from "./modalLayer";
+import { chatDialogStyle, useBackdropDismiss, useModalLayer, useUnderChatHeader } from "./modalLayer";
 
 /** `pending`: the person has not accepted yet; user_id is then the INVITATION id and the nickname follows them on acceptance. */
 export type AliasContact = { user_id: string; email: string; alias: string | null; pending?: boolean };
@@ -45,6 +45,7 @@ export function ContactAliasDialog({ lang, contacts, save, saved, close }: {
   useBackLayer(true, () => { if (!inflight.current) close(); });
   useModalLayer(true, dialog, { native: true });
   const backdrop = useBackdropDismiss(() => { if (!inflight.current) close(); }, undefined, { outsideBox: true });
+  const underHeader = useUnderChatHeader();
   useEffect(() => {
     mounted.current = true;
     const before = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -60,7 +61,7 @@ export function ContactAliasDialog({ lang, contacts, save, saved, close }: {
     finally { inflight.current = false; if (mounted.current) setBusy(false); }
   };
   const selected = contacts.find(c => c.user_id === id);
-  return <dialog ref={dialog} className="contact-alias-dialog" aria-labelledby="contact-alias-title"
+  return <dialog ref={dialog} className="contact-alias-dialog" aria-labelledby="contact-alias-title" style={chatDialogStyle(underHeader)}
     onScroll={e => { const el = e.currentTarget; if (el.scrollTop > 2) el.dataset.scrolled = ""; else delete el.dataset.scrolled; }}
     onCancel={e => { e.preventDefault(); dismiss(); }} {...backdrop}>
     <CardHeader title={da ? "Kontaktens kaldenavn" : "Contact nickname"} titleId="contact-alias-title" lang={lang} onClose={dismiss} closeDisabled={busy} />

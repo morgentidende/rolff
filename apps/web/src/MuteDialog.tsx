@@ -31,7 +31,7 @@ export function MuteDialog({ lang, done }: { lang: Lang; done: (d: MuteDuration 
     e.preventDefault(); f[next].focus();
   };
   return (
-    <div className={underHeader !== null ? "overlay confirm-overlay top-overlay" : "overlay confirm-overlay"} ref={layer} style={underHeader !== null ? { paddingTop: underHeader + 8 } : undefined} {...backdrop}>
+    <div className={underHeader !== null ? "overlay confirm-overlay top-overlay" : "overlay confirm-overlay"} ref={layer} style={underHeader !== null ? { paddingTop: underHeader } : undefined} {...backdrop}>
       <div className="confirm-card mute-card" role="dialog" aria-modal="true" aria-labelledby="mute-title" ref={box} onKeyDown={trap}>
         <CardHeader title={da ? "Slå notifikationer fra" : "Mute notifications"} titleId="mute-title" lang={lang} onClose={() => done(null)} />
         <div className="mute-options" role="radiogroup" aria-label={da ? "Hvor længe?" : "For how long?"}>

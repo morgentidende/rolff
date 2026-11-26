@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { CardSkeleton } from "./CardSkeleton";
+import { peekCard, putCard } from "./cardCache";
 import { focusField } from "./formHint";
 import type { Session } from "@supabase/supabase-js";
 import { useBackLayer } from "./backNavigation";
@@ -26,10 +28,13 @@ export function InfoButton({ label, open }: { label: string; open: ()=>void }) {
 }
 const Trash=()=> <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7m4-7v7"/></svg>;
 export function BlockingLists({ lang, conv, session }: { lang: Lang; conv: string; session: Session }) {
- const da=lang==="da", [words,setWords]=useState<BlockEntry[]>([]),[topics,setTopics]=useState<BlockEntry[]>([]);
+ const da=lang==="da", cacheKey=`blocking:${conv}`,[cached]=useState(()=>peekCard<{words:BlockEntry[];topics:BlockEntry[];photos:boolean;files:boolean}>(cacheKey)),[words,setWords]=useState<BlockEntry[]>(cached?.words??[]),[topics,setTopics]=useState<BlockEntry[]>(cached?.topics??[]);
  const [word,setWord]=useState(""),[topic,setTopic]=useState(""),[ack,setAck]=useState(false),[topicAck,setTopicAck]=useState(false),[sort,setSort]=useState<BlockSort>("oldest");
  const [busy,setBusy]=useState(false),[loaded,setLoaded]=useState(false),[loading,setLoading]=useState(true),[err,setErr]=useState(""),[modal,setModal]=useState<"words"|"topics"|"attachments"|"reset"|null>(null);
- const [blockPhotos,setBlockPhotos]=useState(false),[blockFiles,setBlockFiles]=useState(false);
+ const [blockPhotos,setBlockPhotos]=useState(cached?.photos??false),[blockFiles,setBlockFiles]=useState(cached?.files??false);
+ // Last known lists show at once (cardCache); every change still waits for the fresh read (loaded) — fail-strict.
+ const shown=loaded||(!!cached&&!err);
+ useEffect(()=>{if(loaded)putCard(cacheKey,{words,topics,photos:blockPhotos,files:blockFiles});},[loaded,words,topics,blockPhotos,blockFiles,cacheKey]);
  const [wordHint,setWordHint]=useState<""|"short"|"ack">(""),[topicHint,setTopicHint]=useState<""|"short"|"ack">("");
  const generation=useRef(0),inflight=useRef(false),wordRef=useRef<HTMLInputElement>(null),topicRef=useRef<HTMLInputElement>(null),ackRef=useRef<HTMLInputElement>(null),topicAckRef=useRef<HTMLInputElement>(null);
  const api=blockingApi(import.meta.env.VITE_SUPABASE_URL,import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,session.access_token);
@@ -37,7 +42,7 @@ export function BlockingLists({ lang, conv, session }: { lang: Lang; conv: strin
  const error=da?"Ændringen kunne ikke bekræftes. Listen og din tekst er bevaret. Prøv igen.":"The change could not be confirmed. Your list and draft are preserved. Please retry.";
  useEffect(()=>{
   const g=++generation.current, ac=new AbortController();setLoaded(false);setLoading(true);setErr("");setBusy(false);inflight.current=false;
-  Promise.all([api(query("conversation_blocked_words"),"GET",undefined,ac.signal),api(query("conversation_blocked_topics"),"GET",undefined,ac.signal),api("rpc/get_my_attachment_blocks","POST",{conv},ac.signal)]).then(([w,t,a])=>{if(g===generation.current){setWords(w);setTopics(t);setBlockPhotos(a?.block_photos===true);setBlockFiles(a?.block_files===true);setLoaded(true);}}).catch(()=>{if(g===generation.current)setErr(da?"Listerne kunne ikke hentes. Luk og prøv igen.":"Could not load lists. Close and retry.");}).finally(()=>{if(g===generation.current)setLoading(false);});
+  Promise.all([api(query("conversation_blocked_words"),"GET",undefined,ac.signal),api(query("conversation_blocked_topics"),"GET",undefined,ac.signal),api("rpc/get_my_attachment_blocks","POST",{conv},ac.signal)]).then(([w,t,a])=>{putCard(cacheKey,{words:w,topics:t,photos:a?.block_photos===true,files:a?.block_files===true});if(g===generation.current){setWords(w);setTopics(t);setBlockPhotos(a?.block_photos===true);setBlockFiles(a?.block_files===true);setLoaded(true);}}).catch(()=>{if(g===generation.current)setErr(da?"Listerne kunne ikke hentes. Luk og prøv igen.":"Could not load lists. Close and retry.");}).finally(()=>{if(g===generation.current)setLoading(false);});
   return ()=>{generation.current++;ac.abort();};
  },[conv,session.user.id,session.access_token]);
  const change=async(path:string,method:string,body:unknown,success:(result:any)=>void|Promise<void>)=>{
@@ -83,7 +88,7 @@ export function BlockingLists({ lang, conv, session }: { lang: Lang; conv: strin
  <section className="blocking-card" aria-labelledby="blocked-words-title"><div className="blocking-heading"><h3 id="blocked-words-title">{da?"Blokerede ord":"Blocked words"}</h3><InfoButton label={da?"Om blokerede ord":"About blocked words"} open={()=>setModal("words")}/>
  {loaded&&words.length>1&&<label className="blocking-sort"><span className="sr-only">{da?"Rækkefølge":"Order"}</span><select value={sort} onChange={e=>setSort(e.target.value as BlockSort)}><option value="alphabetical">{da?"A–Å":"A–Z"}</option><option value="newest">{da?"Nyeste":"Newest"}</option><option value="oldest">{da?"Ældste":"Oldest"}</option></select></label>}</div>
  <p className="meta blocking-lead">{da?"Beskeder med disse ord når ikke frem til dig. Kun du ser listen.":"Messages with these words do not reach you. Only you see the list."}</p>
- {loading?<p role="status" className="meta">{da?"Henter lister…":"Loading lists…"}</p>:!loaded?null:words.length?renderList(words,false):<p className="blocking-empty">{da?"Ingen blokerede ord endnu.":"No blocked words yet."}</p>}
+ {loading&&!shown?<CardSkeleton lang={lang} label={da?"Henter lister…":"Loading lists…"} rows={[70,55]} />:!shown?null:words.length?renderList(words,false):<p className="blocking-empty">{da?"Ingen blokerede ord endnu.":"No blocked words yet."}</p>}
  <form className="blocking-add" noValidate onSubmit={e=>{e.preventDefault();void add(false);}}><label htmlFor="blocked-word">{da?"Tilføj ord eller udtryk":"Add a word or phrase"}</label>
  <div className="blocking-add-row"><input id="blocked-word" ref={wordRef} name="blocked-word" maxLength={120} value={word} disabled={busy} autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false} enterKeyHint="done" aria-invalid={wordHint==="short"||undefined} aria-describedby={wordHint==="short"?"blocked-word-hint":undefined} onChange={e=>{setWord(e.target.value);if(wordHint==="short")setWordHint("");}}/>
  <button type="submit" aria-disabled={wordMissing||undefined} disabled={busy}>{da?"Tilføj":"Add"}</button></div>
@@ -95,7 +100,7 @@ export function BlockingLists({ lang, conv, session }: { lang: Lang; conv: strin
  </section>
  <section className="blocking-card" aria-labelledby="blocked-topics-title"><div className="blocking-heading"><h3 id="blocked-topics-title">{da?"Blokerede emner":"Blocked topics"}</h3><InfoButton label={da?"Om blokerede emner":"About blocked topics"} open={()=>setModal("topics")}/></div>
  <p className="meta blocking-lead">{da?"Blokér beskeder ud fra, hvad de handler om. Kun du ser listen.":"Block messages by what they are about. Only you see the list."}</p>
- {loaded&&(topics.length?renderList(topics,true):<p className="blocking-empty">{da?"Ingen emner endnu. Prøv fx ”omtaler mit udseende”.":"No topics yet. Try e.g. “mentions my appearance”."}</p>)}
+ {loading&&!shown?<CardSkeleton lang={lang} label={da?"Henter lister…":"Loading lists…"} rows={[65]} />:shown&&(topics.length?renderList(topics,true):<p className="blocking-empty">{da?"Ingen emner endnu. Prøv fx ”omtaler mit udseende”.":"No topics yet. Try e.g. “mentions my appearance”."}</p>)}
  <form className="blocking-add" noValidate onSubmit={e=>{e.preventDefault();void add(true);}}><label htmlFor="blocked-topic">{da?"Blokér beskeder, der …":"Block messages that …"}</label>
  <div className="blocking-add-row"><input id="blocked-topic" ref={topicRef} name="blocked-topic" maxLength={240} value={topic} disabled={busy} autoComplete="off" autoCapitalize="none" enterKeyHint="done" aria-invalid={topicHint==="short"||undefined} aria-describedby={topicHint==="short"?"blocked-topic-hint blocked-topic-help":"blocked-topic-help"} onChange={e=>{setTopic(e.target.value);if(topicHint==="short")setTopicHint("");}}/>
  <button type="submit" aria-disabled={topicMissing||undefined} disabled={busy}>{da?"Tilføj emne":"Add topic"}</button></div>

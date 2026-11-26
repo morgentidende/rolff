@@ -9,6 +9,8 @@ Object.defineProperty(window, 'sessionStorage', { value: storage(), configurable
 Object.defineProperty(window, 'indexedDB', { value: { open() { throw Error('Synthetic fixture: real cache disabled'); }, deleteDatabase() { const r: any = {}; queueMicrotask(() => r.onsuccess?.()); return r; } }, configurable: true });
 localStorage.setItem('lang', 'da');
 localStorage.setItem('nameHintSeen', '1');
+// Simulates a fixed theme saved by an older Rolff version (system-theme.test.cjs).
+if ((window as any).__QA_OLD_THEME) localStorage.setItem('theme', (window as any).__QA_OLD_THEME);
 let root = createRoot(document.getElementById('root')!);
 const strict = new URLSearchParams(location.search).has('strict');
 root.render(strict ? <React.StrictMode><App /></React.StrictMode> : <App />);
