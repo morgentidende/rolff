@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useBackLayer } from "./backNavigation";
 import { useBackdropDismiss, useModalLayer, useUnderChatHeader } from "./modalLayer";
-import { MUTE_DURATIONS, muteMenuLabel, unmuteLabel, type MuteDuration, type MuteRow } from "./muteModel";
+import { MUTE_DURATIONS, type MuteDuration } from "./muteModel";
 import type { Lang } from "./i18n";
 
-/** WhatsApp-style "Lydløs" dialog: 8 timer / 24 timer / 1 uge / Altid, Annuller and OK. */
-export function MuteDialog({ lang, current, done, onUnmute }: { lang: Lang; current: MuteRow | null; done: (d: MuteDuration | null) => void; onUnmute: () => void }) {
+/** WhatsApp-style mute dialog: 8 timer / 1 uge / Altid, X to close, OK to save. Close is the top-right X only. */
+export function MuteDialog({ lang, done }: { lang: Lang; done: (d: MuteDuration | null) => void }) {
   const da = lang === "da";
   const [pick, setPick] = useState<MuteDuration>("8h");
   const box = useRef<HTMLDivElement>(null), firstRef = useRef<HTMLInputElement>(null);
@@ -31,21 +31,18 @@ export function MuteDialog({ lang, current, done, onUnmute }: { lang: Lang; curr
   };
   return (
     <div className={underHeader !== null ? "overlay confirm-overlay top-overlay" : "overlay confirm-overlay"} ref={layer} style={underHeader !== null ? { paddingTop: underHeader + 8 } : undefined} {...backdrop}>
-      <div className="confirm-card mute-card" role="dialog" aria-modal="true" aria-labelledby="mute-title" aria-describedby="mute-body" ref={box} onKeyDown={trap}>
-        <h2 id="mute-title">{da ? "Lydløs" : "Mute"}</h2>
-        <p id="mute-body">{da
-          ? "Du får ingen notifikationer fra denne samtale. Beskeder når frem som normalt, og den anden part kan ikke se, at den er lydløs."
-          : "You get no notifications from this conversation. Messages still arrive as normal, and the other party cannot see that it is muted."}</p>
-        {current && <p className="mute-state" role="status">{muteMenuLabel(current, da)}</p>}
+      <div className="confirm-card mute-card" role="dialog" aria-modal="true" aria-labelledby="mute-title" ref={box} onKeyDown={trap}>
+        <div className="sheethead mute-head">
+          <h2 id="mute-title">{da ? "Slå notifikationer fra" : "Mute notifications"}</h2>
+          <button type="button" className="icon" aria-label={da ? "Luk" : "Close"} onClick={() => done(null)}>✕</button>
+        </div>
         <div className="mute-options" role="radiogroup" aria-label={da ? "Hvor længe?" : "For how long?"}>
           {MUTE_DURATIONS.map((o, i) => <label key={o.id} className="mute-option">
             <input ref={i === 0 ? firstRef : undefined} type="radio" name="mute-duration" value={o.id} checked={pick === o.id} onChange={() => setPick(o.id)} />
             <span className="mute-radio" aria-hidden="true" /><span>{da ? o.da : o.en}</span>
           </label>)}
         </div>
-        {current && <button type="button" className="text-link mute-unmute" onClick={onUnmute}>{unmuteLabel(da)}</button>}
-        <div className="confirm-actions">
-          <button type="button" className="ghost" onClick={() => done(null)}>{da ? "Annuller" : "Cancel"}</button>
+        <div className="confirm-actions mute-actions">
           <button type="button" onClick={() => done(pick)}>OK</button>
         </div>
       </div>
