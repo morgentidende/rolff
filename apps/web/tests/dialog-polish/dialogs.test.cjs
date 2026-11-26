@@ -132,8 +132,8 @@ test('PWA icons: separate any/maskable/monochrome entries, cache-busted; maskabl
   assert.deepEqual([png('apple-touch-icon.png').w, png('apple-touch-icon.png').h], [180, 180]);
   assert.equal(png('icons/rolff-monochrome-512.png').colorType, 6, 'monochrome keeps alpha');
   const html = fs.readFileSync(path.join(__dirname, '../../index.html'), 'utf8');
-  assert.match(html, /rel="apple-touch-icon" sizes="180x180" href="\.\/apple-touch-icon\.png\?v=3"/);
-  assert.match(html, /rel="manifest" href="\.\/manifest\.webmanifest\?v=3"/);
+  assert.match(html, /rel="apple-touch-icon" sizes="180x180" href="\.\/apple-touch-icon\.png\?v=4"/);
+  assert.match(html, /rel="manifest" href="\.\/manifest\.webmanifest\?v=4"/);
 });
 
 test('Day separators: I dag / I går / weekday / date, in da and en; tail stays on the first bubble of a group', async () => {
@@ -195,7 +195,7 @@ test('messenger look: time inside the bubble (no sent tick), original low-opacit
   const ops = [...css.matchAll(/stroke-opacity='([\d.]+)'/g)].map(m => Number(m[1]));
   assert.equal(ops.length, 2); for (const o of ops) assert.ok(o > 0 && o < 0.04, `wallpaper opacity ${o} < 4%`);
   assert.match(css, /\.chat-wrap > \.msgs\{background-color:var\(--bg\);background-image:var\(--wallpaper\)/);
-  assert.match(css, /\[data-theme=dark\]\{--bg:#0d1417;[^}]*--theirs:#1f2c30;--mine:#0b5c52;--mine-text:#e9f2f0;--mine-time:#b9dcd4/);
+  assert.match(css, /\[data-theme=dark\]\{--bg:#0d1417;[^}]*--theirs:#1f2c30;--mine:#0A6570;--mine-text:#e9f2f0;--mine-time:#b9dcd4/);
   assert.match(css, /\.convlist \.convrow button\.dot\{width:48px;height:48px/);
   assert.match(css, /\.convprev\{white-space:normal;display:-webkit-box;[^}]*-webkit-line-clamp:2/);
 });

@@ -71,7 +71,7 @@ export const INVITE_COPY = {
 } as const;
 
 const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
-// Brand teal = the app's --accent (#016C72 light; #7cc0b2 on dark with #0e1414 text).
+// Brand teal = the app's --accent (#00788A light; #4AD8E4 on dark with #0e1414 text).
 const CSS = `
 :root{color-scheme:light dark;supported-color-schemes:light dark}
 body,table,td,a{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}
@@ -89,9 +89,9 @@ img{-ms-interpolation-mode:bicubic}
   .head{background:#0f4f53 !important;background-color:#0f4f53 !important}
   .tx{color:#e6eeec !important}
   .mut{color:#9fb0ad !important}
-  .lnk{color:#7cc0b2 !important}
+  .lnk{color:#4AD8E4 !important}
   .rule{border-color:#33403e !important}
-  .btn td{background:#7cc0b2 !important;background-color:#7cc0b2 !important}
+  .btn td{background:#4AD8E4 !important;background-color:#4AD8E4 !important}
   .btn a{color:#0e1414 !important}
   .soft{background:#232c2c !important;background-color:#232c2c !important}
 }
@@ -114,8 +114,8 @@ ${preheader}
 <table role="presentation" class="bg outer" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#f4f6f5" style="background:#f4f6f5;padding:28px 12px"><tr><td align="center">
 <!--[if mso]><table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
 <table role="presentation" class="card" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#ffffff" style="width:100%;max-width:600px;background:#ffffff;border-radius:18px;overflow:hidden;border:1px solid #d5dedc">
-<tr><td class="head px" align="center" bgcolor="#016C72" style="background:#016C72;padding:30px 32px 26px;text-align:center">
-<img src="${esc(f.logo)}" width="72" height="72" alt="${L.alt}" style="display:block;margin:0 auto;width:72px;height:72px;border:0;border-radius:18px;background:#016C72;color:#ffffff;font-size:14px;line-height:72px">
+<tr><td class="head px" align="center" bgcolor="#00788A" style="background:#00788A;padding:30px 32px 26px;text-align:center">
+<img src="${esc(f.logo)}" width="72" height="72" alt="${L.alt}" style="display:block;margin:0 auto;width:72px;height:72px;border:0;border-radius:18px;background:#00788A;color:#ffffff;font-size:14px;line-height:72px">
 <div style="margin-top:14px;font-size:24px;line-height:28px;font-weight:700;letter-spacing:.4px;color:#ffffff">Rolff</div>
 <div style="margin-top:4px;font-size:14px;line-height:20px;color:#d6efe9">${L.tagline}</div>
 </td></tr>
@@ -125,7 +125,7 @@ ${preheader}
 ${f.bodyHtml}
 </td></tr>
 <tr><td class="px" align="center" style="padding:0 40px 8px">
-<table role="presentation" class="btn" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%"><tr><td align="center" bgcolor="#016C72" style="border-radius:12px;background:#016C72">
+<table role="presentation" class="btn" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%"><tr><td align="center" bgcolor="#00788A" style="border-radius:12px;background:#00788A">
 <a href="${esc(f.cta.href)}" target="_blank" style="display:block;padding:18px 28px;font-family:${FONT};font-size:18px;line-height:22px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:12px">${esc(f.cta.label)}</a>
 </td></tr></table>
 </td></tr>
@@ -151,7 +151,7 @@ export function renderInviteMail(p: InviteMailParts): { html: string; text: stri
     lang: p.lang, subject: p.subject, preheader: L.preheader, logo: p.logo, headline: L.headline(esc(p.inviter)),
     bodyHtml: P("tx", "#1d2a2a", 16, 25, 14, L.hi) + P("tx", "#1d2a2a", 16, 25, 14, esc(L.about)) + P("mut", "#5b6b6a", 15, 23, 28, esc(L.step)),
     cta: { label: L.cta, href: p.link },
-    belowCtaHtml: `<tr><td class="px" style="padding:20px 40px 8px"><p class="mut" style="margin:0;font-size:13px;line-height:20px;color:#5b6b6a">${esc(L.fallback)}<br><a class="lnk" href="${link}" target="_blank" style="color:#016C72;word-break:break-all">${link}</a></p></td></tr>`,
+    belowCtaHtml: `<tr><td class="px" style="padding:20px 40px 8px"><p class="mut" style="margin:0;font-size:13px;line-height:20px;color:#5b6b6a">${esc(L.fallback)}<br><a class="lnk" href="${link}" target="_blank" style="color:#00788A;word-break:break-all">${link}</a></p></td></tr>`,
     boxHtml: P("tx", "#1d2a2a", 14, 21, 8, `${L.expiry(esc(p.expires))} ${L.sentTo(esc(p.invitee))}`) + P("mut", "#5b6b6a", 14, 21, 0, esc(L.ignore)),
     footerHtml: p.footerHtml,
   });

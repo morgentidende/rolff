@@ -132,7 +132,7 @@ export const FALLBACK_FONTS: PdfFonts = { text: "helvetica", emoji: null, emojiM
 export type Qr = { size: number; isDark(r: number, c: number): boolean };
 
 export const C = {
-  teal: "#016C72", mint: "#7CC4B4", dark: "#1D2A2A", muted: "#5B6B6A", border: "#D5DEDC", soft: "#F4F7F6",
+  teal: "#00788A", mint: "#7CC4B4", dark: "#1D2A2A", muted: "#5B6B6A", border: "#D5DEDC", soft: "#F4F7F6",
   own: "#72D7BB", ownText: "#0E2A24", ownQuote: "#B4EBDB", other: "#EEF2F1", otherQuote: "#DDE5E3", info: "#E8F5F1", white: "#FFFFFF", black: "#000000",
 };
 export const PAGE = { margin: 44, top: 52, bottom: 86, bubbleMax: 0.72 };

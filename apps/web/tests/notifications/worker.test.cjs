@@ -45,7 +45,7 @@ test('names are cleaned and capped; title never contains message content or mark
 });
 test('notification never sets icon or image (no duplicate large logo); only the white badge, no click URL or message data',async()=>{
  const h=harness();await bind(h);await h.push(payload({s:['Far'],k:1,n:1,image:'https://evil.invalid/x.png',icon:'https://evil.invalid/y.png'}));const n=h.shown[0];
- assert(!('icon' in n));assert(!('image' in n));assert.equal(n.badge,'https://synthetic.invalid/app/icons/rolff-badge-96.png?v=3');assert.deepEqual(Object.keys(n.data),['binding']);assert.equal(n.tag,'rolff-ready');
+ assert(!('icon' in n));assert(!('image' in n));assert.equal(n.badge,'https://synthetic.invalid/app/icons/rolff-badge-96.png?v=4');assert.deepEqual(Object.keys(n.data),['binding']);assert.equal(n.tag,'rolff-ready');
 });
 test('a new notice replaces the previous one (same tag) so batched names never stack',async()=>{
  const h=harness();await bind(h);await h.push(payload({s:['Far'],k:1,n:1}));await h.push(payload({s:['Far'],k:2,n:2}));assert(h.shown.every(n=>n.tag==='rolff-ready'));
@@ -71,7 +71,7 @@ function png(file){const b=fs.readFileSync(path.resolve(__dirname,'../../public/
 test('badge PNGs are 96x96 and 72x72 white silhouettes on a transparent background',()=>{for(const [file,n] of [['rolff-badge-96.png',96],['rolff-badge-72.png',72]]){const {w,h,px}=png(file);assert.equal(w,n);assert.equal(h,n);let opaque=0,clear=0;for(let i=0;i<px.length;i+=4){const a=px[i+3];if(a>0){assert.deepEqual([px[i],px[i+1],px[i+2]],[255,255,255],'only white pixels');}if(a===255)opaque++;if(a===0)clear++;}
  assert(clear>w*h*0.2,'transparent background');assert(opaque>w*h*0.25,'solid mark');assert.equal(px[3],0,'corner is transparent');}});
 test('notification uses the monochrome badge as a same-origin PNG under the scope; the full-colour app icon is NOT sent as a notification picture',async()=>{const h=harness();await bind(h);await h.push(payload());const n=h.shown[0];
- assert.equal(n.badge,'https://synthetic.invalid/app/icons/rolff-badge-96.png?v=3');assert(!('icon' in n));
+ assert.equal(n.badge,'https://synthetic.invalid/app/icons/rolff-badge-96.png?v=4');assert(!('icon' in n));
  assert(fs.existsSync(path.resolve(__dirname,'../../public/icons',path.basename(n.badge).split('?')[0])));
  const {px}=png('rolff-192.png');let colour=0;for(let i=0;i<px.length;i+=4)if(px[i+3]>0&&(px[i]!==px[i+1]||px[i+1]!==px[i+2]))colour++;assert(colour>1000,'icon is full colour, not a silhouette');
  assert(n.badge.startsWith('https://synthetic.invalid/'));});
@@ -82,7 +82,7 @@ test('invitation accepted (da): "<name> har accepteret din invitation" / "Nu kan
  const h=harness();await bind(h);await h.push(payload({t:'a',c:CONV,s:['Far']}));const n=h.shown[0];
  assert.equal(n.title,'Far har accepteret din invitation');assert.equal(n.body,'Nu kan I chatte på Rolff.');assert.equal(n.lang,'da');
  assert.equal(n.tag,'rolff-accept-'+CONV,'does not replace (or get replaced by) the message notice');
- assert.equal(n.badge,'https://synthetic.invalid/app/icons/rolff-badge-96.png?v=3');assert(!('icon' in n)&&!('image' in n));
+ assert.equal(n.badge,'https://synthetic.invalid/app/icons/rolff-badge-96.png?v=4');assert(!('icon' in n)&&!('image' in n));
  assert.equal(JSON.stringify(n.data),JSON.stringify({binding,c:CONV}));
 });
 test('invitation accepted (en): "<name> accepted your invitation" / "You can now chat on Rolff."; e-mail fallback name is shown as is',async()=>{
