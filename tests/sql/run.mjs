@@ -401,18 +401,31 @@ await t('Visningsnavn: andre ser altid e-mail (eller eget private kaldenavn); se
   await svc(`delete from contact_aliases where owner_id=$1`, [B]);
 });
 await t('Rapport: B rapporterer med valgte beskeder; kun metadata gemmes', async () => {
-  const ms = await as(B, `select id from get_messages($1)`, [conv]);
+  const ms = await as(B, `select id, sender_id from get_messages($1)`, [conv]);
   const r = await as(B, `select * from submit_report($1,'harassment',$2::uuid[])`, [conv, [ms[0].id]]);
-  assert.equal(r.length, 1); assert.ok(r[0].body);
+  assert.equal(r.length, 1); assert.ok(r[0].body); assert.ok(r[0].report_id); assert.equal(r[0].id, ms[0].id); assert.equal(r[0].sender_id, ms[0].sender_id);
   assert.deepEqual((await db.query(`select column_name from information_schema.columns where table_name='report_log' order by 1`)).rows.map(x => x.column_name), ['attached_count','category','conversation_id','created_at','id','user_id']);
-  assert.equal((await svc(`select attached_count from report_log where user_id=$1`, [B]))[0].attached_count, 1);
+  assert.equal((await svc(`select attached_count, id from report_log where user_id=$1`, [B]))[0].attached_count, 1);
+  assert.equal((await svc(`select attached_count, id from report_log where user_id=$1`, [B]))[0].id, r[0].report_id);
 });
 await t('Rapport: ukendt kategori og fremmede besked-id afvises', async () => {
   await rejects(as(B, `select * from submit_report($1,'spam','{}')`, [conv]), /bad_input/);
   await rejects(as(B, `select * from submit_report($1,'other',$2::uuid[])`, [conv, ['00000000-0000-0000-0000-000000000001']]), /bad_messages/);
 });
 await t('Rapport: ikke-medlem afvises og kan ikke læse log', async () => { await rejects(as(X, `select * from submit_report($1,'other','{}')`, [conv]), /not_member/); await rejects(as(B, `select * from report_log`), /permission|denied/); });
-await t('Rapport: rate limit 3/døgn', async () => { await as(B, `select * from submit_report($1,'other','{}')`, [conv]); await as(B, `select * from submit_report($1,'other','{}')`, [conv]); await rejects(as(B, `select * from submit_report($1,'other','{}')`, [conv]), /rate_limited/); });
+await t('Rapport: uden vedhæftede beskeder returneres report_id', async () => {
+  await svc(`delete from report_log where user_id=$1`, [B]);
+  const r = await as(B, `select * from submit_report($1,'other','{}')`, [conv]);
+  assert.equal(r.length, 1); assert.ok(r[0].report_id); assert.equal(r[0].id, null); assert.equal(r[0].sender_id, null); assert.equal(r[0].body, null);
+  assert.equal((await svc(`select attached_count from report_log where id=$1`, [r[0].report_id]))[0].attached_count, 0);
+});
+await t('Rapport: rate limit 3/døgn', async () => {
+  await svc(`delete from report_log where user_id=$1`, [B]);
+  await as(B, `select * from submit_report($1,'other','{}')`, [conv]);
+  await as(B, `select * from submit_report($1,'other','{}')`, [conv]);
+  await as(B, `select * from submit_report($1,'other','{}')`, [conv]);
+  await rejects(as(B, `select * from submit_report($1,'other','{}')`, [conv]), /rate_limited/);
+});
 
 await t('Opbevaring: standard 1 år; ugyldigt valg afvises', async () => {
   assert.equal((await as(A, `select * from get_my_privacy()`))[0].retention, '1y');

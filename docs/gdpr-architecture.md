@@ -92,8 +92,8 @@ Supabase (DB, auth, functions – Frankfurt), Hostinger (web + mail-relay), Open
 ## Rapportering (besluttet 2026-11-02, Apple 1.2 / Google Play UGC)
 - Adgang: samtalens ⋮ → "Rapportér". Kontakt (nicolaipetersen108@gmail.com) står i FAQ.
 - Brugeren vælger selv indholdet: kategori (Chikane/trusler, Upassende indhold, Børns sikkerhed, Andet), egen tekst (≤2000 tegn) og højst 20 selvmarkerede beskeder. Forhåndsvisning + eksplicit bekræftelse; intet sendes automatisk.
-- Modtager: mail via samme PHP-mailer som feedback til `FEEDBACK_TO`. Ingen moderationsteam, ingen døgnvagt, ingen garanti for svar/handling; ved akut fare 112/politi.
-- Server: `report` Edge Function (kun indlogget, validering) → `submit_report` RPC tjekker medlemskab, at hver vedhæftet besked er synlig for rapportøren (get_messages-regler) og rate limit 3/døgn.
+- Modtager: mail via samme SMTP/PHP-mailer som invitationsmail til `REPORT_EMAIL_TO` (fallback: `FEEDBACK_TO`). Adressen skiftes med ét secret, se `docs/report-mail.md`. Ingen moderationsteam, ingen døgnvagt, ingen garanti for svar/handling; ved akut fare 112/politi.
+- Server: `report` Edge Function (kun indlogget, validering) → `submit_report` RPC tjekker medlemskab, at hver vedhæftet besked er synlig for rapportøren (get_messages-regler) og rate limit 3/døgn. En mislykket mail logger kun `report_mail_failed`; rapporten er allerede gemt.
 - Opbevaring: kun `report_log` (bruger, samtale, kategori, antal vedhæftede, tidspunkt). Ingen tekst gemmes og ingen tekst logges; indholdet findes kun i mailen. Slettes med kontoen (cascade).
 
 ## Opbevaring og sky-synk (implementeret 2026-11-02)

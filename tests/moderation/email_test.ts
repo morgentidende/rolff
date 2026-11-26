@@ -42,8 +42,13 @@ Deno.test("feedbackmail: escaping, kategori-whitelist, afsender", async () => {
 
 Deno.test("reportMail escapes and includes only chosen messages", async () => {
   const { reportMail } = await import("../../supabase/functions/_shared/email.ts");
-  const m = reportMail({ category: "child_safety", body: "<b>x</b>", senderName: "A", senderId: "u1", conversationId: "c1", messages: [{ sender_name: "B", body: "<script>", created_at: "t" }] });
+  const m = reportMail({
+    category: "child_safety", body: "<b>x</b>", reportId: "r1", reporterId: "u1", reporterEmail: "a@x.test",
+    conversationId: "c1",
+    messages: [{ sender_id: "u2", sender_email: "b@x.test", body: "<script>", created_at: "t" }],
+  });
   if (!m.subject.includes("Børns sikkerhed")) throw new Error("cat");
   if (m.html.includes("<script>") || m.html.includes("<b>x</b>")) throw new Error("escape");
-  if (!m.text.includes("(1)")) throw new Error("count");
+  if (!m.html.includes("&lt;script&gt;") || !m.html.includes("&lt;b&gt;x&lt;/b&gt;")) throw new Error("escaped missing");
+  if (!m.text.includes("(1)") || !m.text.includes("Rapport-id: r1") || !m.text.includes("a@x.test") || !m.text.includes("b@x.test") || !m.text.includes("u2")) throw new Error("fields");
 });
