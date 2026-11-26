@@ -143,7 +143,7 @@ async function handle(req: Request, slotCtx: Ctx): Promise<Response> {
   let res, usage;
   try {
     const out = await openaiFileModerate({ apiKey, model, baseUrl: base, prompt: filePromptForLang(lang) }, { mime: fc.mime, bytes, name }, caption, modCtx, ac.signal);
-    usage = out.usage; res = validateFileResult(out.raw, caption);
+    usage = out.usage; res = validateFileResult(out.raw, caption, words);
   } catch (e) {
     const kind = e instanceof ModerationTechnicalError ? e.message : ac.signal.aborted ? "timeout" : "provider_error";
     await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "error", p_reason: kind });

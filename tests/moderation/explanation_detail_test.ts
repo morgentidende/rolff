@@ -1,4 +1,4 @@
-// Detailed tone-check explanations (19/11): name the concrete words, say whether the earlier conversation played a role,
+// Detailed tone-check explanations: name the concrete words, mention earlier messages only when they influenced the block,
 // never quote the other person, never repeat swear words/slurs. Synthetic text, mocked model output, no network.
 import { assert, assertEquals } from "jsr:@std/assert@1";
 import { EXPLANATION_DETAIL_MAX, moderate, OpenAIProvider, sanitizeExplanation, SYSTEM_PROMPT, systemPromptForLang, UNCERTAIN_EXPLANATION, validateResult, type ContextMsg, type ModerationProvider } from "../../supabase/functions/_shared/moderation.ts";
@@ -6,14 +6,14 @@ import { EXPLANATION_DETAIL_MAX, moderate, OpenAIProvider, sanitizeExplanation, 
 const MSG = "Det er jo typisk dig, at du glemmer det igen";
 const CTX: ContextMsg[] = [{ mine: false, body: "Det har jeg sagt!" }, { mine: true, body: "En ret tydeligt irriteret besked, måske en regel omkring udråbstegn?" }];
 const block = (o: Record<string, unknown> = {}) => ({ decision: "block", reason_code: "personal_attack", spans: ["typisk dig"], suggestion: "Kan du huske det næste gang?", explanation: "", ...o });
-const DA = "Ordene „typisk dig“ og „glemmer det igen“ peger på noget, du altid gør, og kan få modtageren til at føle sig angrebet. Tidligere beskeder har ikke spillet en rolle.";
+const DA = "Ordene „typisk dig“ og „glemmer det igen“ peger på noget, du altid gør, og kan få modtageren til at føle sig angrebet.";
 const DA_CTX = "Rolff er i tvivl om „nu hører jeg ikke mere“. Beskeden kan læses som et svar på en tidligere besked om udråbstegn og virke afvisende.";
-const EN = "The words \"so typical of you\" point at something you always do and may make the recipient feel attacked. Earlier messages played no role.";
+const EN = "The words \"so typical of you\" point at something you always do and may make the recipient feel attacked.";
 
 Deno.test("prompt asks for concrete words, the role of the earlier conversation, a Rolff-only voice and no quoting of the other person", () => {
   for (const p of [SYSTEM_PROMPT, systemPromptForLang("en")]) {
-    for (const s of ["max 320 characters", "Name the concrete words or phrase of the NEW MESSAGE", "copied verbatim in quotation marks", "whether the earlier conversation played a role",
-      "Tidligere beskeder har ikke spillet en rolle.", "Earlier messages played no role.", "Beskeden kan læses som et svar på en tidligere besked om udråbstegn.",
+    for (const s of ["max 320 characters", "Name the concrete words or phrase of the NEW MESSAGE", "copied verbatim in quotation marks", "Mention earlier messages ONLY if they actually influenced the block",
+      "NEVER write that earlier messages played no role", "Tidligere beskeder har ikke spillet en rolle.", "Earlier messages played no role.", "Beskeden kan læses som et svar på en tidligere besked om udråbstegn.",
       "NEVER quote or paraphrase the other person's messages", "NEVER repeat slurs, swear words or threats", "never with a pronoun", "Rolff er i tvivl om", "Rolff isn't sure about"]) assert(p.includes(s), s);
     assert(!/luna|gpt|gemini|openai/i.test(p.replace(/OpenAI/g, "")), "no model/provider name in the prompt");
   }
@@ -26,6 +26,12 @@ Deno.test("detailed explanation naming the flagged words passes (da + en), up to
   const long = "Ordene „typisk dig“ kan virke hårde. " + "Det kan få modtageren til at føle sig dømt. ".repeat(12);
   const out = validateResult(block({ explanation: long }), MSG, []).explanation;
   assert([...out].length <= EXPLANATION_DETAIL_MAX && out.endsWith("…"));
+});
+
+Deno.test("the unused 'played no role' sentence is stripped, and a role-by-topic sentence is kept", () => {
+  const withNoRole = DA + " Tidligere beskeder har ikke spillet en rolle.";
+  assertEquals(validateResult(block({ explanation: withNoRole }), MSG, []).explanation, DA);
+  assertEquals(validateResult(block({ spans: ["so typical of you"], explanation: EN + " Earlier messages played no role." }), "It's so typical of you to forget again", []).explanation, EN);
 });
 
 Deno.test("the role of the earlier conversation can be stated by topic (uncertain block, mocked model)", () => {
