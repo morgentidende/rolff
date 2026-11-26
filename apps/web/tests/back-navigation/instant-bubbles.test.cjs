@@ -9,7 +9,7 @@ const { env, delay, click, back } = require('./support.cjs');
 const { webcrypto } = require('node:crypto');
 const PAGE_MS = 280;
 const FETCH_MS = 250;
-const OUT = '/workspace/rolff-instant-bubbles-qa/measurements.json';
+const OUT = process.env.ROLFF_QA_OUT || path.join(require('node:os').tmpdir(), 'rolff-instant-bubbles-measurements.json');
 
 function motion(w) {
   Object.defineProperty(w.navigator, 'userAgent', { get: () => 'Mozilla/5.0 (Linux; Android 14) synthetic' });
@@ -120,6 +120,8 @@ test('cold start with encrypted cache: bubbles are visible during the slide, the
   };
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
   fs.writeFileSync(OUT, JSON.stringify(report, null, 2));
+  const qa = '/workspace/rolff-instant-bubbles-qa/measurements.json';
+  try { if (fs.existsSync(path.dirname(qa))) fs.writeFileSync(qa, JSON.stringify(report, null, 2)); } catch { /* CI */ }
   console.log('MEASUREMENTS', JSON.stringify(report));
 });
 
