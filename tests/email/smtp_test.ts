@@ -92,4 +92,9 @@ Deno.test("MIME: PDF attachments use multipart/mixed; unsafe names are rejected"
   const m = mime({ attachments: [{ filename: "samtale.pdf", content_type: "application/pdf", content_b64: btoa("%PDF-1.4 test") }] });
   assert(m.includes("multipart/mixed") && m.includes('filename="samtale.pdf"'));
   let threw = false; try { mime({ attachments: [{ filename: "../x.pdf", content_type: "application/pdf", content_b64: "AA==" }] }); } catch { threw = true; } assert(threw);
+  const h = mime({ attachments: [{ filename: "rolff-udskrift-2026-11-26.html", content_type: "text/html", content_b64: btoa("<!doctype html><p>ok</p>") }] });
+  assert(h.includes('Content-Type: text/html; charset=UTF-8; name="rolff-udskrift-2026-11-26.html"'));
+  assert(h.includes('Content-Disposition: attachment; filename="rolff-udskrift-2026-11-26.html"'));
+  let badHtml = false; try { mime({ attachments: [{ filename: "x.html", content_type: "application/pdf", content_b64: "AA==" }] }); } catch { badHtml = true; } assert(badHtml);
+  let pathHtml = false; try { mime({ attachments: [{ filename: "../x.html", content_type: "text/html", content_b64: "AA==" }] }); } catch { pathHtml = true; } assert(pathHtml);
 });
