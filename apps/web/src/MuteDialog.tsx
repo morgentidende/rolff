@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useBackLayer } from "./backNavigation";
+import { CardHeader } from "./CardHeader";
 import { useBackdropDismiss, useModalLayer, useUnderChatHeader } from "./modalLayer";
 import { MUTE_DURATIONS, type MuteDuration } from "./muteModel";
 import type { Lang } from "./i18n";
@@ -32,10 +33,7 @@ export function MuteDialog({ lang, done }: { lang: Lang; done: (d: MuteDuration 
   return (
     <div className={underHeader !== null ? "overlay confirm-overlay top-overlay" : "overlay confirm-overlay"} ref={layer} style={underHeader !== null ? { paddingTop: underHeader + 8 } : undefined} {...backdrop}>
       <div className="confirm-card mute-card" role="dialog" aria-modal="true" aria-labelledby="mute-title" ref={box} onKeyDown={trap}>
-        <div className="sheethead mute-head">
-          <h2 id="mute-title">{da ? "Slå notifikationer fra" : "Mute notifications"}</h2>
-          <button type="button" className="icon" aria-label={da ? "Luk" : "Close"} onClick={() => done(null)}>✕</button>
-        </div>
+        <CardHeader title={da ? "Slå notifikationer fra" : "Mute notifications"} titleId="mute-title" lang={lang} onClose={() => done(null)} />
         <div className="mute-options" role="radiogroup" aria-label={da ? "Hvor længe?" : "For how long?"}>
           {MUTE_DURATIONS.map((o, i) => <label key={o.id} className="mute-option">
             <input ref={i === 0 ? firstRef : undefined} type="radio" name="mute-duration" value={o.id} checked={pick === o.id} onChange={() => setPick(o.id)} />

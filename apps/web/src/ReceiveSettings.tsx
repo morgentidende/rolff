@@ -20,7 +20,7 @@ function nextRange(ranges:{start_minute:number;end_minute:number}[]) {
   return { start_minute: Math.min(start, 22*60), end_minute: Math.min(start, 22*60)+60 };
 }
 
-export function ReceiveSettings({lang,conv,onCancel}:{lang:Lang;conv:string;onCancel?:()=>void}) {
+export function ReceiveSettings({lang,conv}:{lang:Lang;conv:string;onCancel?:()=>void}) {
   const da=lang==="da", t=strings[lang];
   const [uid,setUid]=useState(""); const [base,setBase]=useState<ReceiveSettingsState|null>(null);
   const [enabled,setEnabled]=useState(false), [zone,setZone]=useState(""), [mode,setMode]=useState<"auto"|"fixed">("auto");
@@ -127,7 +127,6 @@ export function ReceiveSettings({lang,conv,onCancel}:{lang:Lang;conv:string;onCa
       {issues.length>0&&<div className="field-hint-block" role="alert">{[...new Set(issues.map(x=>`${x.kind}:${x.weekday}`))].map(k=>{const [kind,d]=k.split(":");const day=(da?DA_DAYS:EN_DAYS)[+d-1];return <p key={k} className="field-hint">{kind==="overlap"?(da?`Tiderne overlapper for ${day}.`:`The times overlap on ${day}.`):(da?`Start og slut er ens for ${day}.`:`Start and end are the same on ${day}.`)}</p>;})}</div>}
       {needsWindow&&<p className={nudge?"field-hint":"meta"} role={nudge?"alert":"status"}>{da?"Tilføj mindst ét tidsrum, eller slå modtagetider fra, før du gemmer.":"Add at least one time window, or turn receive times off, before saving."}</p>}
       <div className="times-actions sheet-actions">
-        <button type="button" className="ghost" onClick={()=>onCancel?onCancel():void load()}>{da?"Annuller":"Cancel"}</button>
         <button type="button" className="times-save" disabled={busy} aria-disabled={!canSave||undefined} onClick={()=>void save()}>{busy?(da?"Gemmer…":"Saving…"):t.save}</button>
       </div>
       {message&&<p className="meta times-saved" role="status">{message}</p>}

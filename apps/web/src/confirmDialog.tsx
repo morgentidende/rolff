@@ -1,11 +1,13 @@
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { useBackLayer } from "./backNavigation";
+import { CardHeader, closeLabel } from "./CardHeader";
 import { useBackdropDismiss, useModalLayer } from "./modalLayer";
 
 // In-app replacement for window.confirm: Rolff-styled, aria-modal, focus-trapped,
-// Esc / Android back = cancel. Promise-based so callers read like confirm().
-export type ConfirmOptions = { title: string; body?: string; confirm: string; cancel: string; danger?: boolean };
+// Esc / Android back / ✕ = cancel. Promise-based so callers read like confirm().
+// `cancel` is accepted for call-site compatibility but is not shown: the ✕ is the only dismiss.
+export type ConfirmOptions = { title: string; body?: string; confirm: string; cancel?: string; danger?: boolean };
 type Req = ConfirmOptions & { resolve: (ok: boolean) => void };
 const EVENT = "rolff:confirm";
 
@@ -25,14 +27,16 @@ export function ConfirmHost() {
 }
 
 function ConfirmView({ req, done }: { req: Req; done: (ok: boolean) => void }) {
-  const box = useRef<HTMLDivElement>(null), cancelRef = useRef<HTMLButtonElement>(null);
+  const box = useRef<HTMLDivElement>(null);
   const prev = useRef<Element | null>(typeof document !== "undefined" ? document.activeElement : null);
   const layer = useRef<HTMLDivElement>(null);
   useBackLayer(true, () => done(false));
   useModalLayer(true, layer);
   const backdrop = useBackdropDismiss(() => done(false));
   useEffect(() => {
-    cancelRef.current?.focus({ preventScroll: true });
+    // Safe default: focus the ✕ (cancel), never the destructive confirm.
+    const x = box.current?.querySelector<HTMLButtonElement>(`button[aria-label="${closeLabel()}"]`);
+    x?.focus({ preventScroll: true });
     const back = prev.current;
     return () => { if (back instanceof HTMLElement && back.isConnected) back.focus({ preventScroll: true }); };
   }, []);
@@ -47,10 +51,9 @@ function ConfirmView({ req, done }: { req: Req; done: (ok: boolean) => void }) {
   return (
     <div className="overlay confirm-overlay" ref={layer} {...backdrop}>
       <div className="confirm-card" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby={req.body ? "confirm-body" : undefined} ref={box} onKeyDown={trap}>
-        <h2 id="confirm-title">{req.title}</h2>
+        <CardHeader title={req.title} titleId="confirm-title" onClose={() => done(false)} />
         {req.body && <p id="confirm-body">{req.body}</p>}
         <div className="confirm-actions">
-          <button type="button" ref={cancelRef} className="ghost" onClick={() => done(false)}>{req.cancel}</button>
           <button type="button" className={req.danger ? "danger" : undefined} onClick={() => done(true)}>{req.confirm}</button>
         </div>
       </div>

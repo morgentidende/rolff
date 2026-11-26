@@ -122,9 +122,9 @@ export function swallowGhostTaps(ms = 350): void {
  * before the click and let it land on the chat behind). `blocked()` lets a caller veto (e.g. the
  * message menu's "armed" state right after a long-press).
  */
-export function useBackdropDismiss(close: () => void, blocked?: () => boolean) {
-  const down = useRef(false), latest = useRef(close), veto = useRef(blocked);
-  latest.current = close; veto.current = blocked;
+export function useBackdropDismiss(close: () => void, blocked?: () => boolean, opts?: { outsideBox?: boolean }) {
+  const down = useRef(false), latest = useRef(close), veto = useRef(blocked), box = useRef(!!opts?.outsideBox);
+  latest.current = close; veto.current = blocked; box.current = !!opts?.outsideBox;
   const onPointerDown = useCallback((e: React.PointerEvent<HTMLElement>) => { down.current = e.target === e.currentTarget; }, []);
   const onPointerCancel = useCallback(() => { down.current = false; }, []);
   const onClick = useCallback((e: React.MouseEvent<HTMLElement>) => {
@@ -132,6 +132,12 @@ export function useBackdropDismiss(close: () => void, blocked?: () => boolean) {
     const started = down.current; down.current = false;
     e.preventDefault(); e.stopPropagation(); // the tap ends here
     if (!started || veto.current?.()) return;
+    // Native <dialog>: the dialog element IS the card, so a click on its padding has
+    // target === currentTarget. Only a click outside the card box (the ::backdrop) dismisses.
+    if (box.current) {
+      const r = e.currentTarget.getBoundingClientRect();
+      if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) return;
+    }
     swallowGhostTaps(); latest.current();
   }, []);
   return { onPointerDown, onPointerCancel, onClick };

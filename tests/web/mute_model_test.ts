@@ -47,5 +47,5 @@ Deno.test("mute is wired server-side only, owner-only, and never into delivery o
   const dialog = await Deno.readTextFile("apps/web/src/MuteDialog.tsx");
   for (const model of ["ChatGPT", "GPT", "Gemini", "OpenAI"]) if (dialog.includes(model)) throw new Error("model name in mute UI");
   if (/{da \? "Annuller" : "Cancel"}/.test(dialog) || />Annuller</.test(dialog) || />Cancel</.test(dialog)) throw new Error("mute dialog must close with X, not Annuller");
-  if (!dialog.includes('aria-label={da ? "Luk" : "Close"}')) throw new Error("mute dialog lacks X close");
+  if (!dialog.includes('<CardHeader title={da ? "Slå notifikationer fra" : "Mute notifications"}')) throw new Error("mute dialog lacks the shared X close");
 });

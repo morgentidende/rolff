@@ -1,6 +1,9 @@
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
+import { useBackLayer } from "./backNavigation";
+import { CardHeader } from "./CardHeader";
 import type { Lang } from "./i18n";
+import { useBackdropDismiss, useModalLayer } from "./modalLayer";
 
 /** `pending`: the person has not accepted yet; user_id is then the INVITATION id and the nickname follows them on acceptance. */
 export type AliasContact = { user_id: string; email: string; alias: string | null; pending?: boolean };
@@ -39,7 +42,9 @@ export function ContactAliasDialog({ lang, contacts, save, saved, close }: {
   const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
   const dialog = useRef<HTMLDialogElement>(null); const input = useRef<HTMLInputElement>(null);
   const inflight = useRef(false); const mounted = useRef(true);
-  const backdropDown = useRef(false);
+  useBackLayer(true, () => { if (!inflight.current) close(); });
+  useModalLayer(true, dialog, { native: true });
+  const backdrop = useBackdropDismiss(() => { if (!inflight.current) close(); }, undefined, { outsideBox: true });
   useEffect(() => {
     mounted.current = true;
     const before = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -57,16 +62,8 @@ export function ContactAliasDialog({ lang, contacts, save, saved, close }: {
   const selected = contacts.find(c => c.user_id === id);
   return <dialog ref={dialog} className="contact-alias-dialog" aria-labelledby="contact-alias-title"
     onScroll={e => { const el = e.currentTarget; if (el.scrollTop > 2) el.dataset.scrolled = ""; else delete el.dataset.scrolled; }}
-    onPointerDown={e => { backdropDown.current = e.target === e.currentTarget; }}
-    onCancel={e => { e.preventDefault(); close(); }} onClick={e => {
-      // Only a press that STARTED on the backdrop dismisses: the release of the long-press that
-      // opened this dialog must not close it again.
-      const started = backdropDown.current; backdropDown.current = false;
-      if (e.target !== e.currentTarget || !started) return;
-      const r = e.currentTarget.getBoundingClientRect();
-      if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) dismiss();
-    }}>
-    <div className="sheethead"><h2 id="contact-alias-title">{da ? "Kontaktens kaldenavn" : "Contact nickname"}</h2><button type="button" className="icon" aria-label={da ? "Luk" : "Close"} disabled={busy} onClick={dismiss}>✕</button></div>
+    onCancel={e => { e.preventDefault(); dismiss(); }} {...backdrop}>
+    <CardHeader title={da ? "Kontaktens kaldenavn" : "Contact nickname"} titleId="contact-alias-title" lang={lang} onClose={dismiss} closeDisabled={busy} />
     {!contacts.length ? null : <>
       {contacts.length > 1 && <label>{da ? "Vælg person" : "Choose person"}<select value={id} disabled={busy} onChange={e => { const c = contacts.find(c => c.user_id === e.target.value); setId(c?.user_id ?? ""); setValue(c?.alias ?? ""); setErr(""); }}><option value="">{da ? "Vælg person…" : "Choose person…"}</option>{contacts.map(c => <option key={c.user_id} value={c.user_id}>{c.alias || c.email}</option>)}</select></label>}
       {selected && <form onSubmit={e => { e.preventDefault(); void submit(value); }}>
@@ -75,7 +72,7 @@ export function ContactAliasDialog({ lang, contacts, save, saved, close }: {
         <input ref={input} id="contact-alias-input" name="contact-nickname" type="text" inputMode="text" autoComplete="off" autoCorrect="off" autoCapitalize="words" spellCheck={false} enterKeyHint="done" data-lpignore="true" data-1p-ignore="true" data-form-type="other" maxLength={40} value={value} placeholder={da ? "Skriv et kaldenavn" : "Enter a nickname"} aria-describedby={selected.email ? "contact-alias-original" : undefined} disabled={busy} onChange={e => { setValue(e.target.value); setErr(""); }} />
         {selected.email && <p className="meta" id="contact-alias-original">{da ? "Oprindeligt navn: " : "Original name: "}<span className="alias-original">{selected.email}</span></p>}
         {selected.alias && <button type="button" className="text-link alias-reset" disabled={busy} onClick={() => void submit("")}>{da ? "Nulstil kaldenavn" : "Reset nickname"}</button>}
-        <div className="dialog-actions"><button type="button" className="ghost" disabled={busy} onClick={dismiss}>{da ? "Annuller" : "Cancel"}</button><button type="submit" disabled={busy}>{busy ? (da ? "Gemmer…" : "Saving…") : (da ? "Gem" : "Save")}</button></div>
+        <div className="dialog-actions"><button type="submit" disabled={busy}>{busy ? (da ? "Gemmer…" : "Saving…") : (da ? "Gem" : "Save")}</button></div>
       </form>}
     </>}
     {err && <p className="err" role="alert">{err}</p>}

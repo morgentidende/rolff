@@ -31,7 +31,9 @@ test('pending row shows the e-mail and "venter på accept"; long press offers on
     assert.ok(d.querySelector('#contact-alias-input'), 'field is editable');
     assert.ok(!d.querySelector('.alias-reset'), 'nothing to reset yet');
     assert.equal(d.querySelector('.alias-original').textContent, 'afventer@example.invalid');
-    assert.ok(button(d, 'Annuller') && button(d, 'Gem'));
+    assert.ok(button(d, 'Gem'));
+    assert.ok(d.querySelector('dialog[open] button[aria-label="Luk"]'));
+    assert.ok(![...d.querySelectorAll('dialog[open] button')].some(b => /^(Annuller|Cancel)$/.test(b.textContent.trim())));
     await e.close();
 });
 
@@ -51,7 +53,7 @@ test('Annullér invitation: asks first, then calls cancel_pending_invitation and
     await longPress(w, d); await click(button(d, 'Annullér invitation')); await delay(60);
     const dlg = d.querySelector('[role=alertdialog], [role=dialog]'); assert.ok(dlg, 'confirmation');
     assert.equal(rpcs(w, 'cancel_pending_invitation').length, 0, 'nothing happens before the confirmation');
-    await click(button(d, 'Behold')); await delay(60);
+    await click(dlg.querySelector('button[aria-label="Luk"]')); await delay(60);
     assert.equal(rpcs(w, 'cancel_pending_invitation').length, 0, 'declining the confirmation does nothing');
     assert.equal(d.querySelectorAll('.convrow').length, 1);
     await longPress(w, d); await click(button(d, 'Annullér invitation')); await delay(60);

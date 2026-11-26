@@ -652,11 +652,15 @@ const COLOR_NAMES: Record<string, [string, string]> = { teal: ["Petrol", "Teal"]
 
 function ColorDot({ lang, conv, label, initial, changed }: { lang: Lang; conv: Conv; label: string; initial?: string; changed: (c: string) => void }) {
   const da = lang === "da"; const [open, setOpen] = useState(false); const color = conv.color || "teal";
+  const wrap = useRef<HTMLSpanElement>(null);
   useBackLayer(open,()=>setOpen(false));
+  useModalLayer(open, wrap);
+  const scrim = useBackdropDismiss(() => setOpen(false));
   const letter = (initial || label.trim().match(/[\p{L}\p{N}]/u)?.[0] || "?").toUpperCase();
   const pick = async (c: string) => { const { error } = await supabase.rpc("set_conversation_color", { conv: conv.id, p_color: c }); if (!error) { changed(c); setOpen(false); } };
   return (
-    <span className="dotwrap">
+    <span className="dotwrap" ref={wrap}>
+      {open && createPortal(<div className="menu-scrim" data-modal-exempt="" {...scrim} />, document.body)}
       <button type="button" className={`dot c-${color}`} aria-label={da ? `Vælg farve for samtalen med ${label}` : `Choose colour for conversation with ${label}`} aria-expanded={open} onClick={(e) => { e.stopPropagation(); setOpen(!open); }}>
         <span aria-hidden="true">{letter}</span>
       </button>
