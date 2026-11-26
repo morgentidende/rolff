@@ -96,6 +96,11 @@ test('Konto: delete lives in a danger card with export warning and the long acti
     assert.equal(card.querySelector('button.danger').textContent, 'Slet konto, slet alle data og opsig abonnement');
     assert.match(card.textContent, /alle data i appen/);
     assert.match(card.textContent, /udskrift/);
+    assert.match(card.textContent, /med det samme/);
+    assert.match(card.textContent, /ikke kun en deaktivering/);
+    assert.match(card.textContent, /App Store eller Google Play/);
+    assert.match(card.textContent, /apps\.apple\.com\/account\/subscriptions/);
+
     assert.match(card.textContent, /Eksportér samtale/);
     const go = [...card.querySelectorAll('button')].find(b => b.textContent.trim() === 'Hent mine data først');
     assert.ok(go, 'link to download data');
