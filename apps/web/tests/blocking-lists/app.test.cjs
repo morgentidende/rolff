@@ -151,3 +151,37 @@ test('English consent texts exist in the source',()=>{const src=require('node:fs
  const app=require('node:fs').readFileSync(path.join(__dirname,'../../src/App.tsx'),'utf8');
  assert.ok(app.includes('Modtageren har blokeret et emne, som beskeden handler om.'));assert.ok(app.includes('the recipient has blocked a topic this message is about'));
  assert.ok(!app.includes('privat modtagerindstilling')&&!app.includes('private recipient setting'));});
+
+test('Topic input has no example placeholder in Danish or in the source',async()=>{const e=await env();try{
+ const ph=e.d.getElementById('blocked-topic').getAttribute('placeholder')||'';
+ assert.ok(!/omtaler mine forældre|mention my parents/i.test(ph));
+ const src=require('node:fs').readFileSync(path.join(__dirname,'../../src/BlockingLists.tsx'),'utf8');
+ assert.ok(!src.includes('placeholder={da?"omtaler mine forældre":"mention my parents"}'));
+ assert.ok(!src.includes('placeholder={da?"mention my parents"'));
+}finally{await e.close()}});
+test('Toggling one attachment switch does not disable or change the other switch or the consent ticks, including in flight and on rollback',async()=>{const e=await env();try{
+ const photo=e.d.querySelector('#block-photos-label').closest('.setting-row').querySelector('button[role=switch]');
+ const files=e.d.querySelector('#block-files-label').closest('.setting-row').querySelector('button[role=switch]');
+ const wordAck=e.d.querySelector('.blocking-ack input'), topicBox=topicAck(e.d);
+ await click(wordAck);await click(topicBox);
+ const idle=()=>{assert.equal(files.disabled,false);assert.equal(wordAck.disabled,false);assert.equal(topicBox.disabled,false);assert.equal(wordAck.checked,true);assert.equal(topicBox.checked,true);assert.equal(files.getAttribute('aria-checked'),'false');assert.equal(e.d.querySelector('.blocking-lists').getAttribute('aria-busy'),'false');};
+ idle();
+ const flush=async()=>{const q=e.w.QA.pending.splice(0);q.forEach(fn=>fn());await delay(20);};
+ e.w.QA.pause=true;photo.click();await delay(20);
+ assert.equal(photo.getAttribute('aria-checked'),'true','optimistic on');
+ idle();
+ e.w.QA.pause=false;await flush();
+ assert.equal(photo.getAttribute('aria-checked'),'true');idle();
+ e.w.QA.pause=true;e.w.QA.fail=true;photo.click();await delay(20);
+ assert.equal(photo.getAttribute('aria-checked'),'false','optimistic off while failing');
+ idle();
+ e.w.QA.pause=false;await flush();
+ assert.equal(photo.getAttribute('aria-checked'),'true','rolled back to last confirmed');idle();
+ assert.match(e.d.querySelector('[role=alert]').textContent,/kunne ikke bekræftes/);
+ e.w.QA.fail=false;e.w.QA.pause=true;files.click();await delay(20);
+ assert.equal(files.getAttribute('aria-checked'),'true','files optimistic on');
+ assert.equal(photo.getAttribute('aria-checked'),'true');
+ assert.equal(photo.disabled,false);assert.equal(wordAck.disabled,false);assert.equal(topicBox.disabled,false);assert.equal(wordAck.checked,true);assert.equal(topicBox.checked,true);
+ e.w.QA.pause=false;await flush();
+ assert.equal(files.getAttribute('aria-checked'),'true');assert.equal(photo.getAttribute('aria-checked'),'true');
+}finally{await e.close()}});
