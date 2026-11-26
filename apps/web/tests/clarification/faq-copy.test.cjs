@@ -1,4 +1,4 @@
-// FAQ copy: sender cannot see received/read status, and the FAQ never names the model.
+// FAQ copy: sender cannot see received/read status, and the FAQ never names the AI provider or model.
 // Synthetic data only; no real messages or model calls.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -18,16 +18,14 @@ function has(hay, needle, label) {
   assert.ok(hay.includes(needle), `${label} missing: ${needle.slice(0, 80)}`);
 }
 
-test('FAQ source has the receipt item in da and en, and never names the model', () => {
+test('FAQ source has the receipt item in da and en, and never names the provider or model', () => {
   has(faqSrc, DA_Q, 'da question');
   has(faqSrc, DA_A, 'da answer');
   has(faqSrc, EN_Q, 'en question');
   has(faqSrc, EN_A, 'en answer');
   has(faqSrc, 'tjekker Rolff både billedet og al tekst i det', 'da attachments');
   has(faqSrc, 'Rolff checks the image and all text in it', 'en attachments');
-  assert.doesNotMatch(faqSrc, /gpt-6-luna/i);
-  assert.doesNotMatch(faqSrc, /\bLuna\b/);
-  assert.doesNotMatch(faqSrc, /gpt-\d/i);
+  assert.doesNotMatch(faqSrc, /OpenAI|ChatGPT|Gemini|Grok|Claude|gpt-6-luna|gpt-\d|\bLuna\b/i);
 });
 
 async function openFaq(d, menuName = 'FAQ') {
@@ -40,7 +38,7 @@ async function openFaq(d, menuName = 'FAQ') {
   return s;
 }
 
-test('FAQ sheet shows the receipt item and contains no model name (da and en)', async () => {
+test('FAQ sheet shows the receipt item and contains no provider or model name (da and en)', async () => {
   const f = await env(); const { d } = f;
   try {
     const da = await openFaq(d);
@@ -48,9 +46,7 @@ test('FAQ sheet shows the receipt item and contains no model name (da and en)', 
     has(daText, DA_Q, 'da question in sheet');
     has(daText, DA_A, 'da answer in sheet');
     has(daText, 'tjekker Rolff både billedet og al tekst i det', 'da attachments in sheet');
-    assert.doesNotMatch(daText, /gpt-6-luna/i);
-    assert.doesNotMatch(daText, /\bLuna\b/);
-    assert.doesNotMatch(daText, /gpt-\d/i);
+    assert.doesNotMatch(daText, /OpenAI|ChatGPT|Gemini|Grok|Claude|gpt-6-luna|gpt-\d|\bLuna\b/i);
 
     const close = d.querySelector('.sheet [aria-label="Luk"], .sheet [aria-label="Close"]');
     await click(close); await delay(40);
@@ -69,8 +65,6 @@ test('FAQ sheet shows the receipt item and contains no model name (da and en)', 
     has(enText, EN_Q, 'en question in sheet');
     has(enText, EN_A, 'en answer in sheet');
     has(enText, 'Rolff checks the image and all text in it', 'en attachments in sheet');
-    assert.doesNotMatch(enText, /gpt-6-luna/i);
-    assert.doesNotMatch(enText, /\bLuna\b/);
-    assert.doesNotMatch(enText, /gpt-\d/i);
+    assert.doesNotMatch(enText, /OpenAI|ChatGPT|Gemini|Grok|Claude|gpt-6-luna|gpt-\d|\bLuna\b/i);
   } finally { await f.close(); }
 });
