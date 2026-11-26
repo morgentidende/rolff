@@ -88,7 +88,7 @@ for (const strict of [false, true])
             assertPrivateHistory(w);
             result.push('Chat local addMember→root Plans→local sheet→Chat');
             await click(label(d, 'Menu'));
-            await click(button(d, 'Deltagere og roller'));
+            await click(button(d, 'Beskedfrekvens'));
             assert.ok(d.querySelector('.sheet'));
             await back(w);
             assert.ok(!d.querySelector('.sheet'));
