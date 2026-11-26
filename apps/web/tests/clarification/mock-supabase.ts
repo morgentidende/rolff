@@ -13,6 +13,7 @@ const seedMsg = { id: '40000000-0000-4000-8000-000000000001', sender_id: uid, se
 let messages: any[] = [{ ...seedMsg }];
 let msgSeq = 2;
 let currentPlan = 'text_attachments';
+let prefCloudSync = false;
 const fixtureInvite = { id: 'pending-invite-fixture', role: 'reader', invitee_email: 'advokat.test@example.invalid', consents: 1, required: 2, i_consented: true, mine: true };
 let pendingInvites: any[] = [fixtureInvite];
 let memberInviteOk = false;
@@ -47,8 +48,9 @@ function rpc(name: string, args: any) {
     let data: any = [];
     if (name === 'list_my_conversations')
         data = [conv()];
+    if (name === 'set_my_data_prefs') { if (args?.p_cloud_sync && currentPlan !== 'text_attachments') { return { data: null, error: { message: 'plan_required', code: '42501' } }; } prefCloudSync = !!args?.p_cloud_sync; data = []; }
     if (name === 'get_my_privacy')
-        data = [{ inactivity_delete: true, inactivity_days: 90, cloud_sync: false, retention: '1y' }];
+        data = [{ inactivity_delete: false, inactivity_days: 90, cloud_sync: prefCloudSync, retention: '1y' }];
     if (name === 'get_my_plan')
         data = [{ plan: currentPlan, price: currentPlan === 'text_attachments' ? 79 : currentPlan === 'text' ? 49 : 0, pending_plan: pendingPlan, period_end: '2026-12-09T00:00:00Z', test_switch: true }];
     if (name === 'set_my_plan_test') { currentPlan = args?.p_plan ?? currentPlan; pendingPlan = null; data = [{ plan: currentPlan, pending_plan: null, period_end: '2026-12-09T00:00:00Z' }]; }
@@ -84,7 +86,14 @@ export const supabase: any = {
         signOut: async () => { changeUser(null); return { error: null }; },
         signInWithPassword: async (args: any) => { calls.push({ auth: 'signInWithPassword', args }); return { error: null, data: { session, user: session?.user } }; },
         signUp: async (args: any) => { calls.push({ auth: 'signUp', args }); return { error: null, data: { user: { id: 'new-user', email: args?.email }, session: null } }; },
-        verifyOtp: async () => ({ error: null }), getUser: async () => ({ data: { user: session?.user } }),
+        verifyOtp: async () => { if (!session) changeUser(uid); return { error: null }; },
+        updateUser: async (args: any) => {
+            calls.push({ function: 'auth.updateUser', args });
+            if (!session) return { data: { user: null }, error: { message: 'no session' } };
+            if (typeof args?.password === 'string' && args.password.length >= 8) return { data: { user: session.user }, error: null };
+            return { data: { user: null }, error: { message: 'Password should be at least 8 characters' } };
+        },
+        getUser: async () => ({ data: { user: session?.user } }),
     }, from: query, rpc,
 };
 // Optional: hold send-* calls open so tests can observe the "checking" state.
@@ -107,8 +116,23 @@ export function setNextSend(data: any, status = 200) { nextSend = data; nextSend
 // Optional: a pending downgrade (plan stays text_attachments, switch to 'text' at period_end).
 let pendingPlan: string | null = null;
 export function setPendingPlan(p: string | null) { pendingPlan = p; }
+export function setCurrentPlan(p: string) { currentPlan = p; }
+let recoverResult: { status: number; data: any } | 'throw' | null = null;
+export function setRecoverResult(r: typeof recoverResult) { recoverResult = r; }
+let deleteResult: { status: number; data: any } | 'throw' | null = null;
+export function setDeleteResult(r: typeof deleteResult) { deleteResult = r; }
 export async function callFn(name: string, args: any) {
     calls.push({ function: name, args });
+    if (name === 'account-mail' && args?.action === 'recover') {
+        if (recoverResult === 'throw') { recoverResult = null; throw new Error('synthetic recover failure'); }
+        if (recoverResult) { const r = recoverResult; recoverResult = null; return r; }
+        return { status: 200, data: { data: { ok: true } } };
+    }
+    if (name === 'delete-account') {
+        if (deleteResult === 'throw') { deleteResult = null; throw new Error('synthetic delete failure'); }
+        if (deleteResult) { const r = deleteResult; deleteResult = null; return r; }
+        return { status: 200, data: { data: { deleted: true, transcript_sent: !!args?.email_transcript } } };
+    }
     if (nextSend && name.startsWith('send-')) { const data = nextSend; nextSend = null; return { status: nextSendStatus, data }; }
     if (holdSend && name.startsWith('send-')) {
         const status = await new Promise<string>(r => heldSends.push(r));

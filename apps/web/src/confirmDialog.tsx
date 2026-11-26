@@ -7,11 +7,12 @@ import { useBackdropDismiss, useModalLayer, useUnderChatHeader } from "./modalLa
 // In-app replacement for window.confirm: Rolff-styled, aria-modal, focus-trapped,
 // Esc / Android back / ✕ = cancel. Promise-based so callers read like confirm().
 // `cancel` is accepted for call-site compatibility but is not shown: the ✕ is the only dismiss.
-export type ConfirmOptions = { title: string; body?: string; confirm: string; cancel?: string; danger?: boolean };
-type Req = ConfirmOptions & { resolve: (ok: boolean) => void };
+export type ConfirmChoice = boolean | "secondary";
+export type ConfirmOptions = { title: string; body?: string; confirm: string; cancel?: string; danger?: boolean; secondary?: string };
+type Req = ConfirmOptions & { resolve: (ok: ConfirmChoice) => void };
 const EVENT = "rolff:confirm";
 
-export function confirmDialog(o: ConfirmOptions): Promise<boolean> {
+export function confirmDialog(o: ConfirmOptions): Promise<ConfirmChoice> {
   // Next tick: lets a closing overflow menu release its back layer / focus first.
   return new Promise((resolve) => { setTimeout(() => window.dispatchEvent(new CustomEvent<Req>(EVENT, { detail: { ...o, resolve } })), 0); });
 }
@@ -26,7 +27,7 @@ export function ConfirmHost() {
   return <ConfirmView key={req.title + (req.body ?? "")} req={req} done={(ok) => { req.resolve(ok); setReq(null); }} />;
 }
 
-function ConfirmView({ req, done }: { req: Req; done: (ok: boolean) => void }) {
+function ConfirmView({ req, done }: { req: Req; done: (ok: ConfirmChoice) => void }) {
   const box = useRef<HTMLDivElement>(null);
   const prev = useRef<Element | null>(typeof document !== "undefined" ? document.activeElement : null);
   const layer = useRef<HTMLDivElement>(null);
@@ -56,6 +57,7 @@ function ConfirmView({ req, done }: { req: Req; done: (ok: boolean) => void }) {
         <CardHeader title={req.title} titleId="confirm-title" onClose={() => done(false)} />
         {req.body && <p id="confirm-body">{req.body}</p>}
         <div className="confirm-actions">
+          {req.secondary && <button type="button" className="ghost" onClick={() => done("secondary")}>{req.secondary}</button>}
           <button type="button" className={req.danger ? "danger" : undefined} onClick={() => done(true)}>{req.confirm}</button>
         </div>
       </div>

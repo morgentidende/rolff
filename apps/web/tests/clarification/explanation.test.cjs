@@ -61,10 +61,10 @@ test('compact blocked box: header + close, marked text, quoted suggestion with p
     assert.equal(label(d, 'Skriv en besked').value, 'Opdigtet venligt forslag.'); assert.equal(d.querySelector('.blockbox'), null);
   } finally { await f.close(); }
 });
-test('compact blocked box: close (X) dismisses and keeps the typed text; guidance shown without a use button', async () => {
+test('compact blocked box: close (X) dismisses and keeps the typed text; no suggestion section when Luna has none', async () => {
   const f = await env(); const { d } = f; try {
     const box = await sendText(f, { status: 'blocked', reason_code: 'personal_attack', spans: [], suggestion: '', explanation: EXPL });
-    assert.equal(box.querySelector('.blockbox-use'), null); assert.match(box.querySelector('.blockbox-guide').textContent, /^Vejledning: /);
+    assert.equal(box.querySelector('.blockbox-use'), null); assert.equal(box.querySelector('.blockbox-guide'), null); assert.ok(!/Vejledning/.test(box.textContent));
     assert.equal(box.querySelector('.blockbox-flag'), null);
     await click(box.querySelector('button[aria-label="Luk"]')); await delay(30);
     assert.equal(d.querySelector('.blockbox'), null); assert.equal(label(d, 'Skriv en besked').value, 'Opdigtet blokeret testbesked.');

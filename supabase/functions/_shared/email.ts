@@ -151,7 +151,7 @@ export function feedbackMail(p: { category: string; body: string; senderName: st
   return { subject, html, text };
 }
 
-export type MailAttachment = { filename: string; content_type: "application/pdf"; content_b64: string };
+export type MailAttachment = { filename: string; content_type: "application/pdf" | "text/html"; content_b64: string };
 export type MailKind = "invite" | "invite_copy" | "member_invite" | "approval" | "resend" | "account" | "export" | "report" | "feedback" | "inactivity" | "test" | "other";
 export type MailResult = { ok: boolean; provider: "smtp" | "relay" | "none"; code: number | null; reason: string };
 type MailMsg = { subject: string; html: string; text: string; reply_to?: string; attachments?: MailAttachment[] };
@@ -382,5 +382,26 @@ export function exportNoticeMail(p: { recipient: string; exportId: string; scope
 <p style="margin:0 0 14px;font-size:14px">${esc(p.scope)} · ${p.count} beskeder<br>Eksport-ID: <code>${esc(p.exportId)}</code></p>
 <p style="margin:0;font-size:14px">Var det ikke dig? Log ind og skift din adgangskode med det samme (⋮ → Konto).</p>`, lang);
   const text = `${TESTWARN}Hej,\n\nFra din Rolff-konto er der netop sendt en udskrift af en samtale til ${p.recipient}.\n${p.scope} · ${p.count} beskeder\nEksport-ID: ${p.exportId}\n\nVar det ikke dig? Log ind og skift din adgangskode med det samme (⋮ → Konto).`;
+  return { subject, html, text };
+}
+
+/** Pre-deletion transcript of all the user's conversations, attached as a file. Body never contains message content. */
+export function accountTranscriptMail(p: { conversations: number; messages: number; lang?: MailLang }) {
+  const lang = mailLang(p.lang);
+  if (lang === "en") {
+    const subject = "Your transcript of all your Rolff conversations";
+    const html = shell(subject, `<p style="margin:0 0 14px">Hi,</p>
+<p style="margin:0 0 14px">Attached is a full transcript of all your conversations as they appeared to you. You asked for this copy before deleting your Rolff account.</p>
+<p style="margin:0 0 14px;font-size:14px">${p.conversations} conversations · ${p.messages} messages</p>
+<p style="margin:0">The file is an HTML document you can open and save. Message text is only in the attachment, not in this e-mail.</p>`, lang);
+    const text = `${TESTWARN_EN}Hi,\n\nAttached is a full transcript of all your conversations as they appeared to you. You asked for this copy before deleting your Rolff account.\n${p.conversations} conversations · ${p.messages} messages\nThe file is an HTML document you can open and save. Message text is only in the attachment, not in this e-mail.\n\n${TEXT_FOOT}`;
+    return { subject, html, text };
+  }
+  const subject = "Din udskrift af alle dine samtaler i Rolff";
+  const html = shell(subject, `<p style="margin:0 0 14px">Hej,</p>
+<p style="margin:0 0 14px">Vedhæftet er en fuld udskrift af alle dine samtaler, som de så ud for dig. Du bad om denne kopi, før din Rolff-konto slettes.</p>
+<p style="margin:0 0 14px;font-size:14px">${p.conversations} samtaler · ${p.messages} beskeder</p>
+<p style="margin:0">Filen er et HTML-dokument, du kan åbne og gemme. Beskedteksten står kun i vedhæftningen, ikke i denne mail.</p>`, lang);
+  const text = `${TESTWARN}Hej,\n\nVedhæftet er en fuld udskrift af alle dine samtaler, som de så ud for dig. Du bad om denne kopi, før din Rolff-konto slettes.\n${p.conversations} samtaler · ${p.messages} beskeder\nFilen er et HTML-dokument, du kan åbne og gemme. Beskedteksten står kun i vedhæftningen, ikke i denne mail.`;
   return { subject, html, text };
 }

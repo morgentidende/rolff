@@ -34,7 +34,7 @@ import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useRef, useSt
 import type { Session } from "@supabase/supabase-js";
 import { callFn, supabase } from "./supabase";
 import { detectLang, strings, type Lang } from "./i18n";
-import { passwordsMatch, pwText, toggleLabel } from "./pw";
+import { passwordPairState, passwordsMatch, pwText, toggleLabel } from "./pw";
 import { cacheClear, cacheGet, cacheSet } from "./localStore";
 import { LunaIndicator } from "./LunaRobot";
 import { applySuggestion } from "./suggestion";
@@ -78,7 +78,7 @@ function readOpenConversation(): string | null {
   return OPEN_ID.test(m[1]) ? m[1].toLowerCase() : null;
 }
 
-type Sheet = "notifications" | "members" | "privacy" | "words" | null | "lang" | "times" | "faq" | "feedback" | "invite" | "export" | "addMember" | "report" | "account" | "newpw" | "plans";
+type Sheet = "notifications" | "members" | "privacy" | "words" | null | "lang" | "times" | "faq" | "feedback" | "invite" | "export" | "addMember" | "report" | "account" | "newpw" | "recover" | "plans";
 export type MenuItem = { label: string; run: () => void; danger?: boolean; divider?: boolean; checked?: boolean };
 
 export function App() {
@@ -94,6 +94,8 @@ export function App() {
   const conv = isPendingOnly(rawConv) ? null : rawConv;
   useEffect(() => { if (rawConv && !conv) setConv(null); }, [rawConv, conv]);
   const [sheet, setSheet, resetSheet] = usePanelState<Sheet>(null);
+  const [recoverEmail, setRecoverEmail] = useState("");
+  const [recoverFrom, setRecoverFrom] = useState<"account" | null>(null);
   const [homeKey, setHomeKey] = useState(0);
   const [renameContacts, setRenameContacts] = useState<Other[] | null>(null);
   // Nothing to nickname (e.g. an invitation that expired long ago): do not open an empty dialog.
@@ -188,7 +190,11 @@ export function App() {
     { label: da ? "Inviter person" : "Invite person", run: () => setSheet("invite") },
     { label: t.logout, run: () => { homeCache.clear(); chatCache.clear(); setCardCacheOwner(null); setPushOwner(null); resetBackNavigation(); setConv(null); resetSheet(); cacheClear().finally(() => supabase.auth.signOut()); }, danger: true },
   ];
-  const close = () => setSheet(null);
+  const close = () => {
+    if (sheet === "recover" && recoverFrom === "account") { setSheet("account"); setRecoverFrom(null); return; }
+    setSheet(null); setRecoverFrom(null);
+  };
+  const openRecover = (email: string, from: "account" | null = null) => { setRecoverEmail(email); setRecoverFrom(from); setSheet("recover"); };
   // All sheets from the ⋮ menu open as a card under the ⋮ button at the top, like "Tilføj person".
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const [policyOpen, setPolicyOpen] = useState(false);
@@ -216,7 +222,7 @@ export function App() {
       <div className="notice" role="note">{t.testNotice}</div>
       {inviteMsg && <div className="notice" role="status">{inviteMsg}</div>}
       {session && !conv && !sheet && <PushSettings key={`push-offer:${session.user.id}`} uid={session.user.id} lang={lang} onboarding />}
-      {!session ? <Auth lang={lang} peek={inviteToken ? peek : undefined} />
+      {!session ? <Auth lang={lang} peek={inviteToken ? peek : undefined} onForgot={(email) => openRecover(email)} />
         : conv ? <Chat session={session} key={`${session.user.id}:${conv.id}`} lang={lang} conv={conv} rename={openRename} back={backToList} openPlans={() => setSheet("plans")} planKey={sheet} menuButtonRef={menuButtonRef} />
         : <Home key={`home:${session.user.id}`} uid={session.user.id} refreshKey={homeKey} lang={lang} open={openFromList} rename={openRename} invite={() => setSheet("invite")} />}
       {sheet === "lang" && <SheetView title={t.lang} close={close} lang={lang} anchor={menuButtonRef}><Choice name="lang" value={lang} set={(v) => setLang(v as Lang)} opts={[["da", "Dansk"], ["en", "English"]]} /></SheetView>}
@@ -226,9 +232,10 @@ export function App() {
       {session && renameContacts && <ContactAliasDialog key={`alias:${session.user.id}`} lang={lang} contacts={renameContacts}
         close={() => setRenameContacts(null)} save={async (id, alias, pending) => { const uid=session.user.id; const { error } = await (pending ? supabase.rpc("set_invitation_alias", { p_invitation: id, p_alias: alias }) : supabase.rpc("set_contact_alias", { p_contact: id, p_alias: alias })).setHeader("Authorization", `Bearer ${session.access_token}`); if (error) throw error; if((await supabase.auth.getSession()).data.session?.user.id!==uid)return; const name=alias.trim()||null; setConv(c => c ? (pending ? (c.pending_invitation_id === id ? { ...c, pending_alias: name } : c) : { ...c, others: c.others.map(o => o.user_id === id ? { ...o, alias:name } : o) }) : c); setHomeKey(k => k + 1); }}
         saved={() => setRenameContacts(null)} />}
-      {sheet === "account" && <SheetView title={da ? "Konto" : "Account"} close={close} lang={lang} anchor={menuButtonRef}><AccountPanel lang={lang} openPrivacy={() => setSheet("privacy")} openPlans={() => setSheet("plans")} /></SheetView>}
+      {sheet === "account" && <SheetView title={da ? "Konto" : "Account"} close={close} lang={lang} anchor={menuButtonRef}><AccountPanel lang={lang} openPrivacy={() => setSheet("privacy")} openPlans={() => setSheet("plans")} onForgot={(email) => openRecover(email, "account")} /></SheetView>}
+      {sheet === "recover" && <SheetView title={da ? "Glemt adgangskode" : "Forgot password"} close={close} lang={lang} anchor={session ? menuButtonRef : undefined}><RecoverPassword lang={lang} initialEmail={recoverEmail} /></SheetView>}
       {sheet === "newpw" && session && <SheetView title={da ? "Vælg ny adgangskode" : "Choose a new password"} close={close} lang={lang} anchor={menuButtonRef}><NewPassword lang={lang} done={close} /></SheetView>}
-      {sheet === "privacy" && <SheetView title={da ? "Privatliv og sletning" : "Privacy and deletion"} close={close} lang={lang} anchor={menuButtonRef}><PrivacyPanel lang={lang} /></SheetView>}
+      {sheet === "privacy" && <SheetView title={da ? "Privatliv og sletning" : "Privacy and deletion"} close={close} lang={lang} anchor={menuButtonRef}><PrivacyPanel lang={lang} openPlans={() => setSheet("plans")} /></SheetView>}
       {sheet === "feedback" && <SheetView title={da ? "Kontakt" : "Contact"} close={close} lang={lang} anchor={menuButtonRef}><FeedbackForm lang={lang} /></SheetView>}
       {sheet === "invite" && <SheetView title={da ? "Inviter person" : "Invite person"} close={close} lang={lang} anchor={menuButtonRef}><InviteByEmail lang={lang} done={(toast, tone = "success") => { setHomeKey(homeKey + 1); close(); showToast(toast, { tone, ms: tone === "success" ? 4000 : 9000, at: "top" }); }} /></SheetView>}
       {policyOpen && <PolicyView lang={lang} close={() => setPolicyOpen(false)} />}
@@ -302,47 +309,47 @@ function Faq({ lang }: { lang: Lang }) {
   const qa: [string, string][] = da ? [
     ["Kan jeg se, om min besked er modtaget eller læst?", "Nej. Rolff viser aldrig, om en besked er modtaget eller læst. Det er for at undgå pres og konflikter. Du ved, at beskeden er nået frem, når du får et svar."],
     ["Kan den anden se, om jeg har læst en besked eller er online?", "Nej. Rolff har ingen læsekvitteringer, ingen online-status og ingen “skriver…”-indikator."],
-    ["Hvad gør AI-tonetjekket?", "Før en besked sendes, vurderer en AI-tjeneste tonen. Bliver den afvist, leveres den ikke. Har beskeden et konkret legitimt praktisk ønske, kan du få et valgfrit omformuleringsforslag; ellers kun vejledning (ikke sendbar). Beskeden og korte uddrag (højst 300 tegn) af op til 5 tidligere beskeder sendes til tjenesten. I testen: kun opdigtede beskeder."],
+    ["Hvad gør AI-tonetjekket?", "Før en besked sendes, vurderer en AI-tjeneste tonen. Bliver den afvist, leveres den ikke. Hvis der er et konkret, roligt omformuleringsforslag, vises det; ellers vises intet forslag. Beskeden og korte uddrag (højst 300 tegn) af op til 5 tidligere beskeder sendes til tjenesten. I testen: kun opdigtede beskeder."],
     ["Hvilke sprog kan jeg skrive på?", "Rolff finder selv ud af, hvilket sprog du skriver på. Den kan også håndtere, at du blander flere sprog i samme besked eller endda i samme sætning. Filteret er dog mest præcist, når du holder dig til ét sprog."],
     ["Kan jeg få notifikationer?", "Notifikationer er slået fra, indtil du selv slår dem til. Du kan vælge Ja eller Ikke nu på oversigten og ændre valget under ⋮ → Notifikationer. Notifikationen viser afsenderens navn (det du selv har kaldt personen, ellers personens e-mail), men aldrig beskedteksten. Når nogen accepterer din invitation, får du også besked. Du kan gøre en enkelt samtale lydløs i samtalens menu. Tilmeldingen fornyes automatisk, mens du bruger appen; har enheden ikke været brugt i 90 dage, skal du slå notifikationer til igen. Under Enheder kan du fjerne en telefon eller slå fra på alle. På iPhone/iPad kræves iOS/iPadOS 16.4+ og hjemmeskærm-installation. Aktuelle modtagetider kontrolleres, når afsendelsen sættes i gang. En afsendelse, der allerede er sat i gang, kan stadig nå frem efter ændring af tider eller fravalg. Telefon og netværk kan forsinke eller undlade visning. Ingen garanti for præcist tidspunkt."],
     ["Hvad er modtagetider?", "I hver samtale kan du under ⋮ → Modtagetider vælge, hvornår på ugen nye beskeder i den samtale når frem til dig. Tiderne gælder kun den samtale. Beskeder uden for tiderne venter, til næste modtagetid – eller til du i samtalen trykker “Modtag beskeder nu”."],
     ["Hvordan kommer man ind i en samtale?", "Kun via invitation på e-mail. Ekstra deltagere (fx advokat eller sagsbehandler) får først adgang, når alle i samtalen har godkendt, og de ser ingen beskeder fra før, de kom med."],
     ["Hvad er et kaldenavn?", "Et kaldenavn er et navn, du selv giver en person, så du kan genkende vedkommende. Kun du kan se det – personens profil og navn hos andre ændres ikke. Hold fingeren på en samtale for at ændre det. Du kan også give et kaldenavn, før personen har accepteret din invitation: det følger med, når invitationen tages imod, og personen kan aldrig se det. En invitation, der venter på accept, har ingen samtale at åbne endnu. Tryk eller hold fingeren på den for at ændre kaldenavn eller annullere invitationen."],
     ["Hvem kan se og skrive i samtalen?", "Under ⋮ → “Beskedfrekvens” ser du alle deltagere og deres rolle: Part, Læse og skrive eller Kun læse. Parterne kan fjerne ekstra deltagere eller gøre en skrivende deltager til kun læse. Skriveadgang kræver en ny invitation, som alle parter godkender. Alle kan forlade samtalen."],
-    ["Hvad bliver blokeret?", "Rolff stopper beskeder, der kan opfattes som sårende eller unødigt kan provokere til vrede (tjekket af AI), beskeder med emojis eller tekst-smileys som :-) og :( (de misforstås let eller kan bruges til sarkasme – skriv det med ord; et 👍 på en besked er et fast svar, ikke tekst, og er tilladt), beskeder skrevet med store bogstaver (opleves som råb) og den samme besked sendt igen. Ved AI-/tone-afvisning kan du få et valgfrit forslag, hvis beskeden indeholder et konkret, legitimt praktisk ønske («Brug forslaget» kopierer det til skrivefeltet; du redigerer og sender selv, og det tjekkes igen). Ren kritik, trusler uden praktisk kerne eller lignende kan ikke omformuleres — så får du kun vejledning (ikke en sendbar tekst). Forslag erstatter ikke ordblokliste, længde- eller frekvensgrænser. Stavefejl og ukendte egenavne er ikke i sig selv et problem. Hvis AI er usikker på beskedens afgørende mening, bliver du bedt om at præcisere den, før den kan sendes. Store begyndelsesbogstaver gør ikke krænkende ord til tilladte navne."],
+    ["Hvad bliver blokeret?", "Rolff stopper beskeder, der kan opfattes som sårende eller unødigt kan provokere til vrede (tjekket af AI), beskeder med emojis eller tekst-smileys som :-) og :( (de misforstås let eller kan bruges til sarkasme – skriv det med ord; et 👍 på en besked er et fast svar, ikke tekst, og er tilladt), beskeder skrevet med store bogstaver (opleves som råb) og den samme besked sendt igen. Ved AI-/tone-afvisning kan du få et valgfrit, konkret omformuleringsforslag, når der er et relevant og roligt forslag («Brug forslag» kopierer det til skrivefeltet; du redigerer og sender selv, og det tjekkes igen). Hvis der ikke er et godt forslag, vises intet forslag. Forslag erstatter ikke ordblokliste, længde- eller frekvensgrænser. Stavefejl og ukendte egenavne er ikke i sig selv et problem. Hvis AI er usikker på beskedens afgørende mening, bliver du bedt om at præcisere den, før den kan sendes. Store begyndelsesbogstaver gør ikke krænkende ord til tilladte navne."],
     ["Hvordan blokerer jeg en samtale?", "Tryk ⋮ i samtalen → “Blokér samtale”. Så kan de andre ikke længere sende beskeder i samtalen; de får kun at vide, at beskeden ikke kan sendes – ikke hvem eller hvornår. Blokeringen udløber aldrig af sig selv. Den ophører kun, når du selv trykker “Afblokér”."],
     ["Hvad er “Blokerede ord”?", "Et valgfrit filter (slået fra som standard): Under ⋮ → “Blokerede ord” kan du tilføje enkeltord, udtryk på flere ord eller hele sætninger (op til 120 tegn), som ikke må nå frem til dig. Store/små bogstaver og accenter er ligegyldige (fx matcher “dårlig far” også “DÅRLIG FAR” og “darlig far”), og ordene skal stå i samme rækkefølge. Afslutter du med * (fx “pis*”), rammes også ord, der begynder sådan. Listen gælder den samtale, du står i, og er privat. Rammer en besked noget på listen, bliver den ikke leveret – afsenderen får at vide præcis hvilket ord eller udtryk, og at modtageren har blokeret det, og kan omformulere. Derfor skal du bekræfte det for hvert ord. Du kan fjerne ord igen når som helst."],
     ["Kan jeg begrænse hvor tit en person skriver?", "Ja. Åbn “Beskedfrekvens” og tryk “Indstillinger” ud for personen. Vælg højst 1 besked pr. minut, pr. 5 minutter, pr. time eller et brugerdefineret antal minutter (1 til 1.440 = 24 timer). Standard er ingen grænse. Det regnes fra personens seneste leverede besked til dig i alle jeres samtaler; afviste beskeder tæller ikke, vedhæftninger tæller som en besked. For tidlige beskeder gemmes ikke, og afsenderen får at vide, hvornår der kan sendes igen. Er I flere, gælder den strengeste grænse."],
     ["Hvem kan tilføje en ekstra person til en samtale?", "At invitere den anden forælder, når du opretter en samtale, kan alle. At tilføje en ekstra person (fx advokat eller bedsteforælder) kræver, at DU som inviterer har planen “Premium” (79 kr./md.). De andre deltagere og den inviterede må gerne have Standard-planen. Nedgraderer du senere, bliver de nuværende deltagere."],
-    ["Hvad kan de andre se om mig?", "Du logger ind med din e-mail. Din e-mail er også det navn, de andre i samtalen ser – du kan ikke selv vælge et andet navn. Hver person kan give dig et privat kaldenavn, som kun de selv ser (hold fingeren på samtalen). Glemt adgangskode: brug linket på login-siden. Skift e-mail eller adgangskode: ⋮ → Konto. Sletning af konto: ⋮ → Konto."],
+    ["Hvad kan de andre se om mig?", "Du logger ind med din e-mail. Din e-mail er også det navn, de andre i samtalen ser – du kan ikke selv vælge et andet navn. Hver person kan give dig et privat kaldenavn, som kun de selv ser (hold fingeren på samtalen). Glemt adgangskode: brug linket på login-siden eller under ⋮ → Konto. Skift e-mail eller adgangskode: ⋮ → Konto. Sletning af konto: ⋮ → Konto."],
     ["Hvordan kontakter jeg Rolff?", "Tryk ⋮ → “Kontakt”. Du vælger kategorien Feedback eller Problemer med Rolff-appen og skriver din besked. Det er også sådan, du skriver til kundeservice. Skriv ikke samtaleindhold eller personoplysninger, du ikke vil dele. Beskeden sendes til Rolff med dit bruger-id – ikke dine samtaler."],
     ["Hvordan rapporterer jeg noget?", "Tryk ⋮ i samtalen → “Rapportér”. Du vælger kategori, skriver selv hvad der er sket og kan markere de beskeder, du vil vedhæfte. Du ser en forhåndsvisning, og intet sendes før du bekræfter. Rapporten mailes til Rolffs udvikler (kontakt: nicolaipetersen108@gmail.com) med dit bruger-id. Rolff gemmer kun kategori, tidspunkt og antal vedhæftede beskeder (til at begrænse misbrug) – ikke teksten. Der er ingen døgnvagt og ingen garanti for svar eller handling. Ved akut fare: ring 112."],
-    ["Hvor ligger mine data, og hvor længe?", "På Supabase-servere i Frankfurt (EU). Du vælger selv opbevaring (1 år, 5 år eller ubegrænset) og sky-synk under ⋮ → Privatliv og sletning. Der kan du også downloade alle dine data (ZIP med JSON og CSV). Du sletter din konto under ⋮ → Konto (det sletter alle data med det samme og stopper abonnementet; den resterende periode går tabt, og en eventuel refusion sker via App Store eller Google Play. Lav en udskrift først, hvis du vil beholde noget). Vil du bare stoppe betalingen og beholde kontoen, vælg “Opsig abonnement” under ⋮ → Konto eller Abonnement; så løber planen til periodens slut. AI-tonetjekket sender i testen beskeden til en AI-tjeneste. Uden en aftale om nul-opbevaring kan tjenesten gemme indholdet i op til 30 dage til misbrugskontrol; det bruges ikke til træning. Vil du trække dit samtykke til AI-behandlingen tilbage, så slet kontoen under ⋮ → Konto, eller skriv via Kontakt. Læs mere i privatlivspolitikken (⋮ → Privatlivspolitik)."],
+    ["Hvor ligger mine data, og hvor længe?", "På Supabase-servere i Frankfurt (EU). Du vælger selv opbevaring (1 år, 5 år eller ubegrænset) og sky-synk (kun Premium) under ⋮ → Privatliv og sletning. Der kan du også downloade alle dine data (ZIP med JSON og CSV). Du sletter din konto under ⋮ → Konto (det sletter alle data med det samme og stopper abonnementet; den resterende periode går tabt, og en eventuel refusion sker via App Store eller Google Play. Lav en udskrift først, hvis du vil beholde noget). Vil du bare stoppe betalingen og beholde kontoen, vælg “Opsig abonnement” under ⋮ → Konto eller Abonnement; så løber planen til periodens slut. AI-tonetjekket sender i testen beskeden til en AI-tjeneste. Uden en aftale om nul-opbevaring kan tjenesten gemme indholdet i op til 30 dage til misbrugskontrol; det bruges ikke til træning. Vil du trække dit samtykke til AI-behandlingen tilbage, så slet kontoen under ⋮ → Konto, eller skriv via Kontakt. Læs mere i privatlivspolitikken (⋮ → Privatlivspolitik)."],
     ["Kan jeg sende billeder og PDF'er?", "Ja, med planen “Premium” (79 kr./md.). Brug papirclipsen til filvalg eller kameraikonet til et nyt billede. Telefonen styrer eventuelle kameratilladelser, når funktionen bruges; filvælgeren giver kun adgang til den valgte fil. En valgt fil sendes først, når du trykker på papirflyet. Du kan sende PNG, JPG, WebP, GIF (ikke animeret) og PDF (højst 4 MB og 5 sider). Du kan sende op til 5 vedhæftninger i døgnet (regnet over de seneste 24 timer). Før filen sendes, tjekker Rolff både billedet og al tekst i det – samme regler som beskeder. Er bare én linje sårende, eller er billedet upassende, bliver filen ikke sendt, og du får at vide hvorfor. Modtagerens blokerede ord gælder også tekst i filen. Under Blokeringer kan du slå fra, at den anden må sende dig fotos eller filer; afsenderen får så at vide, at den type ikke tages imod i samtalen – ikke om en besked er læst eller modtaget. Alle i samtalen kan se vedhæftninger, de modtager, uanset plan. Læsere kan ikke sende filer."],
-    ["Hvad koster Rolff?", "Der er to betalte planer: “Standard” 49 kr./md. med højst 160 tegn pr. besked (én SMS-længde) og “Premium” 79 kr./md. med højst 480 tegn (tre SMS-længder). Planen gælder dig som afsender, så to forældre kan have hver sin plan. Opgradering gælder straks, nedgradering fra næste periode. “Opsig abonnement” (under ⋮ → Konto eller Abonnement) beholder konto og data; planen løber til periodens slut, derefter uden betalt plan (samme muligheder som Standard). “Slet konto” sletter med det samme, og den resterende periode går tabt. I testversionen er skift og opsigelse en testfunktion uden betaling."],
+    ["Hvad koster Rolff?", "Der er to betalte planer: “Standard” 49 kr./md. med højst 160 tegn pr. besked (én SMS-længde) og “Premium” 79 kr./md. med højst 480 tegn (tre SMS-længder) og sky-synk, så du kan bruge Rolff på flere enheder. Planen gælder dig som afsender, så to forældre kan have hver sin plan. Opgradering gælder straks, nedgradering fra næste periode. “Opsig abonnement” (under ⋮ → Konto eller Abonnement) beholder konto og data; planen løber til periodens slut, derefter uden betalt plan (samme muligheder som Standard). “Slet konto” sletter med det samme, og den resterende periode går tabt. I testversionen er skift og opsigelse en testfunktion uden betaling."],
     ["Hvem må bruge Rolff?", "Rolff er kun for personer, der er fyldt 18 år. Ved oprettelse skal du bekræfte det. Vil du trække dit samtykke til AI-behandlingen tilbage, så slet kontoen under ⋮ → Konto, eller skriv via Kontakt."],
     ["Er det her den rigtige app?", "Nej, det er et testmiljø. Skriv kun opdigtede beskeder."],
   ] : [
     ["Can I see if my message was received or read?", "No. Rolff never shows whether a message was received or read. That is to protect against pressure and conflicts. You know a message has arrived when you get a reply."],
     ["Can the other person see if I read a message or am online?", "No. Rolff has no read receipts, no online status and no typing indicator."],
-    ["What does the AI tone check do?", "Before a message is sent, an AI service assesses the tone. If rejected, it is not delivered. With a concrete legitimate practical wish you may get an optional rewrite; otherwise guidance only (not sendable). The message and short excerpts (max 300 characters) of up to 5 earlier messages are sent to the service. In the test: synthetic messages only."],
+    ["What does the AI tone check do?", "Before a message is sent, an AI service assesses the tone. If rejected, it is not delivered. If there is a concrete, calm rewrite, it is shown; otherwise no suggestion is shown. The message and short excerpts (max 300 characters) of up to 5 earlier messages are sent to the service. In the test: synthetic messages only."],
     ["Which languages can I write in?", "Rolff works out by itself which language you write in. It can also handle you mixing several languages in the same message or even the same sentence. The filter is most precise, though, when you stick to one language."],
     ["Can I get notifications?", "Notifications are off unless you turn them on. You can choose Yes or Not now on the overview and change this under ⋮ → Notifications. The notification shows the sender's name (the nickname you gave them, otherwise their email), but never the message text. When someone accepts your invitation, you are notified too. You can mute a single conversation in its menu. The registration is renewed automatically while you use the app; if the device has not been used for 90 days, turn notifications on again. Under Devices you can remove a phone or turn them off on all devices. iPhone/iPad requires iOS/iPadOS 16.4+ and a Home Screen installation. Current receive times are checked when dispatch is started. A dispatch already started may still arrive after changing times or opting out. Phone and network may delay or omit display. Exact timing is not guaranteed."],
     ["What are receive times?", "In each conversation you can choose, under ⋮ → Receive times, when during the week new messages in that conversation reach you. The times apply only to that conversation. Messages arriving outside your times wait until the next receive time – or until you tap “Receive messages now” in the conversation."],
     ["How do people join a conversation?", "Only by e-mail invitation. Extra participants (e.g. a lawyer or caseworker) only get access when everyone in the conversation has approved, and they see no messages from before they joined."],
     ["What is a nickname?", "A nickname is a name you give a person so you can recognise them. Only you can see it – their profile and their name for others are unchanged. Press and hold a conversation to change it. You can also give a nickname before the person has accepted your invitation: it carries over when the invitation is accepted, and the person can never see it. An invitation that is waiting for acceptance has no conversation to open yet. Tap or press and hold it to change the nickname or cancel the invitation."],
     ["Who can read and write in the conversation?", "Under ⋮ → “Message frequency” you see everyone and their role: Party, Read and write or Read only. Parties can remove extra participants or make a writer read only. Write access needs a new invitation approved by all parties. Anyone can leave."],
-    ["What gets blocked?", "Rolff stops messages that may come across as hurtful or needlessly provoke anger (checked by AI), messages with emojis or text emoticons such as :-) and :( (easily misread or used for sarcasm – use words; a 👍 on a message is a fixed reply, not text, and is allowed), messages in all caps (reads as shouting) and the same message sent twice. On AI/tone blocks you may get an optional rephrase only if the message contains a concrete legitimate practical wish (“Use suggestion” copies it into the composer; you edit and send yourself, and it is checked again). Pure criticism, threats without a practical core, and similar cannot be rewritten — you then get guidance only (not sendable text). Suggestions do not override blocked words, length or frequency limits. Spelling errors and unfamiliar proper names alone are not a problem. If AI cannot understand the core meaning sufficiently, you are asked to clarify before sending. Capitalizing offensive words does not exempt them as names."],
+    ["What gets blocked?", "Rolff stops messages that may come across as hurtful or needlessly provoke anger (checked by AI), messages with emojis or text emoticons such as :-) and :( (easily misread or used for sarcasm – use words; a 👍 on a message is a fixed reply, not text, and is allowed), messages in all caps (reads as shouting) and the same message sent twice. On AI/tone blocks you may get an optional concrete rewrite when there is a relevant, calm suggestion (“Use suggestion” copies it into the composer; you edit and send yourself, and it is checked again). If there is no good suggestion, none is shown. Suggestions do not override blocked words, length or frequency limits. Spelling errors and unfamiliar proper names alone are not a problem. If AI cannot understand the core meaning sufficiently, you are asked to clarify before sending. Capitalizing offensive words does not exempt them as names."],
     ["How do I block a conversation?", "Tap ⋮ in the conversation → “Block conversation”. The others can then no longer send messages there; they are only told the message cannot be sent – not who or when. A block never expires by itself. It only ends when you tap “Unblock”."],
     ["What are “Blocked words”?", "An optional filter (off by default): under ⋮ → “Blocked words” you can add single words, multi-word expressions or whole sentences (up to 120 characters) that must not reach you. Case and accents are ignored, and words must appear in the same order. Ending with * (e.g. “pis*”) also matches words starting that way. The list applies to the current conversation and is private. If a message hits it, it is not delivered – the sender is told exactly which word or phrase and that the recipient blocked it, and can rephrase. That is why you confirm each word. You can remove words at any time."],
     ["Can I limit how often a person writes?", "Yes. Open “Message frequency”, then tap “Settings” next to the person. Choose at most 1 message per minute, per 5 minutes, per hour, or a custom number of minutes (1 to 1,440 = 24 hours). Default: no limit. It counts from the person's latest delivered message to you in any of your conversations; rejected messages do not count; attachments count as a message. Early messages are not stored and the sender is told when they can send again. With several recipients the strictest applies."],
     ["Who can add an extra person to a conversation?", "Anyone can invite the other parent when creating a conversation. Adding an extra person (e.g. a lawyer) requires that YOU, the inviter, are on “Premium” (79 DKK/month). Other members and the invitee may be on Standard. If you downgrade later, existing members stay."],
-    ["What can others see about me?", "You log in with your e-mail. Your e-mail is also the name others in the conversation see – you cannot choose a different name yourself. Each person can give you a private nickname that only they see (press and hold the conversation). Forgot password: use the link on the login page. Change e-mail or password: ⋮ → Account. Account deletion: ⋮ → Account."],
+    ["What can others see about me?", "You log in with your e-mail. Your e-mail is also the name others in the conversation see – you cannot choose a different name yourself. Each person can give you a private nickname that only they see (press and hold the conversation). Forgot password: use the link on the login page or under ⋮ → Account. Change e-mail or password: ⋮ → Account. Account deletion: ⋮ → Account."],
     ["How do I contact Rolff?", "Tap ⋮ → “Contact”. Choose the category Feedback or Problems with the Rolff app and write your message. This is also how you reach customer service. Do not write conversation content or personal data you do not want to share. The message is sent to Rolff with your user id – not your conversations."],
     ["How do I report something?", "Tap ⋮ in the conversation → “Report”. You choose a category, write what happened and can tick the messages you want to attach. You see a preview and nothing is sent until you confirm. The report is e-mailed to Rolff's developer (contact: nicolaipetersen108@gmail.com) with your user id. Rolff stores only category, time and number of attached messages (to limit abuse) – not the text. There is no 24/7 staff and no guarantee of a reply or action. In an emergency: call 112."],
-    ["Where is my data, and for how long?", "On Supabase servers in Frankfurt (EU). You choose retention (1 year, 5 years or unlimited) and cloud sync under ⋮ → Privacy and deletion, where you can also download all your data (ZIP with JSON and CSV). You delete your account under ⋮ → Account (this deletes all data immediately and ends the subscription; any remaining paid period is lost, and refunds are handled by the App Store or Google Play. Make a transcript first if you want to keep anything). To stop payment and keep the account, choose “Cancel subscription” under ⋮ → Account or Plan; the plan then runs until the period ends. During testing, the AI tone check sends the message to an AI service. Without a zero-retention agreement the service may keep the content for up to 30 days for abuse monitoring; it is not used for training. To withdraw your consent to AI processing, delete your account under ⋮ → Account, or write via Contact. See the privacy policy (⋮ → Privacy policy)."],
+    ["Where is my data, and for how long?", "On Supabase servers in Frankfurt (EU). You choose retention (1 year, 5 years or unlimited) and cloud sync (Premium only) under ⋮ → Privacy and deletion, where you can also download all your data (ZIP with JSON and CSV). You delete your account under ⋮ → Account (this deletes all data immediately and ends the subscription; any remaining paid period is lost, and refunds are handled by the App Store or Google Play. Make a transcript first if you want to keep anything). To stop payment and keep the account, choose “Cancel subscription” under ⋮ → Account or Plan; the plan then runs until the period ends. During testing, the AI tone check sends the message to an AI service. Without a zero-retention agreement the service may keep the content for up to 30 days for abuse monitoring; it is not used for training. To withdraw your consent to AI processing, delete your account under ⋮ → Account, or write via Contact. See the privacy policy (⋮ → Privacy policy)."],
     ["Can I send images and PDFs?", "Yes, with the “Premium” plan (79 DKK/month). Use the paperclip to choose a file or the camera to take a photo. Your phone manages any camera permission when used; the file picker grants access only to your chosen file. Nothing is sent until you press the paper plane. PNG, JPG, WebP, GIF (not animated) and PDF (max 4 MB, 5 pages). You can send up to 5 attachments per day (counted over the last 24 hours). Before sending, Rolff checks the image and all text in it with the same rules as messages. If one line is hurtful or the image is inappropriate, it is not sent and you are told why. The recipient's blocked words also apply to text in the file. Under Blocking lists you can decline photos or files from the other person; the sender is then told that that type is not accepted in the conversation — not whether a message was read or delivered. Everyone can view attachments they receive, whatever their plan. Readers cannot send files."],
-    ["What does Rolff cost?", "Two paid plans: “Standard” 49 DKK/month with up to 160 characters per message (one SMS length) and “Premium” 79 DKK/month with up to 480 (three SMS lengths). The plan applies to you as sender, so two parents may have different plans. Upgrades apply immediately, downgrades from the next period. “Cancel subscription” (under ⋮ → Account or Plan) keeps the account and data; the plan runs until the period ends, then you have no paid plan (same capabilities as Standard). “Delete account” deletes immediately, and any remaining period is lost. In the test version switching and cancellation are a test feature without payment."],
+    ["What does Rolff cost?", "Two paid plans: “Standard” 49 DKK/month with up to 160 characters per message (one SMS length) and “Premium” 79 DKK/month with up to 480 (three SMS lengths) and cloud sync, so you can use Rolff on several devices. The plan applies to you as sender, so two parents may have different plans. Upgrades apply immediately, downgrades from the next period. “Cancel subscription” (under ⋮ → Account or Plan) keeps the account and data; the plan runs until the period ends, then you have no paid plan (same capabilities as Standard). “Delete account” deletes immediately, and any remaining period is lost. In the test version switching and cancellation are a test feature without payment."],
     ["Who may use Rolff?", "Rolff is only for people aged 18 or older. You confirm this when you create an account. To withdraw your consent to AI processing, delete your account under ⋮ → Account, or write via Contact."],
     ["Is this the real app?", "No, this is a test environment. Write made-up messages only."],
   ];
@@ -435,12 +442,24 @@ function MyDataExport({ lang }: { lang: Lang }) {
     </form>);
 }
 
-function PrivacyPanel({ lang }: { lang: Lang }) {
+function PrivacyPanel({ lang, openPlans }: { lang: Lang; openPlans: () => void }) {
   const da = lang === "da";
-  const [p, setP] = useState<{ inactivity_delete: boolean; inactivity_days: number; cloud_sync: boolean; retention: string } | null>(null);
-  useEffect(() => { supabase.rpc("get_my_privacy").then(({ data }) => setP(((data as any[]) ?? [])[0] ?? null)); }, []);
-  const saveData = async (n: NonNullable<typeof p>) => { setP(n); await supabase.rpc("set_my_data_prefs", { p_cloud_sync: n.cloud_sync, p_retention: n.retention }); };
-  const save = async (n: NonNullable<typeof p>) => { setP(n); await supabase.rpc("set_my_privacy", { p_inactivity_delete: n.inactivity_delete, p_inactivity_days: n.inactivity_days }); };
+  const [p, setP] = useState<{ cloud_sync: boolean; retention: string } | null>(null);
+  const [plan, setPlan] = useState<string | null>(() => peekCard<{ plan: string } | null>("plan")?.plan ?? null);
+  useEffect(() => {
+    supabase.rpc("get_my_privacy").then(({ data }) => setP(((data as any[]) ?? [])[0] ?? null));
+    supabase.rpc("get_my_plan").then(({ data, error }) => {
+      const v = ((data as any[]) ?? [])[0];
+      if (!error && v?.plan) setPlan(v.plan);
+      else setPlan((cur) => cur ?? "text");
+    });
+  }, []);
+  const premium = plan === "text_attachments";
+  const saveData = async (n: NonNullable<typeof p>) => {
+    if (n.cloud_sync && !premium) return;
+    setP(n);
+    await supabase.rpc("set_my_data_prefs", { p_cloud_sync: n.cloud_sync, p_retention: n.retention });
+  };
   return (
     <div className="privacy">
       <section className="psec" aria-labelledby="data">
@@ -450,32 +469,28 @@ function PrivacyPanel({ lang }: { lang: Lang }) {
         <select id="ret" value={p.retention} onChange={(e) => saveData({ ...p, retention: e.target.value })}>
           <option value="1y">{da ? "1 år (standard)" : "1 year (default)"}</option><option value="5y">{da ? "5 år" : "5 years"}</option><option value="unlimited">{da ? "Ubegrænset" : "Unlimited"}</option></select>
         <p className="meta">{da ? "Ældre beskeder forsvinder straks for dig. De slettes fra serveren, når alle i samtalen har nået deres egen grænse. Har den anden valgt længere tid, beholder de deres kopi." : "Older messages disappear for you right away. They are deleted from the server once everyone in the conversation has reached their own limit. If the other person chose a longer time, they keep their copy."}</p>
-        <CheckRow checked={p.cloud_sync} onChange={(v) => saveData({ ...p, cloud_sync: v })} label={da ? "Sky-synk (brug Rolff på flere enheder)" : "Cloud sync (use Rolff on several devices)"} />
-        <p className="meta">{da ? "Valgfrit og slået fra, til du selv slår det til. Ændringen gemmes med det samme. I denne testversion ligger dine beskeder altid på en server i EU (Frankfurt), uanset hvad du vælger. I mobilappen betyder “fra”, at serveren kun gemmer en besked, indtil den er leveret." : "Optional and off until you turn it on. The change is saved right away. In this test version your messages are always stored on a server in the EU (Frankfurt), whatever you choose. In the mobile app, “off” means the server only keeps a message until it has been delivered."}</p></>}
+        <CheckRow checked={premium && p.cloud_sync} disabled={!premium} onChange={(v) => saveData({ ...p, cloud_sync: v })} label={da ? "Sky-synk (brug Rolff på flere enheder)" : "Cloud sync (use Rolff on several devices)"} />
+        {!premium && <p className="meta sync-premium-note"><strong>{da ? "Kun Premium." : "Premium only."}</strong>{" "}<button type="button" className="textbtn strong" onClick={openPlans}>{da ? "Opgradér til Premium" : "Upgrade to Premium"}</button></p>}
+        <p className="meta">{premium
+          ? (da ? "Valgfrit og slået fra, til du selv slår det til. Ændringen gemmes med det samme. I denne testversion ligger dine beskeder altid på en server i EU (Frankfurt), uanset hvad du vælger. I mobilappen betyder “fra”, at serveren kun gemmer en besked, indtil den er leveret, og at din synk-kopi og -nøgle slettes straks. Modpartens kopi røres ikke. Mister du Premium, slås sky-synk fra automatisk med samme virkning." : "Optional and off until you turn it on. The change is saved right away. In this test version your messages are always stored on a server in the EU (Frankfurt), whatever you choose. In the mobile app, “off” means the server only keeps a message until it has been delivered, and your sync copy and key are deleted immediately. The other party’s copy is not touched. If you leave Premium, cloud sync turns off automatically with the same effect.")
+          : (da ? "I denne testversion ligger dine beskeder altid på en server i EU (Frankfurt). I mobilappen betyder “fra”, at serveren kun gemmer en besked, indtil den er leveret." : "In this test version your messages are always stored on a server in the EU (Frankfurt). In the mobile app, “off” means the server only keeps a message until it has been delivered.")}</p></>}
       </section>
       <section className="psec"><MyDataExport lang={lang} /></section>
-      <section className="psec" aria-labelledby="inactivity">
-      <h3 id="inactivity" className="psec-h">{da ? "Automatisk sletning ved inaktivitet" : "Automatic deletion when inactive"}</h3>
-      {p && <>
-        <CheckRow checked={p.inactivity_delete} onChange={(v) => save({ ...p, inactivity_delete: v })} label={da ? "Slet min konto, hvis jeg ikke logger ind i" : "Delete my account if I do not log in for"} />
-        <select aria-label={da ? "Antal dage" : "Days"} disabled={!p.inactivity_delete} value={p.inactivity_days} onChange={(e) => save({ ...p, inactivity_days: +e.target.value })}>
-          {[30, 60, 90].map((d) => <option key={d} value={d}>{d} {da ? "dage" : "days"}</option>)}</select>
-        <p className="meta">{da ? "Du får en mail 14 dage før. Mailen indeholder ingen beskeder." : "You get an email 14 days before. It contains no messages."}</p></>}
-      </section>
     </div>
   );
 }
 
 function DeleteAccountSection({ lang, openPrivacy }: { lang: Lang; openPrivacy: () => void }) {
   const da = lang === "da";
-  const [pw, setPw] = useState(""); const [ok, setOk] = useState(false); const [state, setState] = useState<"" | "busy" | "wrong" | "err" | "nopw" | "noack">("");
+  const [pw, setPw] = useState(""); const [ok, setOk] = useState(false); const [transcript, setTranscript] = useState(true);
+  const [state, setState] = useState<"" | "busy" | "wrong" | "err" | "export" | "nopw" | "noack">("");
   const del = async (e: React.FormEvent) => {
     e.preventDefault(); if (state === "busy") return;
     if (!pw) { setState("nopw"); focusField(document.getElementById("delpw")); return; }
     if (!ok) { setState("noack"); focusField(document.getElementById("delack")); return; }
     setState("busy");
-    let r; try { r = await callFn("delete-account", { password: pw }); } catch { r = { status: 0, data: null as any }; }
-    if (r.status !== 200) { setState(r.status === 403 ? "wrong" : "err"); return; }
+    let r; try { r = await callFn("delete-account", { password: pw, email_transcript: transcript, lang }); } catch { r = { status: 0, data: null as any }; }
+    if (r.status !== 200) { setState(r.status === 403 ? "wrong" : r.data?.error === "export_failed" || r.status === 502 ? "export" : "err"); return; }
     try { localStorage.clear(); sessionStorage.clear(); if ("caches" in window) for (const k of await caches.keys()) await caches.delete(k);
       const dbs = (indexedDB as any).databases ? await (indexedDB as any).databases() : []; for (const d of dbs) if (d.name) indexedDB.deleteDatabase(d.name); } catch { /* best effort */ }
     setPushOwner(null); await cacheClear(); await supabase.auth.signOut({ scope: "local" }); location.replace(location.pathname + "?deleted=1");
@@ -493,10 +508,13 @@ function DeleteAccountSection({ lang, openPrivacy }: { lang: Lang; openPrivacy: 
         <label htmlFor="delpw">{da ? "Bekræft med din adgangskode" : "Confirm with your password"}</label>
         <PasswordInput id="delpw" lang={lang} value={pw} onChange={(v) => { setPw(v); if (state !== "busy" && state !== "noack") setState(""); }} minLength={1} autoComplete="current-password" invalid={state === "nopw"} describedBy="delpw-hint" />
         {state === "nopw" && <p id="delpw-hint" className="field-hint" role="alert">{da ? "Skriv din adgangskode for at slette kontoen." : "Enter your password to delete your account."}</p>}
+        <CheckRow id="delexport" checked={transcript} onChange={setTranscript} label={da ? "Send mig en fuld udskrift af alle mine samtaler, før kontoen slettes" : "Email me a full transcript of all my conversations before my account is deleted"} />
+        <p className="meta">{da ? "Udskriften sendes til din e-mail. Hvis afsendelsen ikke lykkes, slettes kontoen ikke." : "The transcript is sent to your e-mail. If sending fails, your account is not deleted."}</p>
         <CheckRow id="delack" checked={ok} onChange={(v) => { setOk(v); if (v && state === "noack") setState(""); }} label={da ? "Jeg forstår, at sletningen er endelig." : "I understand that deletion is final."} attention={state === "noack"} describedBy={state === "noack" ? "delack-hint" : undefined} />
         {state === "noack" && <p id="delack-hint" className="field-hint" role="alert">{da ? "Sæt flueben i ”Jeg forstår …” for at slette." : "Tick “I understand …” to delete."}</p>}
         <div className="row end"><button type="submit" className="danger" disabled={state === "busy"} aria-disabled={!ok || !pw || undefined}>{da ? "Slet konto, slet alle data og opsig abonnement" : "Delete account, delete all data and cancel subscription"}</button></div>
         {state === "wrong" && <p className="err" role="alert">{da ? "Forkert adgangskode." : "Wrong password."}</p>}
+        {state === "export" && <p className="err" role="alert">{da ? "Udskriften kunne ikke sendes. Kontoen er ikke slettet. Prøv igen, eller fjern fluebenet hvis du vil slette uden udskrift." : "The transcript could not be sent. Your account has not been deleted. Try again, or untick the box if you want to delete without a transcript."}</p>}
         {state === "err" && <p className="err" role="alert">{da ? "Sletningen mislykkedes. Prøv igen." : "Deletion failed. Please try again."}</p>}
       </form>
       </section>
@@ -504,8 +522,8 @@ function DeleteAccountSection({ lang, openPrivacy }: { lang: Lang; openPrivacy: 
   );
 }
 /** Checkbox in Rolff's theme colours with a full-row tap target (native input kept for a11y). */
-function CheckRow({ checked, onChange, label, id, attention, describedBy }: { checked: boolean; onChange: (v: boolean) => void; label: string; id?: string; attention?: boolean; describedBy?: string }) {
-  return <label className={attention ? "check-row needs-attention" : "check-row"}><input id={id} type="checkbox" className="check" checked={checked} aria-invalid={attention || undefined} aria-describedby={describedBy} onChange={(e) => onChange(e.target.checked)} /><span>{label}</span></label>;
+function CheckRow({ checked, onChange, label, id, attention, describedBy, disabled }: { checked: boolean; onChange: (v: boolean) => void; label: string; id?: string; attention?: boolean; describedBy?: string; disabled?: boolean }) {
+  return <label className={attention ? "check-row needs-attention" : disabled ? "check-row is-disabled" : "check-row"}><input id={id} type="checkbox" className="check" checked={checked} disabled={disabled} aria-invalid={attention || undefined} aria-describedby={describedBy} onChange={(e) => { if (!disabled) onChange(e.target.checked); }} /><span>{label}</span></label>;
 }
 
 export const emailVisibleNote = (lang: Lang) => lang === "da"
@@ -610,17 +628,54 @@ function FeedbackForm({ lang }: { lang: Lang }) {
   );
 }
 
-function Auth({ lang, peek }: { lang: Lang; peek?: Peek | null }) {
+function PasswordPairStatus({ lang, a, b, id }: { lang: Lang; a: string; b: string; id?: string }) {
+  const state = passwordPairState(a, b);
+  if (state === "empty") return null;
+  return (
+    <p id={id} className={`pw-pair ${state === "match" ? "is-match" : "is-mismatch"}`} role="status" aria-live="polite">
+      {state === "match" ? <span className="pw-pair-mark" aria-hidden="true">✓</span> : null}
+      {pwText[lang][state]}
+    </p>
+  );
+}
+
+function RecoverPassword({ lang, initialEmail = "" }: { lang: Lang; initialEmail?: string }) {
+  const da = lang === "da";
   const t = strings[lang];
-  const [mode, setMode] = useState<"login" | "signup" | "forgot">("login"); const [sent, setSent] = useState(false);
+  const [email, setEmail] = useState(initialEmail);
+  const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try { await callFn("account-mail", { action: "recover", email: email.trim(), lang }); } catch { /* same message whether the address exists */ }
+    setBusy(false);
+    setSent(true);
+  };
+  return (
+    <form onSubmit={submit}>
+      {sent
+        ? <p className="notice" role="status">{da ? "Hvis adressen findes, har vi sendt et link. Tjek også spam." : "If the address exists, we have sent a link. Check spam too."}</p>
+        : <>
+            <label htmlFor="re">{t.email}</label>
+            <input id="re" type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <p className="meta">{da ? "Vi sender et link til at vælge en ny adgangskode." : "We will send a link to choose a new password."}</p>
+            <button type="submit" disabled={busy} style={{ marginTop: 12 }}>{da ? "Send link" : "Send link"}</button>
+          </>}
+    </form>
+  );
+}
+
+function Auth({ lang, peek, onForgot }: { lang: Lang; peek?: Peek | null; onForgot: (email: string) => void }) {
+  const t = strings[lang];
+  const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState(""); const [pw, setPw] = useState(""); const [pw2, setPw2] = useState("");
   useEffect(() => { if (peek) { setMode("signup"); setEmail(peek.invitee_email); } }, [peek]);
   const [ai, setAi] = useState(false); const [demoOk, setDemoOk] = useState(false); const [ageOk, setAgeOk] = useState(false);
   const [err, setErr] = useState(""); const [busy, setBusy] = useState(false);
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setErr("");
-    if (mode === "forgot") { setBusy(true); try { await callFn("account-mail", { action: "recover", email, lang }); } catch { /* same message */ } setBusy(false); setSent(true); return; }
-    if (mode === "signup" && !passwordsMatch(pw, pw2)) { setErr(pwText[lang].mismatch); return; }
+    if (mode === "signup" && !passwordsMatch(pw, pw2)) return;
     if (mode === "signup" && !(demoOk && ageOk && ai)) { setErr(t.signupChecks); return; }
     setBusy(true);
     const r = mode === "login" ? await supabase.auth.signInWithPassword({ email, password: pw })
@@ -628,6 +683,7 @@ function Auth({ lang, peek }: { lang: Lang; peek?: Peek | null }) {
     setBusy(false);
     if (r.error) setErr(t.authError); // generic: does not reveal whether account exists
   };
+  const pair = mode === "signup" ? passwordPairState(pw, pw2) : "empty";
   return (
     <div className="card">
       <div style={{ textAlign: "center" }}><img src="./icons/rolff-192.png" alt="Rolff logo" width={96} height={96} style={{ borderRadius: 22 }} /><h1 style={{ marginTop: 8 }}>Rolff</h1></div>
@@ -636,33 +692,25 @@ function Auth({ lang, peek }: { lang: Lang; peek?: Peek | null }) {
       {new URLSearchParams(location.search).has("deleted") && <div className="notice" role="status">{lang === "da" ? "Din konto er slettet." : "Your account has been deleted."}</div>}
       <div className="notice" role="note"><strong>{t.demoWarn}</strong></div>
       <p>{t.tagline}</p><p>{t.intro}</p>
-      {mode === "forgot" ? <form onSubmit={submit}>
-        <h2>{lang === "da" ? "Glemt adgangskode" : "Forgot password"}</h2>
-        {sent ? <p className="notice" role="status">{lang === "da" ? "Hvis der findes en konto med den e-mail, har vi sendt et link til at vælge en ny adgangskode. Tjek også spam." : "If an account exists for that email, we have sent a link to choose a new password. Check spam too."}</p>
-          : <><label htmlFor="fe">{t.email}</label><input id="fe" type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} /></>}
-        <div className="row" style={{ marginTop: 12 }}>
-          {!sent && <button type="submit" disabled={busy}>{lang === "da" ? "Send link" : "Send link"}</button>}
-          <button type="button" className="ghost" onClick={() => { setMode("login"); setSent(false); }}>{t.login}</button>
-        </div>
-      </form> : <form onSubmit={submit}>
+      <form onSubmit={submit}>
         <label htmlFor="e">{t.email}</label><input id="e" type="email" required autoComplete="email" readOnly={!!peek} value={email} onChange={(e) => setEmail(e.target.value)} />
         <label htmlFor="p">{t.password}</label>
         <PasswordInput id="p" lang={lang} value={pw} onChange={setPw} minLength={mode === "signup" ? 8 : 1} autoComplete={mode === "login" ? "current-password" : "new-password"} />
         {mode === "signup" && <><label htmlFor="p2">{pwText[lang].repeat}</label>
-          <PasswordInput id="p2" lang={lang} value={pw2} onChange={(v) => { setPw2(v); setErr(""); }} minLength={8} autoComplete="new-password" invalid={pw2.length > 0 && !passwordsMatch(pw, pw2)} describedBy="pwerr" /></>}
+          <PasswordInput id="p2" lang={lang} value={pw2} onChange={(v) => { setPw2(v); setErr(""); }} minLength={8} autoComplete="new-password" invalid={pair === "mismatch"} describedBy="pwerr" /></>}
+        {mode === "signup" && <PasswordPairStatus lang={lang} a={pw} b={pw2} id="pwerr" />}
         {mode === "signup" && <p className="meta" role="note">{evidenceNote(lang)} {emailVisibleNote(lang)}</p>}
         {mode === "signup" && <p><label style={{ display: "flex", gap: 8, alignItems: "flex-start" }}><input type="checkbox" style={{ width: 24, minHeight: 24, flex: "0 0 24px", marginTop: 2 }} checked={demoOk} onChange={(e) => setDemoOk(e.target.checked)} required />{t.demoAccept}</label></p>}
         {mode === "signup" && <p><label style={{ display: "flex", gap: 8, alignItems: "flex-start" }}><input type="checkbox" style={{ width: 24, minHeight: 24, flex: "0 0 24px", marginTop: 2 }} checked={ageOk} onChange={(e) => setAgeOk(e.target.checked)} required />{t.age18}</label></p>}
         {mode === "signup" && <p><label style={{ display: "flex", gap: 8, alignItems: "flex-start" }}><input type="checkbox" style={{ width: 24, minHeight: 24, flex: "0 0 24px", marginTop: 2 }} checked={ai} onChange={(e) => setAi(e.target.checked)} required />{t.ai} {t.aiAccept}</label></p>}
         {mode === "signup" && <p className="meta"><a href="./privatliv.html" target="_blank" rel="noopener noreferrer">{t.privacyPolicy}</a></p>}
-        {err ? <p className="err" id="pwerr" role="alert">{err}</p>
-          : mode === "signup" && pw2.length > 0 && !passwordsMatch(pw, pw2) ? <p className="err" id="pwerr" aria-live="polite">{pwText[lang].mismatch}</p> : null}
+        {err ? <p className="err" id="autherr" role="alert">{err}</p> : null}
         <div className="row" style={{ marginTop: 12 }}>
           <button type="submit" disabled={busy}>{mode === "login" ? t.login : t.signup}</button>
           <button type="button" className="ghost" onClick={() => { setMode(mode === "login" ? "signup" : "login"); setPw2(""); setErr(""); }}>{mode === "login" ? t.signup : t.login}</button>
         </div>
-        {mode === "login" && !peek && <p><button type="button" className="linkish" onClick={() => { setMode("forgot"); setErr(""); }}>{lang === "da" ? "Glemt adgangskode?" : "Forgot password?"}</button></p>}
-      </form>}
+        {mode === "login" && <p><button type="button" className="linkish" onClick={() => onForgot(email)}>{lang === "da" ? "Glemt adgangskode?" : "Forgot password?"}</button></p>}
+      </form>
     </div>
   );
 }
@@ -1411,8 +1459,9 @@ function AddMember({ lang, conv, done, openPlans }: { lang: Lang; conv: string; 
 function NewPassword({ lang, done }: { lang: Lang; done: () => void }) {
   const da = lang === "da";
   const [pw, setPw] = useState(""); const [pw2, setPw2] = useState(""); const [msg, setMsg] = useState(""); const [ok, setOk] = useState(false);
+  const pair = passwordPairState(pw, pw2);
   const submit = async (e: React.FormEvent) => {
-    e.preventDefault(); if (!passwordsMatch(pw, pw2)) { setMsg(pwText[lang].mismatch); return; }
+    e.preventDefault(); if (!passwordsMatch(pw, pw2)) return;
     const r = await supabase.auth.updateUser({ password: pw });
     if (r.error) setMsg(da ? "Adgangskoden kunne ikke gemmes. Den skal være mindst 8 tegn." : "The password could not be saved. It must be at least 8 characters.");
     else { setOk(true); setMsg(da ? "Ny adgangskode gemt." : "New password saved."); }
@@ -1420,13 +1469,15 @@ function NewPassword({ lang, done }: { lang: Lang; done: () => void }) {
   if (ok) return <><p className="notice" role="status">{msg}</p><button type="button" onClick={done}>OK</button></>;
   return (<form onSubmit={submit}>
     <label htmlFor="np">{da ? "Ny adgangskode" : "New password"}</label><PasswordInput id="np" lang={lang} value={pw} onChange={setPw} minLength={8} autoComplete="new-password" />
-    <label htmlFor="np2">{pwText[lang].repeat}</label><PasswordInput id="np2" lang={lang} value={pw2} onChange={setPw2} minLength={8} autoComplete="new-password" />
+    <label htmlFor="np2">{pwText[lang].repeat}</label>
+    <PasswordInput id="np2" lang={lang} value={pw2} onChange={(v) => { setPw2(v); setMsg(""); }} minLength={8} autoComplete="new-password" invalid={pair === "mismatch"} describedBy="nperr" />
+    <PasswordPairStatus lang={lang} a={pw} b={pw2} id="nperr" />
     {msg && <p className="err" role="alert">{msg}</p>}
     <button type="submit" style={{ marginTop: 12 }}>{da ? "Gem" : "Save"}</button>
   </form>);
 }
 
-function AccountPanel({ lang, openPrivacy, openPlans }: { lang: Lang; openPrivacy: () => void; openPlans: () => void }) {
+function AccountPanel({ lang, openPrivacy, openPlans, onForgot }: { lang: Lang; openPrivacy: () => void; openPlans: () => void; onForgot: (email: string) => void }) {
   const da = lang === "da";
   const [email, setEmail] = useState("");
   useEffect(() => { supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? "")); }, []);
@@ -1434,7 +1485,7 @@ function AccountPanel({ lang, openPrivacy, openPlans }: { lang: Lang; openPrivac
   const [ne, setNe] = useState(""); const [ep, setEp] = useState(""); const [eMsg, setEMsg] = useState<[boolean, string] | null>(null); const [busy, setBusy] = useState(false);
   const changePw = async (e: React.FormEvent) => {
     e.preventDefault(); setPwMsg(null);
-    if (!passwordsMatch(pw, pw2)) { setPwMsg([false, pwText[lang].mismatch]); return; }
+    if (!passwordsMatch(pw, pw2)) return;
     setBusy(true);
     const re = await supabase.auth.signInWithPassword({ email, password: cur });
     if (re.error) { setBusy(false); setPwMsg([false, da ? "Nuværende adgangskode er forkert." : "Current password is wrong."]); return; }
@@ -1458,12 +1509,15 @@ function AccountPanel({ lang, openPrivacy, openPlans }: { lang: Lang; openPrivac
     if (r.status === 200) setEp("");
   };
   return (<>
-    <p className="meta">{da ? "Din e-mail: " : "Your email: "}<strong>{email}</strong></p>
+    <p className="account-email">{da ? "Din e-mail: " : "Your email: "}<strong>{email}</strong></p>
     <form onSubmit={changePw}>
       <h2>{da ? "Skift adgangskode" : "Change password"}</h2>
       <label htmlFor="cp">{da ? "Nuværende adgangskode" : "Current password"}</label><PasswordInput id="cp" lang={lang} value={cur} onChange={setCur} minLength={1} autoComplete="current-password" />
+      <p><button type="button" className="linkish" onClick={() => onForgot(email)}>{da ? "Glemt adgangskode?" : "Forgot password?"}</button></p>
       <label htmlFor="cp1">{da ? "Ny adgangskode" : "New password"}</label><PasswordInput id="cp1" lang={lang} value={pw} onChange={setPw} minLength={8} autoComplete="new-password" />
-      <label htmlFor="cp2">{pwText[lang].repeat}</label><PasswordInput id="cp2" lang={lang} value={pw2} onChange={setPw2} minLength={8} autoComplete="new-password" />
+      <label htmlFor="cp2">{pwText[lang].repeat}</label>
+      <PasswordInput id="cp2" lang={lang} value={pw2} onChange={setPw2} minLength={8} autoComplete="new-password" invalid={passwordPairState(pw, pw2) === "mismatch"} describedBy="cperr" />
+      <PasswordPairStatus lang={lang} a={pw} b={pw2} id="cperr" />
       {pwMsg && <p className={pwMsg[0] ? "notice" : "err"} role={pwMsg[0] ? "status" : "alert"}>{pwMsg[1]}</p>}
       <button type="submit" disabled={busy} style={{ marginTop: 12 }}>{da ? "Skift adgangskode" : "Change password"}</button>
     </form>
@@ -1485,14 +1539,14 @@ function AccountPanel({ lang, openPrivacy, openPlans }: { lang: Lang; openPrivac
 const PLAN_TOAST_MS = 3500;
 export const PLANS = [
   { id: "text", price: 49, da: ["Standard", "Op til 160 tegn pr. besked med AI-tonetjek og samtale med den anden forælder. Du kan se vedhæftninger og deltage, når andre tilføjer dig."], en: ["Standard", "Up to 160 characters per message with AI tone check. You can view attachments others send."] },
-  { id: "text_attachments", price: 79, da: ["Premium", "Op til 480 tegn pr. besked, og du kan sende screenshots, billeder og PDF'er (tjekket af AI før afsendelse) og tilføje ekstra personer til samtaler."], en: ["Premium", "Up to 480 characters per message, plus sending screenshots, images and PDFs (checked by AI before sending) and adding extra people to conversations."] },
+  { id: "text_attachments", price: 79, da: ["Premium", "Op til 480 tegn pr. besked, og du kan sende screenshots, billeder og PDF'er (tjekket af AI før afsendelse), tilføje ekstra personer til samtaler og bruge sky-synk på flere enheder."], en: ["Premium", "Up to 480 characters per message, plus sending screenshots, images and PDFs (checked by AI before sending), adding extra people to conversations, and cloud sync across devices."] },
 ] as const;
 const PAID_PLANS = new Set(["text", "text_attachments"]);
 export const planName = (id: string, da: boolean) => id === "free" ? (da ? "Ingen betalt plan" : "No paid plan") : ((PLANS.find((x) => x.id === id)?.[da ? "da" : "en"] ?? [id])[0]);
 const planEndLabel = (iso: string, da: boolean) => new Date(iso).toLocaleDateString(da ? "da-DK" : "en-GB", { dateStyle: "long" });
 type MyPlan = { plan: string; pending_plan: string | null; period_end: string | null; test_switch: boolean };
 
-function SubscriptionManage({ lang, openPlans, plan, onChange, ready = true }: { lang: Lang; openPlans?: () => void; plan?: MyPlan | null; onChange?: () => void; ready?: boolean }) {
+function SubscriptionManage({ lang, openPlans, plan, onChange, ready = true, hideTitle = false }: { lang: Lang; openPlans?: () => void; plan?: MyPlan | null; onChange?: () => void; ready?: boolean; hideTitle?: boolean }) {
   const da = lang === "da";
   // Shows the last known plan at once (cardCache); cancelling/resuming waits for a fresh server read (fail-strict).
   const [own, setOwn] = useState<MyPlan | null>(() => peekCard<MyPlan | null>("plan") ?? null);
@@ -1506,14 +1560,25 @@ function SubscriptionManage({ lang, openPlans, plan, onChange, ready = true }: {
   const cancel = async () => {
     if (!p || busy || !canAct) return;
     const when = p.period_end ? planEndLabel(p.period_end, da) : (da ? "periodens slut" : "the end of the period");
-    const ok = await confirmDialog({
+    const onPremium = p.plan === "text_attachments";
+    const choice = await confirmDialog({
       title: da ? "Opsig abonnement?" : "Cancel subscription?",
       body: da
-        ? `Konto og data bliver. ${planName(p.plan, true)} løber til ${when}. Derefter har du ingen betalt plan (samme muligheder som Standard). Du kan fortryde med “Genoptag abonnement” indtil den dato. Der er endnu ingen betaling via App Store eller Google Play. Når der er, opsiges et butiks-abonnement typisk i butikkens indstillinger.`
-        : `The account and data are kept. ${planName(p.plan, false)} runs until ${when}. After that you have no paid plan (the same capabilities as Standard). You can undo with “Resume subscription” until that date. There is not yet any App Store or Google Play billing. When there is, a store subscription is typically cancelled in the store’s settings.`,
+        ? `Konto og data bliver. ${planName(p.plan, true)} løber til ${when}. Opsiger du, har du derefter ingen betalt plan (samme muligheder som Standard). Du kan fortryde med “Genoptag abonnement” indtil den dato. Der er endnu ingen betaling via App Store eller Google Play. Når der er, opsiges et butiks-abonnement typisk i butikkens indstillinger.`
+        : `The account and data are kept. ${planName(p.plan, false)} runs until ${when}. If you cancel, you then have no paid plan (the same capabilities as Standard). You can undo with “Resume subscription” until that date. There is not yet any App Store or Google Play billing. When there is, a store subscription is typically cancelled in the store’s settings.`,
       confirm: da ? "Opsig abonnement" : "Cancel subscription",
+      secondary: onPremium ? (da ? "Skift til Standard i stedet" : "Switch to Standard instead") : undefined,
     });
-    if (!ok) return;
+    if (!choice) return;
+    if (choice === "secondary") {
+      setBusy(true); setErr("");
+      const r = await supabase.rpc("set_my_plan_test", { p_plan: "text", p_now: false }); setBusy(false);
+      if (r.error) { setErr(da ? "Planen kunne ikke skiftes. Prøv igen." : "Could not change plan. Try again."); return; }
+      const d = r.data?.[0]; await load();
+      showToast(d?.pending_plan ? (da ? `Skiftet er planlagt og gælder fra ${planEndLabel(d.period_end, da)}.` : `The change is scheduled from ${planEndLabel(d.period_end, da)}.`)
+        : (da ? "Planen er skiftet." : "Plan changed."), { tone: "success", ms: PLAN_TOAST_MS });
+      return;
+    }
     setBusy(true); setErr("");
     const r = await supabase.rpc("cancel_my_subscription"); setBusy(false);
     if (r.error) { setErr(da ? "Abonnementet kunne ikke opsiges. Prøv igen." : "Could not cancel the subscription. Try again."); return; }
@@ -1535,7 +1600,7 @@ function SubscriptionManage({ lang, openPlans, plan, onChange, ready = true }: {
   }
   return (
     <div className="sub-manage">
-      <h2>{da ? "Abonnement" : "Subscription"}</h2>
+      {!hideTitle && <h2>{da ? "Abonnement" : "Subscription"}</h2>}
       {cancelling && p.period_end && <p className="notice" role="status">{da ? `Dit abonnement udløber ${planEndLabel(p.period_end, da)}.` : `Your subscription ends on ${planEndLabel(p.period_end, da)}.`}</p>}
       {cancelling && <button type="button" className="ghost" disabled={busy || !canAct} onClick={resume}>{da ? "Genoptag abonnement" : "Resume subscription"}</button>}
       {paid && !cancelling && <button type="button" disabled={busy || !canAct} onClick={() => void cancel()}>{da ? "Opsig abonnement" : "Cancel subscription"}</button>}
@@ -1570,7 +1635,7 @@ function Plans({ lang }: { lang: Lang }) {
   return (<div>
     <div className="notice" role="note"><strong>{da ? "TESTFUNKTION – ingen betaling." : "TEST FEATURE – no payment."}</strong> {da ? "Du kan skifte frit for at prøve planerne. Der trækkes ingen penge, og der er ikke koblet betaling på endnu." : "Switch freely to try the plans. Nothing is charged; no payment is connected yet."}</div>
     <div className="plans" role="list">
-      {PLANS.map((x) => { const cur = p.plan === x.id; const [title, desc] = x[da ? "da" : "en"]; const action = p.plan === "free" ? (da ? "Vælg (test)" : "Choose (test)") : x.id === "text_attachments" ? (da ? "Opgradér (test)" : "Upgrade (test)") : (da ? "Nedgradér (test)" : "Downgrade (test)"); return (
+      {PLANS.map((x) => { const cur = p.plan === x.id; const [title, desc] = x[da ? "da" : "en"]; const action = x.id === "text_attachments" ? (da ? "Opgradér til Premium" : "Upgrade to Premium") : p.plan === "free" ? (da ? "Vælg Standard" : "Choose Standard") : (da ? "Nedgradér til Standard" : "Downgrade to Standard"); return (
         <section key={x.id} role="listitem" className={`card plan${cur ? " current" : ""}`} aria-current={cur ? "true" : undefined} aria-labelledby={`plan-${x.id}`}>
           {/* Quiet label, not a button. The other card gets an invisible spacer so the titles line up. */}
           {cur ? <span className="plan-badge">{da ? "Din plan" : "Your plan"}</span> : <span className="plan-badge plan-badge-spacer" aria-hidden="true">{da ? "Din plan" : "Your plan"}</span>}
@@ -1585,7 +1650,7 @@ function Plans({ lang }: { lang: Lang }) {
     </div>
     {p.pending_plan && p.pending_plan !== "free" && <div className="row"><button className="ghost" disabled={!fresh || busy} onClick={() => change(p.plan)}>{da ? `Behold ${name(p.plan)}` : `Keep ${name(p.plan)}`}</button>
       <button className="ghost" disabled={!fresh || busy} onClick={() => change(p.pending_plan!, true)}>{da ? "Skift straks (kun test)" : "Switch now (test only)"}</button></div>}
-    <SubscriptionManage lang={lang} plan={p} onChange={load} ready={fresh} />
+    <SubscriptionManage lang={lang} plan={p} onChange={load} ready={fresh} hideTitle />
     <p className="meta plan-rule">{da ? "Opgradering gælder med det samme. Nedgradering gælder fra næste periode." : "Upgrades apply right away. Downgrades apply from the next period."}</p>
     <p className="meta plan-rule">{da ? "Planen gælder kun dig – den anden forælder kan have en anden plan, og alle kan altid se vedhæftninger, de modtager." : "The plan only applies to you – the other parent may have a different plan, and everyone can always see attachments they receive."}</p>
     {p.pending_plan && p.pending_plan !== "free" && p.period_end && <p className="meta">{da ? "Periode slutter" : "Period ends"}: {planEndLabel(p.period_end, da)}</p>}

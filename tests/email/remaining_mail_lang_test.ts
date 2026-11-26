@@ -3,7 +3,7 @@
 import { assert, assertEquals } from "jsr:@std/assert@1";
 Deno.env.set("APP_URL", "https://example.test/");
 import {
-  emailChangeMail, exportMail, exportNoticeMail, inactivityMail, mailLang, preferLang, recoveryMail, storedLang, storedLangIfSet,
+  accountTranscriptMail, emailChangeMail, exportMail, exportNoticeMail, inactivityMail, mailLang, preferLang, recoveryMail, storedLang, storedLangIfSet,
 } from "../../supabase/functions/_shared/email.ts";
 
 Deno.test("preferLang: first explicit da|en wins, else da", () => {
@@ -60,6 +60,10 @@ Deno.test("English: recovery, e-mail change, inactivity and export receipts", ()
   const other = exportMail({ ...exportArgs, toSelf: false, lang: "en", scope: "The whole conversation" });
   assertEn(other, "a@x.test has sent you a transcript of a conversation from Rolff");
   assertEn(exportNoticeMail({ recipient: "b@x.test", exportId: exportArgs.exportId, scope: "The whole conversation", count: 4, lang: "en" }), "Rolff: You have sent a transcript of a conversation");
+  const pre = accountTranscriptMail({ conversations: 2, messages: 9, lang: "en" });
+  assertEn(pre, "Your transcript of all your Rolff conversations");
+  assert(pre.html.includes("2 conversations") && pre.html.includes("9 messages"));
+  assert(!pre.html.includes("<script>") && !pre.text.includes("Hej,"));
 });
 
 Deno.test("Danish remains the default and matches explicit da", () => {
@@ -68,12 +72,14 @@ Deno.test("Danish remains the default and matches explicit da", () => {
     [inactivityMail({ link: "https://x" }), inactivityMail({ link: "https://x", lang: "da" })],
     [emailChangeMail({ link, current: false, newEmail: "n@x.test" }), emailChangeMail({ link, current: false, newEmail: "n@x.test", lang: "da" })],
     [exportMail(exportArgs), exportMail({ ...exportArgs, lang: "da" })],
+    [accountTranscriptMail({ conversations: 1, messages: 1 }), accountTranscriptMail({ conversations: 1, messages: 1, lang: "da" })],
   ] as const) assertEquals(JSON.stringify(da), JSON.stringify(en));
   const r = recoveryMail({ link });
   assert(r.html.startsWith('<!doctype html><html lang="da">'));
   assertEquals(r.subject, "Nulstil din adgangskode til Rolff");
   assert(inactivityMail({ link: "https://x" }).text.includes("14 dage"));
   assertEquals(exportMail(exportArgs).subject, "Din udskrift af samtalen fra Rolff");
+  assertEquals(accountTranscriptMail({ conversations: 1, messages: 1 }).subject, "Din udskrift af alle dine samtaler i Rolff");
 });
 
 Deno.test("garbage lang falls back to Danish", () => {

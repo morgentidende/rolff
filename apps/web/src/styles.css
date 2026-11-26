@@ -37,6 +37,16 @@ label{display:block;margin:6px 0 2px;color:var(--muted);font-size:14px}
 [data-theme=dark] .msg.theirs{border-color:transparent}
 .msg.hit.tailed::before{filter:drop-shadow(0 0 1px var(--accent))}
 .meta{font-size:12px;color:var(--muted)}mark{background:var(--warn-b);color:#000;border-radius:3px}
+/* Konto: "Din e-mail" is the same size as field labels, not the smaller .meta. */
+.account-email{display:block;margin:6px 0 8px;color:var(--muted);font-size:14px;line-height:1.5}
+.account-email strong{color:var(--text);font-weight:650}
+/* Live match/mismatch under new-password + repeat pairs (text + mark, not colour only). Independent of the eye toggle. */
+.pw-pair{margin:6px 0 0;font-size:14px;line-height:1.4;font-weight:600;display:flex;align-items:center;gap:6px}
+.pw-pair.is-match{color:#137333}
+[data-theme=dark] .pw-pair.is-match{color:#81c995}
+.pw-pair.is-mismatch{color:#b42318}
+[data-theme=dark] .pw-pair.is-mismatch{color:#ffb4ab}
+.pw-pair-mark{flex:none;font-weight:700}
 .list .convbtn{width:100%;text-align:left;margin:4px 0;background:var(--card);color:var(--text);border-color:var(--border)}
 code{font-size:15px;word-break:break-all}
 .pw{position:relative}.pw input{padding-right:52px}
@@ -263,6 +273,9 @@ button.danger{background:#c0392b;color:#fff;border-color:#c0392b}button.danger:d
 /* Privacy and account: equal section headings, themed checkboxes, delete in its own danger card. */
 .privacy .psec{margin:0 0 18px}
 .privacy .psec-h{font-size:17px;font-weight:650;line-height:1.3;margin:6px 0 8px}
+.check-row.is-disabled{opacity:.65;cursor:default}
+.privacy .sync-premium-note{margin-top:2px}
+.privacy .sync-premium-note .textbtn{margin-left:0}
 .privacy form{margin:0}
 .danger-card{border:1.5px solid #c0392b;border-radius:14px;padding:12px 14px 14px;background:color-mix(in srgb,#c0392b 5%,var(--card))}
 [data-theme=dark] .danger-card{border-color:#ff8a80;background:color-mix(in srgb,#ff8a80 6%,var(--card))}

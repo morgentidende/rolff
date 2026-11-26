@@ -125,7 +125,7 @@ Deno.serve(async (req) => {
   const remembered = await admin.rpc("recent_moderation_block", { p_sender: uid, conv, p_hash: textKey });
   if (remembered.error) return json({ status: "technical_error" }, 503);
   let res;
-  try { res = await moderate(provider, body, modCtx, timeoutFromEnv({ get: (k) => Deno.env.get(k) }), { doubleCheck: doubleCheckFromEnv({ get: (k) => Deno.env.get(k) }) }); }
+  try { res = await moderate(provider, body, modCtx, timeoutFromEnv({ get: (k) => Deno.env.get(k) }), { doubleCheck: doubleCheckFromEnv({ get: (k) => Deno.env.get(k) }), bannedWords: policy.words }); }
   catch (e) {
     await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "error", p_reason: e instanceof ModerationTechnicalError ? e.message : "unknown" });
     // No message text in logs.

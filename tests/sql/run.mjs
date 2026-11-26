@@ -293,7 +293,7 @@ await t('Feedback: for lang tekst afvises', async () => rejects(as(A, `select su
 await t('Feedback: max 5 pr. døgn', async () => { for (let k = 0; k < 4; k++) await as(A, `select submit_feedback('feedback','ok')`); await rejects(as(A, `select submit_feedback('app_problem','sjette')`), /rate_limited/); });
 await t('Feedback: anonym kan ikke indsende', async () => rejects(db.transaction(async (tx) => { await tx.exec(`set local role anon`); return tx.query(`select submit_feedback('other','x')`); }), /permission|denied/));
 
-// GDPR: deletion (art. 17) and inactivity
+// GDPR: deletion (art. 17)
 const [P, Q, R] = (await db.query(`insert into auth.users(email) values ('p@test.invalid'),('q@test.invalid'),('r@test.invalid') returning id`)).rows.map(r => r.id);
 let pc, solo;
 await t('Sletning: opsætning (P og Q i samtale, P alene i en anden)', async () => {
@@ -334,23 +334,22 @@ await t('Sletning: modpartens kopi er uændret (samme beskeder, tekst og tid; af
   assert.deepEqual(r.map(x => [x.id, x.body, +x.created_at]), qBefore.map(x => [x.id, x.body, +x.created_at]));
   assert.equal(r.length, 2); assert.ok(r.some(x => x.mine)); const p = r.find(x => !x.mine); assert.equal(p.sender_name, 'Slettet bruger'); assert.equal(p.sender_id, null);
 });
-await t('Privatliv: standard 90 dage, til, ingen sky, 1 år', async () => {
+await t('Privatliv: standard ingen sky, 1 år; inaktivitetssletning er slået fra', async () => {
   const r = (await as(Q, `select * from get_my_privacy()`))[0];
-  assert.deepEqual(r, { inactivity_delete: true, inactivity_days: 90, cloud_sync: false, retention: '1y' });
+  assert.deepEqual(r, { inactivity_delete: false, inactivity_days: 90, cloud_sync: false, retention: '1y' });
 });
-await t('Privatliv: frist uden for 30-90 afvises', async () => rejects(as(Q, `select set_my_privacy(true, 10)`), /check|violat/));
+await t('Privatliv: set_my_privacy cannot turn inactivity deletion back on', async () => {
+  await as(Q, `select set_my_privacy(true, 10)`);
+  const r = (await as(Q, `select * from get_my_privacy()`))[0];
+  assert.equal(r.inactivity_delete, false);
+});
 await t('Privatliv: klient kan ikke læse user_privacy direkte', async () => rejects(as(Q, `select * from user_privacy`), /permission denied/));
-await t('Inaktivitet: advarsel, så sletning efter frist; fravalg respekteres; login annullerer', async () => {
+await t('Inaktivitet: inactivity_sweep is a no-op and never returns warn or delete', async () => {
   await as(R, `select touch_seen()`);
-  await as(Q, `select set_my_privacy(false, 30)`);
-  await db.query(`update user_privacy set last_seen_at = now() - interval '100 days' where user_id = any($1)`, [[Q, R]]);
-  let s = await svc(`select * from inactivity_sweep()`);
-  assert.ok(s.some(x => x.user_id === R && x.action === 'warn')); assert.ok(!s.some(x => x.user_id === Q));
-  s = await svc(`select * from inactivity_sweep()`); assert.ok(!s.some(x => x.user_id === R)); // warned once only
-  await db.query(`update user_privacy set warned_at = now() - interval '15 days' where user_id=$1`, [R]);
-  s = await svc(`select * from inactivity_sweep()`); assert.ok(s.some(x => x.user_id === R && x.action === 'delete'));
-  await as(R, `select touch_seen()`);
-  s = await svc(`select * from inactivity_sweep()`); assert.ok(!s.some(x => x.user_id === R));
+  await db.query(`update user_privacy set last_seen_at = now() - interval '100 days', inactivity_delete = true, warned_at = now() - interval '15 days' where user_id = any($1)`, [[Q, R]]);
+  const s = await svc(`select * from inactivity_sweep()`);
+  assert.equal(s.length, 0);
+  assert.equal((await db.query(`select count(*)::int n from auth.users where id = any($1)`, [[Q, R]])).rows[0].n, 2);
 });
 
 // Blokerede ord + samtaleblokering
@@ -728,5 +727,7 @@ const {testCancelSubscription}=await import('./cancel-subscription.mjs');
 await testCancelSubscription({db,as,svc,hash,t,assert,rejects});
 const {testSignupConsent}=await import('./signup-consent.mjs');
 await testSignupConsent({db,as,svc,hash,t,assert,rejects});
+const {testPremiumSyncNoInactivity}=await import('./premium-sync.mjs');
+await testPremiumSyncNoInactivity({db,as,svc,hash,t,assert,rejects});
 console.log(`\n${pass} bestået, ${fail} fejlet`);
 process.exit(fail ? 1 : 0);
