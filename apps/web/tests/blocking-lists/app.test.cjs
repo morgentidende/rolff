@@ -151,3 +151,32 @@ test('English consent texts exist in the source',()=>{const src=require('node:fs
  const app=require('node:fs').readFileSync(path.join(__dirname,'../../src/App.tsx'),'utf8');
  assert.ok(app.includes('Modtageren har blokeret et emne, som beskeden handler om.'));assert.ok(app.includes('the recipient has blocked a topic this message is about'));
  assert.ok(!app.includes('privat modtagerindstilling')&&!app.includes('private recipient setting'));});
+
+function tapDialogBackdrop(w, dialog) {
+  const r = dialog.getBoundingClientRect();
+  const x = (r.width ? r.right + 20 : 200), y = (r.height ? r.bottom + 20 : 800);
+  for (const type of ['pointerdown', 'pointerup', 'click']) {
+    const e = new w.Event(type, { bubbles: true, cancelable: true });
+    Object.assign(e, { isPrimary: true, button: 0, clientX: x, clientY: y, pointerId: 1, pointerType: 'touch' });
+    dialog.dispatchEvent(e);
+  }
+}
+
+test('info and reset dialogs close on a backdrop tap; reset is cancelled', async () => {
+  const e = await env();
+  try {
+    await click(e.d.querySelector('[aria-label="Om blokerede ord"]'));
+    const info = e.d.querySelector('dialog[open]');
+    assert.ok(info);
+    tapDialogBackdrop(e.w, info); await delay(20);
+    assert.ok(!e.d.querySelector('dialog[open]'), 'info dialog closed');
+    await click(btn(e.d, 'Nulstil blokeringsliste'));
+    const reset = e.d.querySelector('dialog[open]');
+    assert.ok(reset);
+    assert.ok(btn(e.d, 'Nulstil'));
+    tapDialogBackdrop(e.w, reset); await delay(20);
+    assert.ok(!e.d.querySelector('dialog[open]'), 'reset dialog closed');
+    assert.equal(list(e.d).length, 3, 'words kept (backdrop = cancel)');
+    assert.equal(e.w.QA.requests.filter(x => x.method !== 'GET' && !String(x.url).includes('get_my_attachment_blocks')).length, 0);
+  } finally { await e.close(); }
+});

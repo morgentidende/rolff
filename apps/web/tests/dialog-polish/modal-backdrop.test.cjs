@@ -10,7 +10,7 @@ const { JSDOM } = require('jsdom');
 const { env, delay, button, label, click } = require('../back-navigation/support.cjs');
 const css = fs.readFileSync(path.join(__dirname, '../../src/styles.css'), 'utf8');
 
-const TOP = '.confirm-overlay,.message-overlay,.menu-scrim,.overlay';
+const TOP = '.confirm-overlay,.message-overlay,.menu-scrim,.overlay,dialog[open]';
 function installHitTest(w, d, behind) {
   d.elementFromPoint = () => { const all = d.querySelectorAll(TOP); return all.length ? all[all.length - 1] : behind(); }; // topmost = last in DOM order
 }
@@ -187,4 +187,78 @@ test('source: no backdrop closes on pointerdown any more', () => {
   for (const f of ['App.tsx', 'confirmDialog.tsx', 'MuteDialog.tsx', 'MessageBubble.tsx'])
     assert.ok(!/e\.target === e\.currentTarget\) (close|done)\(/.test(src(f)), f + ' must dismiss at click time via useBackdropDismiss');
   assert.ok(!/document\.addEventListener\("pointerdown", off\)/.test(src('App.tsx')), 'dropdown menu no longer closes on a document pointerdown');
+});
+
+
+function menuItem(d, text) {
+  const b = [...d.querySelectorAll('.menu button')].find(el => (el.querySelector('.menu-label')?.textContent || el.textContent).trim() === text);
+  assert.ok(b, 'menu item: ' + text);
+  return b;
+}
+async function openMenuItem(d, text) {
+  await click(label(d, 'Menu')); await click(menuItem(d, text)); await delay(40);
+}
+
+async function assertBackdropCloses(w, d, name, sel, open, behind, seen) {
+  installHitTest(w, d, behind);
+  let hits = 0;
+  const b = behind();
+  const onHit = () => { hits++; };
+  b?.addEventListener('click', onHit, true);
+  try {
+    await open();
+    assert.ok(d.querySelector(sel), name + ' opened');
+    const inChat = chatOpen(d);
+    await tap(w, d);
+    assert.ok(!d.querySelector(sel), name + ' closed on a tap outside');
+    assert.equal(chatOpen(d), inChat, name + ' did not open or leave the chat underneath');
+    assert.equal(hits, 0, name + ' did not click through to the page behind');
+    seen.push(name);
+  } finally { b?.removeEventListener('click', onHit, true); }
+  await delay(400); // let swallowGhostTaps expire before the next opener taps the page
+}
+
+test('every card, sheet, dialog and menu closes on a backdrop tap; the page behind is not activated', { timeout: 60000 }, async () => {
+  const seen = [];
+  const fx = await env(false); const { w, d } = fx;
+  try {
+    const listRow = () => d.querySelector('.convbtn');
+    await assertBackdropCloses(w, d, '⋮ menu', '.menu', async () => { await click(label(d, 'Menu')); await delay(20); }, listRow, seen);
+    for (const [name, item] of [['Sprog', 'Sprog'], ['Tema', 'Tema'], ['FAQ', 'FAQ'], ['Abonnement', 'Abonnement'], ['Feedback', 'Feedback'], ['Konto', 'Konto (e-mail og adgangskode)'], ['Inviter person', 'Inviter person']]) {
+      await assertBackdropCloses(w, d, name, '.sheet', () => openMenuItem(d, item), listRow, seen);
+    }
+    await assertBackdropCloses(w, d, 'Kontaktens kaldenavn', 'dialog.contact-alias-dialog[open]', async () => {
+      d.querySelector('.convbtn').dispatchEvent(new w.MouseEvent('contextmenu', { bubbles: true, cancelable: true })); await delay(40);
+    }, listRow, seen);
+    await assertBackdropCloses(w, d, 'color palette', '.palette', async () => { await click(d.querySelector('.dot')); await delay(30); }, listRow, seen);
+
+    await click(d.querySelector('.convbtn')); await delay(40);
+    if (!chatOpen(d)) await click(d.querySelector('.convbtn')); // a prior long-press can swallow the first click
+    await delay(40);
+    assert.ok(chatOpen(d), 'chat opened');
+    const back = () => label(d, 'Tilbage');
+    await assertBackdropCloses(w, d, 'chat ⋮ menu', '.menu', async () => { await click(label(d, 'Menu')); await delay(20); }, back, seen);
+    await assertBackdropCloses(w, d, 'Lydløs', '.mute-card', () => openMenuItem(d, 'Lydløs'), back, seen);
+    await assertBackdropCloses(w, d, 'Blokér confirm', '.confirm-card', () => openMenuItem(d, 'Blokér samtale'), back, seen);
+    await assertBackdropCloses(w, d, 'Modtagetider', '.sheet', () => openMenuItem(d, 'Modtagetider'), back, seen);
+    await assertBackdropCloses(w, d, 'Deltagere og roller', '.sheet', () => openMenuItem(d, 'Deltagere og roller'), back, seen);
+    await assertBackdropCloses(w, d, 'Rapportér', '.sheet', () => openMenuItem(d, 'Rapportér'), back, seen);
+    await assertBackdropCloses(w, d, 'Eksportér samtale', '.sheet', () => openMenuItem(d, 'Eksportér samtale'), back, seen);
+    await assertBackdropCloses(w, d, 'Tilføj person', '.sheet', async () => { await click(label(d, 'Tilføj person')); await delay(40); }, back, seen);
+    // Blokeringer inner dialogs are covered in blocking-lists/app.test.cjs (this fixture has no VITE_SUPABASE_*).
+    await assertBackdropCloses(w, d, 'message menu', '.message-overlay', async () => {
+      d.querySelector('.msg')?.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await delay(40);
+    }, back, seen);
+  } finally { await fx.close(); }
+
+  const pfx = await env(false, false, (win) => { win.__QA_PENDING = 'live'; });
+  try {
+    const { w, d } = pfx;
+    const listRow = () => d.querySelector('.convbtn');
+    await assertBackdropCloses(w, d, 'pending-invite menu', 'dialog.pending-invite-menu[open]', async () => {
+      d.querySelector('.convbtn').dispatchEvent(new w.MouseEvent('contextmenu', { bubbles: true, cancelable: true })); await delay(40);
+    }, listRow, seen);
+  } finally { await pfx.close(); }
+
+  assert.ok(seen.length >= 20, 'iterated cards: ' + seen.join(', '));
 });
