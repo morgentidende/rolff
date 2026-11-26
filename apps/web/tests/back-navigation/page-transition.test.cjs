@@ -39,9 +39,16 @@ test('list → chat: the chat slides in from the right over an inert copy of the
     assert.equal(tf(inn, 0), 'translate3d(100%,0,0)'); assert.equal(tf(inn, 1), 'translate3d(0,0,0)');
     assert.equal(tf(out, 1), 'translate3d(-25%,0,0)');
     assert.equal(inn.o.duration, PAGE_MS); assert.match(inn.o.easing, /cubic-bezier\(\.4,0,\.2,1\)/);
-    for (const a of w.__anims) for (const k of a.keyframes) assert.deepEqual(Object.keys(k).filter((p) => !['transform', 'opacity', 'backgroundColor', 'boxShadow'].includes(p)), [], 'GPU-friendly properties only, no layout');
+    // Compositor-only: transform and opacity. box-shadow/background-color would make Chrome run the slide on the
+    // main thread, where the chat's first render froze it (the Android jerks).
+    for (const a of w.__anims) for (const k of a.keyframes) assert.deepEqual(Object.keys(k).filter((p) => !['transform', 'opacity'].includes(p)), [], 'compositor-only properties');
+    const sheet = d.querySelector('.page-sheet');
+    assert.ok(sheet && sheet.hasAttribute('inert') && sheet.getAttribute('aria-hidden') === 'true', 'static shadowed backdrop under the incoming chat');
+    const sh = w.__anims.find((a) => a.el === sheet);
+    assert.equal(JSON.stringify(sh.keyframes.map((k) => k.transform)), JSON.stringify([tf(inn, 0), tf(inn, 1)]), 'backdrop moves exactly with the chat');
     await delay(PAGE_MS + 60);
     assert.equal(d.querySelector('.page-ghost'), null, 'copy removed after the slide');
+    assert.equal(d.querySelector('.page-sheet'), null, 'backdrop removed after the slide');
 
     w.__anims.length = 0;
     await back(w); // Android Back / gesture
@@ -53,6 +60,7 @@ test('list → chat: the chat slides in from the right over an inert copy of the
     const home = w.__anims.find((a) => a.el === wrap2), chat = w.__anims.find((a) => a.el === gb);
     assert.equal(tf(home, 0), 'translate3d(-25%,0,0)'); assert.equal(tf(home, 1), 'translate3d(0,0,0)');
     assert.equal(tf(chat, 1), 'translate3d(100%,0,0)', 'chat slides out to the right');
+    for (const a of w.__anims) for (const k of a.keyframes) assert.deepEqual(Object.keys(k).filter((p) => !['transform', 'opacity'].includes(p)), [], 'compositor-only properties (back)');
     await delay(PAGE_MS + 60);
     assert.equal(d.querySelector('.page-ghost'), null);
 
@@ -88,8 +96,44 @@ test('source: only list taps, ← and Back animate; deep links / notifications /
   assert.match(app, /useState<ConvRow\[\] \| null>\(\(\) => homeCache\.get\(uid\)\?\.convs \?\? null\)/, 'list renders from cache on Back');
   assert.match(app, /if\(uid!==next\)\{homeCache\.clear\(\);/, 'cache never crosses accounts');
   const css = fs.readFileSync(path.join(__dirname, '../../src/styles.css'), 'utf8');
-  assert.match(css, /\.page-ghost-forward\{z-index:-1\}\.page-ghost-back\{z-index:25\}/, 'below cards (overlay z-index 30)');
-  assert.match(css, /@media \(prefers-reduced-motion:reduce\)\{\.page-ghost\{display:none!important\}\}/);
+  assert.match(css, /\.page-ghost-forward\{z-index:-1\}\.page-ghost-back\{z-index:25;/, 'below cards (overlay z-index 30)');
+  assert.match(css, /\.page-sheet\{position:fixed;inset:0;z-index:-1;/, 'backdrop under the chat, above the list copy');
+  assert.match(css, /@media \(prefers-reduced-motion:reduce\)\{\.page-ghost,\.page-sheet\{display:none!important\}\}/);
   const ml = fs.readFileSync(path.join(__dirname, '../../src/modalLayer.ts'), 'utf8');
   assert.match(ml, /\.topbar\.chat:not\(\[data-ghost\] \*\)/, 'the in-chat card offset never measures the leaving copy');
 });
+
+const bubbles = (d) => [...d.querySelectorAll('.msgs .day-group')].filter((n) => !n.closest('.page-ghost'));
+test('no re-render mid-slide: messages fetched during the slide are shown right after it; a reopened chat slides in with them', { timeout: 10000 }, async () => {
+  const fx = await env(false, false, motion); const { w, d } = fx;
+  try {
+    await click(d.querySelector('.convbtn'));
+    assert.ok(d.querySelector('.page-ghost'), 'sliding');
+    await delay(60); // the (synthetic) fetch has answered, the slide is still running
+    assert.ok(d.querySelector('.page-ghost'), 'still sliding');
+    assert.equal(bubbles(d).length, 0, 'fetched messages wait for the end of the slide');
+    await delay(PAGE_MS + 60);
+    assert.equal(d.querySelector('.page-ghost'), null);
+    assert.equal(bubbles(d).length, 1, 'messages shown right after the slide');
+    assert.match(bubbles(d)[0].textContent, /Kun en opdigtet testbesked/);
+
+    await back(w); await delay(PAGE_MS + 60);
+    await click(d.querySelector('.convbtn'));
+    assert.ok(d.querySelector('.page-ghost'), 'sliding again');
+    assert.equal(bubbles(d).length, 1, 'reopened chat already has its messages while it slides in');
+    await delay(PAGE_MS + 60);
+    assert.equal(bubbles(d).length, 1);
+  } finally { await fx.close(); }
+});
+
+test('CSS: the slide layers paint once and only move (no animated shadow), and are hidden for reduced motion', () => {
+  const css = fs.readFileSync(path.join(__dirname, '../../src/styles.css'), 'utf8');
+  const rule = (sel) => (css.match(new RegExp('(?:^|\\n)' + sel.replace(/[.]/g, '\\.') + '\\{([^}]*)\\}')) || [])[1] || '';
+  assert.match(rule('.page-sheet'), /position:fixed/); assert.match(rule('.page-sheet'), /background:var\(--bg\)/); assert.match(rule('.page-sheet'), /box-shadow:/);
+  assert.match(rule('.page-sheet'), /will-change:transform/);
+  assert.doesNotMatch(rule('.page-ghost') + rule('.page-sheet'), /contain:[^;]*paint|contain:strict/, 'no paint containment (it would clip the edge shadow)');
+  assert.match(css, /@media \(prefers-reduced-motion:reduce\)\{\.page-ghost,\.page-sheet\{display:none!important\}\}/);
+  const src = fs.readFileSync(path.join(__dirname, '../../src/pageTransition.ts'), 'utf8');
+  assert.doesNotMatch(src, /boxShadow|backgroundColor/, 'no non-composited animated properties');
+});
+

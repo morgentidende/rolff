@@ -24,7 +24,7 @@ import { onDeepLink } from "./native/deepLinks";
 import { isNative } from "./native/platform";
 import { afterSettle } from "./viewportSettle";
 import { useBackdropDismiss, useModalLayer, useUnderChatHeader } from "./modalLayer";
-import { playPage, preparePage, type PendingPage } from "./pageTransition";
+import { playPage, preparePage, whenPageSettled, type PendingPage } from "./pageTransition";
 import { fetchCard, peekCard, prefetchCard, setCardCacheOwner } from "./cardCache";
 import { CardSkeleton } from "./CardSkeleton";
 import { rectOf, useAnchoredPlacement, visibleViewport } from "./anchoredPosition";
@@ -112,7 +112,7 @@ export function App() {
   }, []);
   useEffect(() => {
     let uid:string|null=null, active=true, observed=0;
-    const apply=(s:Session|null)=>{if(!active)return;const next=s?.user.id??null;setReceiveTimezoneUser(next);setPushOwner(s?{id:s.user.id,token:s.access_token}:null);if(uid!==next){homeCache.clear();setCardCacheOwner(next);resetBackNavigation();setConv(null);resetSheet();setRenameContacts(null);uid=next;}setSession(s);};
+    const apply=(s:Session|null)=>{if(!active)return;const next=s?.user.id??null;setReceiveTimezoneUser(next);setPushOwner(s?{id:s.user.id,token:s.access_token}:null);if(uid!==next){homeCache.clear(); chatCache.clear();setCardCacheOwner(next);resetBackNavigation();setConv(null);resetSheet();setRenameContacts(null);uid=next;}setSession(s);};
     const { data } = supabase.auth.onAuthStateChange((event, s) => {if(event==="INITIAL_SESSION"&&observed)return;observed++;apply(s);});
     const start=observed;
     supabase.auth.getSession().then(({ data }) => {if(observed===start)apply(data.session);});
@@ -186,7 +186,7 @@ export function App() {
     { label: da ? "Privatlivspolitik" : "Privacy policy", run: () => setPolicyOpen(true) },
     { label: da ? "Kontakt" : "Contact", run: () => setSheet("feedback") },
     { label: da ? "Inviter person" : "Invite person", run: () => setSheet("invite") },
-    { label: t.logout, run: () => { homeCache.clear(); setCardCacheOwner(null); setPushOwner(null); resetBackNavigation(); setConv(null); resetSheet(); cacheClear().finally(() => supabase.auth.signOut()); }, danger: true },
+    { label: t.logout, run: () => { homeCache.clear(); chatCache.clear(); setCardCacheOwner(null); setPushOwner(null); resetBackNavigation(); setConv(null); resetSheet(); cacheClear().finally(() => supabase.auth.signOut()); }, danger: true },
   ];
   const close = () => setSheet(null);
   // All sheets from the ⋮ menu open as a card under the ⋮ button at the top, like "Tilføj person".
@@ -708,6 +708,10 @@ type ConvRow = Conv & ConvPreview;
 const InviteIcon = () => <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c.6-3.6 3.3-5.5 6.5-5.5s5.9 1.9 6.5 5.5" /><path d="M19 8v6M16 11h6" /></svg>;
 /** Last list per user, so Back from a chat shows the list at once (and at the same scroll position) while it refreshes. */
 const homeCache = new Map<string, { convs: ConvRow[]; mutes: MuteRow[] }>();
+// Last loaded messages per conversation for this signed-in user (cleared on user switch and logout, like homeCache):
+// a chat opened again slides in with its messages already in place instead of filling in mid-slide.
+const chatCache = new Map<string, Msg[]>();
+const SLIDE_TAIL = 24;
 function Home({ uid, lang, open, invite, rename, refreshKey }: { uid: string; lang: Lang; open: (c: Conv) => void; invite: () => void; rename: (contacts: Other[]) => void; refreshKey: number }) {
   const t = strings[lang]; const da = lang === "da";
   const [convs, setConvs] = useState<ConvRow[] | null>(() => homeCache.get(uid)?.convs ?? null);
@@ -721,10 +725,13 @@ function Home({ uid, lang, open, invite, rename, refreshKey }: { uid: string; la
   // v2 adds the latest visible message (server-filtered: own or released to me) and sorts by it.
   // Falls back to v1 while the v2 migration is not deployed.
   const load = useCallback(async () => {
-    void supabase.rpc("my_conversation_mutes").then(({ data, error }: { data: unknown; error: unknown }) => { if (!error && Array.isArray(data)) setMutes(data as MuteRow[]); }, () => {});
+    // Results that arrive while the page slides in are committed right after the slide (no re-render mid-slide).
+    void supabase.rpc("my_conversation_mutes").then(async ({ data, error }: { data: unknown; error: unknown }) => { if (!error && Array.isArray(data)) { await whenPageSettled(); setMutes(data as MuteRow[]); } }, () => {});
     const v2 = await supabase.rpc("list_my_conversations_v2");
-    if (!v2.error) { setConvs((v2.data as ConvRow[]) ?? []); return; }
-    const { data } = await supabase.rpc("list_my_conversations"); setConvs((data as ConvRow[]) ?? []);
+    // Unchanged list (e.g. back from a chat, rendered from homeCache): keep the current array, nothing re-renders.
+    const put = (rows: ConvRow[]) => setConvs((cur) => cur && JSON.stringify(cur) === JSON.stringify(rows) ? cur : rows);
+    if (!v2.error) { await whenPageSettled(); put((v2.data as ConvRow[]) ?? []); return; }
+    const { data } = await supabase.rpc("list_my_conversations"); await whenPageSettled(); put((data as ConvRow[]) ?? []);
   }, []);
   useEffect(() => { load(); }, [load, refreshKey]);
   useEffect(() => { const f = () => { if (document.visibilityState === "visible") load(); }; document.addEventListener("visibilitychange", f); return () => document.removeEventListener("visibilitychange", f); }, [load]);
@@ -838,8 +845,12 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
   useEffect(() => { setOthers(conv.others ?? []); }, [conv.others]);
   const t = strings[lang]; const da = lang === "da";
   const draftKey = `draft:${conv.id}`; const replyKey = `draft-reply:${conv.id}`;
-  const [msgs, setMsgs] = useState<Msg[]>([]); const [pending, setPending] = useState(0);
+  // From the cache only the newest messages are rendered while the chat slides in (the list opens at the bottom);
+  // the full list follows right after the slide, so the slide starts without a long first render.
+  const [msgs, setMsgs] = useState<Msg[]>(() => (chatCache.get(conv.id) ?? []).slice(-SLIDE_TAIL)); const [pending, setPending] = useState(0);
   const events = useConversationEvents(conv.id, msgs.length);
+  const fullMsgs = useRef(false);
+  useEffect(() => { if (fullMsgs.current) chatCache.set(conv.id, msgs); }, [conv.id, msgs]);
   type ReplyTarget = { id: string; body: string | null; mine: boolean; sender_id: string | null; sender_name: string | null; sender_email?: string | null };
   const [reply, setReply] = useState<ReplyTarget | null>(() => { const id = localStorage.getItem(replyKey); return id && /^[0-9a-f-]{36}$/i.test(id) ? { id, body: null, mine: false, sender_id: null, sender_name: null } : null; });
   const composerRef = useRef<HTMLTextAreaElement>(null); const composerRootRef = useRef<HTMLDivElement>(null);
@@ -940,8 +951,11 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
     const uid = (await supabase.auth.getSession()).data.session?.user.id;
     if (uid) await syncReceiveTimezone(uid);
     const { data, error } = await supabase.rpc("get_messages_v3", { conv: conv.id });
-    if (data) { setMsgs(data as Msg[]); setReply(r => { if (!r) return null; const m = (data as Msg[]).find(x => x.id === r.id); return m ? { id: m.id, body: m.body ?? null, mine: m.mine, sender_id: m.sender_id, sender_name: m.sender_name, sender_email: m.sender_email } : { ...r, body: null }; }); if (uid) cacheSet(uid, conv.id, data); }
-    else if (error && uid) { const c = await cacheGet<Msg[]>(uid, conv.id); if (c) setMsgs(c); }
+    // Opening the chat slides it in; render the fetched messages after the slide, not in the middle of it.
+    if (data || error) await whenPageSettled();
+    // Same rows as on screen (the 8-second refresh, mostly): keep the current array so nothing re-renders.
+    if (data) { const rows = data as Msg[], same = (cur: Msg[]) => cur.length === rows.length && JSON.stringify(cur) === JSON.stringify(rows); fullMsgs.current = true; setMsgs((cur) => same(cur) ? cur : rows); setReply(r => { if (!r) return null; const m = (data as Msg[]).find(x => x.id === r.id); return m ? { id: m.id, body: m.body ?? null, mine: m.mine, sender_id: m.sender_id, sender_name: m.sender_name, sender_email: m.sender_email } : { ...r, body: null }; }); if (uid) cacheSet(uid, conv.id, data); }
+    else if (error && uid) { const c = await cacheGet<Msg[]>(uid, conv.id); if (c) { fullMsgs.current = true; setMsgs(c); } }
     const p = await supabase.rpc("my_pending_count", { p_conv: conv.id }); setPending((p.data as number) ?? 0);
     const i = await supabase.rpc("list_pending_invitations", { conv: conv.id }); setInvs((i.data as Pending[]) ?? []);
     const d = await supabase.rpc("delayed_send_enabled", { conv: conv.id }); if (!d.error) setDelayedOn(!!d.data);
