@@ -115,7 +115,8 @@ async function handle(req: Request, slotCtx: Ctx): Promise<Response> {
     const hit = checkRules(caption, words, ctx.filter((c: any) => c.mine).map((c: any) => c.body));
     if (hit) {
       await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "block", p_reason: "rule" });
-      return json(hit.rule === "blocked_word" ? { status: "blocked_word", word: hit.word, where: "caption" } : { status: "rule", rule: hit.rule }, 200);
+      const rule = hit.rule === "emoticon" ? "emoji" : hit.rule;
+      return json(hit.rule === "blocked_word" ? { status: "blocked_word", word: hit.word, where: "caption" } : { status: "rule", rule, ...(hit.word ? { word: hit.word } : {}) }, 200);
     }
   }
 

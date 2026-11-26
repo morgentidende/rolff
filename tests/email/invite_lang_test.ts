@@ -10,7 +10,7 @@ Deno.env.set("MAILER_SECRET", "mailer-test");
 const E = await import("../../supabase/functions/_shared/email.ts");
 const exp = "2026-11-12T15:30:00Z"; // 16:30 in Copenhagen
 const link = "https://example.test/#invite=abc";
-const FOOT_DA = "Beskeder tjekkes af OpenAI", FOOT_EN = "Messages are checked by OpenAI";
+const FOOT_DA = "Beskeder tjekkes automatisk, før de leveres", FOOT_EN = "Messages are checked automatically before delivery";
 
 Deno.test("mailLang: only da|en, everything else falls back to da", () => {
   assertEquals(E.mailLang("en"), "en"); assertEquals(E.mailLang("da"), "da");
