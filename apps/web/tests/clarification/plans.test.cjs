@@ -18,6 +18,13 @@ test('current plan has a quiet label (not a button); other plan keeps its action
     const spacer = other.querySelector('.plan-badge-spacer'); assert.equal(spacer.getAttribute('aria-hidden'), 'true');
     const btn = other.querySelector('.plan-foot > button'); assert.ok(btn); assert.equal(btn.textContent, 'Nedgradér (test)');
     assert.ok(!/Din nuværende plan/.test(d.body.textContent));
+    const titles = [...plans.querySelectorAll('h3')].map(h => h.textContent);
+    assert.deepEqual(titles, ['Standard', 'Premium']);
+    assert.match(cur.textContent, /79 kr\./);
+    assert.match(other.textContent, /49 kr\./);
+    assert.ok(!/Tekst \+ vedhæftninger/.test(d.body.textContent));
+    assert.equal(cur.querySelector('h3').textContent, 'Premium');
+    assert.equal(other.querySelector('h3').textContent, 'Standard');
   } finally { await f.close(); }
 });
 test('rule text is two short lines without "Regel:"; TESTFUNKTION kept, no period line', async () => {
@@ -38,7 +45,7 @@ test('plan change confirms with the app-wide success toast, not an orange notice
     const pill = region.querySelector('.toast-pill'); assert.equal(pill.textContent, 'Planen er skiftet.'); assert.ok(pill.classList.contains('is-success'));
     assert.ok(![...d.querySelectorAll('.notice')].some(n => /Planen er skiftet/.test(n.textContent)), 'no orange box');
     assert.equal(d.querySelectorAll('.toast-region').length, 1, 'single app-wide toast region');
-    assert.equal(d.querySelector('.plan.current .plan-badge:not(.plan-badge-spacer)').closest('.plan').querySelector('h3').textContent, 'Tekst');
+    assert.equal(d.querySelector('.plan.current .plan-badge:not(.plan-badge-spacer)').closest('.plan').querySelector('h3').textContent, 'Standard');
   } finally { await f.close(); }
 });
 test('period end is shown only while a downgrade is pending (da)', async () => {
