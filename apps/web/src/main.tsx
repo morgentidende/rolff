@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { startVersionCheck } from "./versionCheck";
+import { startPushRenewal } from "./push";
 import "./styles.css";
 import "./export.css";
 import "./native.css";
@@ -12,6 +13,7 @@ import { installViewportVars } from "./viewport";
 installViewportVars();
 createRoot(document.getElementById("root")!).render(<App />);
 startVersionCheck();
+startPushRenewal();
 // Both are no-ops on the web; they only act inside a wrapped (native) app.
 installExternalLinkHandler();
 installNativeBackButton(hasBackLayers);

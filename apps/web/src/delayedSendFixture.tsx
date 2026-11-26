@@ -28,14 +28,14 @@ const pending: Message = {
   created_at: "2026-11-13T08:00:00.000Z", mine: true, deliver_after: deliverAfter,
 };
 
-// Paused state: Ret was tapped, the server holds the message (no countdown), the editor banner is open.
+// Paused state: Ret was tapped, the server holds the message. It is not shown as a bubble; the text is only in the composer.
 const held: Message = { ...pending, id: "h1", deliver_after: null, held: true };
 
 function MenuOpen() {
   const da = lang === "da";
   const items = [
     { label: da ? "Forsinkede beskeder" : "Delayed messages", checked: true },
-    { label: da ? "Deltagere og roller" : "Participants and roles" },
+    { label: da ? "Beskedfrekvens" : "Message frequency" },
     { label: da ? "Eksportér samtale" : "Export conversation" },
     { label: da ? "Blokeringer" : "Blocking lists" },
   ];
@@ -71,9 +71,7 @@ function Fixture() {
       </header>
       <div className="msgs">
         <MessageBubble m={theirs} lang={lang} tailed onReply={() => {}} />
-        {view === "held"
-          ? <MessageBubble m={held} lang={lang} tailed pendingSec={null} onReply={() => {}} onEdit={() => {}} onDelete={() => {}} onResume={() => {}} />
-          : <MessageBubble m={pending} lang={lang} tailed pendingSec={27} onReply={() => {}} onEdit={() => {}} onDelete={() => {}} />}
+        {view === "held" ? null : <MessageBubble m={pending} lang={lang} tailed pendingSec={27} onReply={() => {}} onEdit={() => {}} onDelete={() => {}} />}
       </div>
       <div className="card composer">
         <ComposerInput
@@ -88,7 +86,7 @@ function Fixture() {
           onFile={() => {}}
           openPlans={() => {}}
           canSend={view === "held" || !!text.trim()}
-          leading={view === "held" ? <EditComposer lang={lang} onCancel={() => {}} /> : null}
+          leading={view === "held" ? <EditComposer lang={lang} onResume={() => {}} onDelete={() => {}} /> : null}
           countdownUntil={view === "menu" || view === "held" ? null : deliverAfter}
           onSend={() => {}}
           onSendNow={() => {}}

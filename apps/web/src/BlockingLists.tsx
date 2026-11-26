@@ -2,14 +2,18 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { focusField } from "./formHint";
 import type { Session } from "@supabase/supabase-js";
 import { useBackLayer } from "./backNavigation";
+import { CardHeader } from "./CardHeader";
 import { blockingApi, sortBlockEntries, type BlockEntry, type BlockSort } from "./blockingListModel";
 import type { Lang } from "./i18n";
+import { useBackdropDismiss, useModalLayer } from "./modalLayer";
 
-function Modal({ title, close, children }: { title: string; close: ()=>void; children: ReactNode }) {
+function Modal({ title, lang, close, children }: { title: string; lang: Lang; close: ()=>void; children: ReactNode }) {
  const ref=useRef<HTMLDialogElement>(null);
  useBackLayer(true,close);
+ useModalLayer(true, ref, { native: true });
+ const backdrop = useBackdropDismiss(close, undefined, { outsideBox: true });
  useEffect(()=>{ const before=document.activeElement as HTMLElement|null; const d=ref.current;d?.showModal();return ()=>{d?.close();if(before?.isConnected)before.focus();};},[]);
- return <dialog className="blocking-dialog" ref={ref} aria-labelledby="blocking-dialog-title" onCancel={e=>{e.preventDefault();close();}}><h2 id="blocking-dialog-title">{title}</h2>{children}</dialog>;
+ return <dialog className="blocking-dialog" ref={ref} aria-labelledby="blocking-dialog-title" onCancel={e=>{e.preventDefault();close();}} {...backdrop}><CardHeader title={title} titleId="blocking-dialog-title" lang={lang} onClose={close} />{children}</dialog>;
 }
 export function InfoButton({ label, open }: { label: string; open: ()=>void }) {
  const timer=useRef<ReturnType<typeof setTimeout>|null>(null), start=useRef<{x:number;y:number}|null>(null), suppress=useRef(false);
@@ -59,7 +63,16 @@ export function BlockingLists({ lang, conv, session }: { lang: Lang; conv: strin
   const rows=await api(query(isTopic?"conversation_blocked_topics":"conversation_blocked_words"));if(g===generation.current){if(isTopic){setTopics(rows);setTopic("");setTopicAck(false);topicRef.current?.focus({preventScroll:true});}else{setWords(rows);setWord("");setAck(false);wordRef.current?.focus({preventScroll:true});}}
  };
  const infoWords=da?"Ord, udtryk og hele sætninger matches som tekst; store/små bogstaver og accenter ignoreres. Kun du ser din liste. Hvis afsenderen forsøger at sende ordet, får vedkommende at vide, at du har blokeret det, og hvilket ord det er. Sortering ændrer ikke din liste. Nulstilling fjerner kun blokerede ord, ikke emner.":"Words, expressions and sentences are matched as text, ignoring case and accents. Only you see your list. If the sender tries to send a blocked word, they are told that you have blocked it, and which word it is. Sorting changes only the view. Reset removes words, not topics.";
- const setAttach=(photos:boolean,files:boolean)=>change("rpc/set_my_attachment_blocks","POST",{conv,p_block_photos:photos,p_block_files:files},result=>{setBlockPhotos(result?.block_photos===true);setBlockFiles(result?.block_files===true);});
+ // Attachment toggles must not use the shared busy flag: that disables and fades the other switch and both consent ticks.
+ const setAttach=(photos:boolean,files:boolean)=>{
+  if(inflight.current||!loaded)return;
+  const prevPhotos=blockPhotos, prevFiles=blockFiles;
+  setBlockPhotos(photos);setBlockFiles(files);setErr("");
+  inflight.current=true;const g=generation.current;
+  void api("rpc/set_my_attachment_blocks","POST",{conv,p_block_photos:photos,p_block_files:files}).then(result=>{
+   if(g===generation.current){setBlockPhotos(result?.block_photos===true);setBlockFiles(result?.block_files===true);}
+  }).catch(()=>{if(g===generation.current){setBlockPhotos(prevPhotos);setBlockFiles(prevFiles);setErr(error);}}).finally(()=>{if(g===generation.current)inflight.current=false;});
+ };
  const infoAttachments=da?"Blokér fotos eller filer (PDF), som den anden sender i denne samtale. Indstillingen gælder kun her, er slået fra som standard, og kun du ser den. Afsenderen får at vide, at du ikke tager imod den type – ikke om beskeder er læst eller modtaget. Allerede sendte vedhæftninger bliver stående.":"Block photos or files (PDF) the other person sends in this conversation. The setting applies only here, is off by default, and only you see it. The sender is told that you do not accept that type — not whether messages were read or delivered. Attachments already sent stay in the conversation.";
  const infoTopics=da?"Blokér efter betydning, også venlig eller neutral omtale. Skriv fx ‘omtaler mine forældre’ eller ‘omtaler mit udseende’. ‘Mine’ og ‘mit’ betyder dig som modtager. AI kan tage fejl; ved usikker betydning beder vi om præcisering. Ingen send-alligevel. Listen er privat: afsenderen får kun at vide, at du har blokeret et emne, ikke hvilket. Dine emner sendes til AI-tjenesten sammen med beskeden; der er endnu ingen garanti om EU-behandling eller Zero Data Retention.":"Block by meaning, including friendly or neutral mentions. Try ‘mentions my parents’ or ‘mentions my appearance’. ‘My’ means you as recipient. AI can make mistakes; uncertain meaning requires clarification, with no send-anyway option. The list is private: the sender is only told that you have blocked a topic, not which one. Criteria are sent to the AI service with the message; EU processing and Zero Data Retention are not yet guaranteed.";
  const renderList=(items:BlockEntry[],isTopic:boolean)=><ul className="blocking-entries">{sortBlockEntries(items,isTopic?"oldest":sort,lang).map(x=><li key={x.id}><span>{x.word}</span><button className="blocking-trash" type="button" disabled={busy||!loaded} aria-label={`${da?"Fjern":"Remove"} ${x.word}`} onClick={()=>void remove(x,isTopic)}><Trash/></button></li>)}</ul>;
@@ -84,7 +97,7 @@ export function BlockingLists({ lang, conv, session }: { lang: Lang; conv: strin
  <p className="meta blocking-lead">{da?"Blokér beskeder ud fra, hvad de handler om. Kun du ser listen.":"Block messages by what they are about. Only you see the list."}</p>
  {loaded&&(topics.length?renderList(topics,true):<p className="blocking-empty">{da?"Ingen emner endnu. Prøv fx ”omtaler mit udseende”.":"No topics yet. Try e.g. “mentions my appearance”."}</p>)}
  <form className="blocking-add" noValidate onSubmit={e=>{e.preventDefault();void add(true);}}><label htmlFor="blocked-topic">{da?"Blokér beskeder, der …":"Block messages that …"}</label>
- <div className="blocking-add-row"><input id="blocked-topic" ref={topicRef} name="blocked-topic" maxLength={240} value={topic} disabled={busy} autoComplete="off" autoCapitalize="none" enterKeyHint="done" placeholder={da?"omtaler mine forældre":"mention my parents"} aria-invalid={topicHint==="short"||undefined} aria-describedby={topicHint==="short"?"blocked-topic-hint blocked-topic-help":"blocked-topic-help"} onChange={e=>{setTopic(e.target.value);if(topicHint==="short")setTopicHint("");}}/>
+ <div className="blocking-add-row"><input id="blocked-topic" ref={topicRef} name="blocked-topic" maxLength={240} value={topic} disabled={busy} autoComplete="off" autoCapitalize="none" enterKeyHint="done" aria-invalid={topicHint==="short"||undefined} aria-describedby={topicHint==="short"?"blocked-topic-hint blocked-topic-help":"blocked-topic-help"} onChange={e=>{setTopic(e.target.value);if(topicHint==="short")setTopicHint("");}}/>
  <button type="submit" aria-disabled={topicMissing||undefined} disabled={busy}>{da?"Tilføj emne":"Add topic"}</button></div>
  {topicHint==="short"&&<p id="blocked-topic-hint" className="field-hint" role="alert">{da?"Skriv mindst 2 tegn for at tilføje et emne.":"Type at least 2 characters to add a topic."}</p>}
 <label className={`check-row blocking-ack${topicHint==="ack"?" needs-attention":""}`}><input type="checkbox" className="check" ref={topicAckRef} checked={topicAck} disabled={busy} aria-invalid={topicHint==="ack"||undefined} aria-describedby={topicHint==="ack"?"blocked-topic-ack-hint":undefined} onChange={e=>{setTopicAck(e.target.checked);if(e.target.checked&&topicHint==="ack")setTopicHint("");}}/><span>{topicAckText}</span></label>
@@ -101,8 +114,8 @@ export function BlockingLists({ lang, conv, session }: { lang: Lang; conv: strin
  </div>}
  </section>
  {err&&<p role="alert" className="err">{err}</p>}
- {modal&&<Modal title={modal==="reset"?(da?"Nulstil blokeringsliste?":"Reset blocked words?"):(modal==="words"?(da?"Blokerede ord":"Blocked words"):modal==="topics"?(da?"Blokerede emner":"Blocked topics"):(da?"Vedhæftninger":"Attachments"))} close={()=>setModal(null)}>
- {modal==="reset"?<><p>{da?"Alle dine blokerede ord i denne samtale fjernes. Dine blokerede emner og vedhæftningsindstillinger bevares.":"All your blocked words in this conversation will be removed. Your blocked topics and attachment settings are kept."}</p><div className="row end"><button type="button" className="ghost" onClick={()=>setModal(null)}>{da?"Annuller":"Cancel"}</button><button type="button" className="danger" disabled={busy} onClick={()=>{setModal(null);void change("rpc/reset_blocked_words","POST",{conv},()=>setWords([]));}}>{da?"Nulstil":"Reset"}</button></div></>:<><p>{modal==="words"?infoWords:modal==="topics"?infoTopics:infoAttachments}</p><button type="button" onClick={()=>setModal(null)}>{da?"Luk":"Close"}</button></>}
+ {modal&&<Modal lang={lang} title={modal==="reset"?(da?"Nulstil blokeringsliste?":"Reset blocked words?"):(modal==="words"?(da?"Blokerede ord":"Blocked words"):modal==="topics"?(da?"Blokerede emner":"Blocked topics"):(da?"Vedhæftninger":"Attachments"))} close={()=>setModal(null)}>
+ {modal==="reset"?<><p>{da?"Alle dine blokerede ord i denne samtale fjernes. Dine blokerede emner og vedhæftningsindstillinger bevares.":"All your blocked words in this conversation will be removed. Your blocked topics and attachment settings are kept."}</p><div className="row end"><button type="button" className="danger" disabled={busy} onClick={()=>{setModal(null);void change("rpc/reset_blocked_words","POST",{conv},()=>setWords([]));}}>{da?"Nulstil":"Reset"}</button></div></>:<p>{modal==="words"?infoWords:modal==="topics"?infoTopics:infoAttachments}</p>}
  </Modal>}
  </div>;
 }

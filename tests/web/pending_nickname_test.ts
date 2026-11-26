@@ -3,11 +3,12 @@ const read = (p: string) => Deno.readTextFile(p);
 const has = (src: string, s: string) => { if (!src.includes(s)) throw new Error("missing: " + s); };
 const lacks = (src: string, s: string) => { if (src.includes(s)) throw new Error("must not contain: " + s); };
 
-Deno.test("sheet: no explanatory paragraphs in da and en (they live in the FAQ); title, field, original name, buttons stay", async () => {
+Deno.test("sheet: no explanatory paragraphs in da and en (they live in the FAQ); title, field, original name, Gem stay", async () => {
   const dlg = await read("apps/web/src/ContactAlias.tsx");
   for (const s of ["Kaldenavnet kan ændres, når invitationen er accepteret", "You can change the nickname after the invitation is accepted",
     "Personen har ikke accepteret endnu", "They have not accepted yet", "Kun du kan se dette navn", "Only you can see this name", "contact-alias-pending"]) lacks(dlg, s);
-  for (const s of ["Kontaktens kaldenavn", "Contact nickname", "Oprindeligt navn: ", "Original name: ", "Annuller", "Cancel", "contact-alias-input"]) has(dlg, s);
+  for (const s of ["Kontaktens kaldenavn", "Contact nickname", "Oprindeligt navn: ", "Original name: ", "Gem", "Save", "contact-alias-input", "CardHeader"]) has(dlg, s);
+  lacks(dlg, 'da ? "Annuller" : "Cancel"');
 });
 
 Deno.test("FAQ: one concise nickname entry (da + en) that covers pending invitations; the sheet explanation moved there", async () => {

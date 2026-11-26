@@ -54,7 +54,7 @@ Deno.test("Edits of delayed messages are re-moderated in send-message; delivery 
   assert(mig.includes("release_delayed_message") && mig.includes("cancel_delayed_message"), "send-now and delete");
 });
 
-Deno.test("Ret pauses a delayed message on the server; Send saves, X/Genoptag resumes; no auto-resume; da + en", async () => {
+Deno.test("Ret pauses a delayed message on the server; Send saves, Genoptag resumes, Slet discards; no auto-resume; da + en", async () => {
   const app = await Deno.readTextFile("apps/web/src/App.tsx");
   const bubble = await Deno.readTextFile("apps/web/src/MessageBubble.tsx");
   const banner = await Deno.readTextFile("apps/web/src/EditComposer.tsx");
@@ -63,8 +63,10 @@ Deno.test("Ret pauses a delayed message on the server; Send saves, X/Genoptag re
   assert(!app.includes("resume_delayed_message") && !mig.includes("resume_delayed_message"), "no client-callable un-pause without moderation");
   assert(app.indexOf("hold_delayed_message") < app.indexOf("setEditId(selected.id)"), "hold is requested before the editor opens");
   assert(app.includes("Beskeden er allerede sendt, så den kan ikke rettes.") && app.includes("has already been sent"), "race message da + en");
-  assert(bubble.includes("sat på pause") && bubble.includes('"paused"') && bubble.includes("Genoptag") && bubble.includes('"Resume"'), "paused label da + en");
   assert(banner.includes("sat på pause") && banner.includes("paused"), "editor banner mentions the pause");
+  assert(banner.includes("Genoptag") && banner.includes('"Resume"') && banner.includes("Slet") && banner.includes('"Delete"'), "resume and delete live on the composer, da + en");
+  assert(app.includes("timelineMsgs") && app.includes("isHeldMessage"), "held messages are kept out of the chat timeline");
+  assert(app.includes("setText(latest.body)"), "reload restores the held text into the composer");
   assert(mig.includes("'infinity'::timestamptz"), "held = deliver_after infinity, so every existing release path refuses it");
   assert(mig.includes("pg_advisory_xact_lock(hashtextextended('rolff:receive:'"), "hold serialises with the release path");
   assert(mig.includes("get_resumable_message") && mig.includes("resume_held_message") && mig.includes("to service_role"), "resume is service-role only and needs an approval");
