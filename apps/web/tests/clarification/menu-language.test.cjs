@@ -11,7 +11,7 @@ async function closeSheet(d) { const x = d.querySelector('.sheet [aria-label="Lu
 
 test('all front-page menu sheets open as a top card anchored to ⋮ (like "Tilføj person")', async () => {
   const f = await env(); const { d } = f; try {
-    for (const name of ['Sprog', 'Tema', 'FAQ', 'Abonnement', 'Konto (e-mail og adgangskode)', 'Privatliv og sletning', 'Kontakt', 'Inviter person']) {
+    for (const name of ['App-sprog', 'FAQ', 'Abonnement', 'Konto (e-mail og adgangskode)', 'Privatliv og sletning', 'Kontakt', 'Inviter person']) {
       await click(label(d, 'Menu')); const it = items(d).find(b => b.textContent.trim() === name);
       if (!it) { assert.fail(`missing ${name}: ${items(d).map(i => i.textContent).join(', ')}`); }
       await click(it); await delay(60);
@@ -50,13 +50,13 @@ test('language: switching applies at once (menu, html lang, storage) and invitat
       await closeSheet(d); return c.args.lang;
     };
     assert.equal(await inviteLang('Inviter person', /Send|Inviter/), 'da');
-    const s = await openItem(d, 'Sprog');
+    const s = await openItem(d, 'App-sprog');
     const en = [...s.querySelectorAll('.choice')].find(c => c.textContent.includes('English')); await click(en.querySelector('input')); await delay(40);
     assert.equal(d.documentElement.lang, 'en'); assert.equal(w.localStorage.getItem('lang'), 'en');
-    assert.equal(d.querySelector('.sheet h2').textContent, 'Language', 'open sheet re-renders in English without reload');
+    assert.equal(d.querySelector('.sheet h2').textContent, 'App language', 'open sheet re-renders in English without reload');
     await closeSheet(d);
     await click(label(d, 'Menu')); const labels = items(d).map(i => i.textContent.trim()); await click(label(d, 'Menu'));
-    assert.ok(labels.includes('Plan') && labels.includes('Privacy and deletion') && labels.includes('Contact') && labels.includes('Invite person'), labels.join(', '));
+    assert.ok(labels.includes('App language') && labels.includes('Plan') && labels.includes('Privacy and deletion') && labels.includes('Contact') && labels.includes('Invite person'), labels.join(', '));
     assert.equal(await inviteLang('Invite person', /Send|Invite/), 'en');
   } finally { await f.close(); }
 });
@@ -102,6 +102,9 @@ test('Konto: delete lives in a danger card with export warning and the long acti
     assert.match(card.textContent, /ikke kun en deaktivering/);
     assert.match(card.textContent, /App Store eller Google Play/);
     assert.match(card.textContent, /apps\.apple\.com\/account\/subscriptions/);
+    assert.match(card.textContent, /resterende periode/);
+    assert.match(card.textContent, /refusion/);
+    assert.match(card.textContent, /Opsig abonnement/);
 
     assert.match(card.textContent, /Eksportér samtale/);
     const go = [...card.querySelectorAll('button')].find(b => b.textContent.trim() === 'Hent mine data først');
@@ -130,5 +133,27 @@ test('front page: visible "Inviter person" button above the list opens the same 
     assert.ok(!/Mit visningsnavn|indtil du vælger/.test(s.textContent));
     await closeSheet(d);
     await click(label(d, 'Menu')); assert.ok(items(d).some(i => i.textContent.trim() === 'Inviter person'), 'menu entry kept'); await click(label(d, 'Menu'));
+  } finally { await f.close(); }
+});
+
+test('Konto: Opsig abonnement is visible on a paid plan and confirms with a warning card', async () => {
+  const f = await env(); const { d, w } = f; try {
+    const s = await openItem(d, 'Konto (e-mail og adgangskode)'); await delay(80);
+    const cancel = [...s.querySelectorAll('button')].find(b => b.textContent.trim() === 'Opsig abonnement');
+    assert.ok(cancel, 'Opsig abonnement on Konto');
+    await click(cancel); await delay(60);
+    const card = d.querySelector('.confirm-card'); assert.ok(card);
+    assert.equal(card.querySelector('#confirm-title, [id=confirm-title], h2, h3')?.textContent || card.querySelector('.sheethead h2, .card-title, h2')?.textContent, 'Opsig abonnement?');
+    assert.match(card.textContent, /Konto og data bliver/);
+    assert.match(card.textContent, /9\. december 2026|periodens slut/);
+    assert.match(card.textContent, /Genoptag abonnement/);
+    const x = card.querySelector('[aria-label="Luk"]'); assert.ok(x, 'X-only close');
+    assert.ok(![...card.querySelectorAll('button')].some(b => /Annuller/.test(b.textContent)));
+    const ok = [...card.querySelectorAll('button')].find(b => b.textContent.trim() === 'Opsig abonnement');
+    assert.ok(ok); await click(ok); await delay(80);
+    assert.ok(w.QA.calls.some(c => c.name === 'cancel_my_subscription'));
+    assert.match(d.body.textContent, /Dit abonnement udløber 9\. december 2026/);
+    const resume = [...d.querySelectorAll('button')].find(b => b.textContent.trim() === 'Genoptag abonnement');
+    assert.ok(resume, 'undo after cancel');
   } finally { await f.close(); }
 });

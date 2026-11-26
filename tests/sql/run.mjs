@@ -724,5 +724,7 @@ const {testPendingInvitationAlias}=await import('./pending-invitation-alias.mjs'
 await testPendingInvitationAlias({db,as,svc,hash,t,assert,rejects});
 const {testPendingInvitationCancel}=await import('./pending-invitation-cancel.mjs');
 await testPendingInvitationCancel({db,as,svc,hash,t,assert,rejects});
+const {testCancelSubscription}=await import('./cancel-subscription.mjs');
+await testCancelSubscription({db,as,svc,hash,t,assert,rejects});
 console.log(`\n${pass} bestået, ${fail} fejlet`);
 process.exit(fail ? 1 : 0);
