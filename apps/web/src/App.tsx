@@ -210,7 +210,7 @@ export function App() {
       {session && renameContacts && <ContactAliasDialog key={`alias:${session.user.id}`} lang={lang} contacts={renameContacts}
         close={() => setRenameContacts(null)} save={async (id, alias, pending) => { const uid=session.user.id; const { error } = await (pending ? supabase.rpc("set_invitation_alias", { p_invitation: id, p_alias: alias }) : supabase.rpc("set_contact_alias", { p_contact: id, p_alias: alias })).setHeader("Authorization", `Bearer ${session.access_token}`); if (error) throw error; if((await supabase.auth.getSession()).data.session?.user.id!==uid)return; const name=alias.trim()||null; setConv(c => c ? (pending ? (c.pending_invitation_id === id ? { ...c, pending_alias: name } : c) : { ...c, others: c.others.map(o => o.user_id === id ? { ...o, alias:name } : o) }) : c); setHomeKey(k => k + 1); }}
         saved={() => setRenameContacts(null)} />}
-      {sheet === "account" && <SheetView title={da ? "Konto" : "Account"} close={close} lang={lang} anchor={menuButtonRef}><AccountPanel lang={lang} openPrivacy={() => setSheet("privacy")} /></SheetView>}
+      {sheet === "account" && <SheetView title={da ? "Konto" : "Account"} close={close} lang={lang} anchor={menuButtonRef}><AccountPanel lang={lang} openPrivacy={() => setSheet("privacy")} openPlans={() => setSheet("plans")} /></SheetView>}
       {sheet === "newpw" && session && <SheetView title={da ? "Vælg ny adgangskode" : "Choose a new password"} close={close} lang={lang} anchor={menuButtonRef}><NewPassword lang={lang} done={close} /></SheetView>}
       {sheet === "privacy" && <SheetView title={da ? "Privatliv og sletning" : "Privacy and deletion"} close={close} lang={lang} anchor={menuButtonRef}><PrivacyPanel lang={lang} /></SheetView>}
       {sheet === "feedback" && <SheetView title={da ? "Kontakt" : "Contact"} close={close} lang={lang} anchor={menuButtonRef}><FeedbackForm lang={lang} /></SheetView>}
@@ -300,9 +300,9 @@ function Faq({ lang }: { lang: Lang }) {
     ["Hvad kan de andre se om mig?", "Du logger ind med din e-mail. Din e-mail er også det navn, de andre i samtalen ser – du kan ikke selv vælge et andet navn. Hver person kan give dig et privat kaldenavn, som kun de selv ser (hold fingeren på samtalen). Glemt adgangskode: brug linket på login-siden. Skift e-mail eller adgangskode: ⋮ → Konto. Sletning af konto: ⋮ → Konto."],
     ["Hvordan kontakter jeg Rolff?", "Tryk ⋮ → “Kontakt”. Du vælger kategorien Feedback eller Problemer med Rolff-appen og skriver din besked. Det er også sådan, du skriver til kundeservice. Skriv ikke samtaleindhold eller personoplysninger, du ikke vil dele. Beskeden sendes til Rolff med dit bruger-id – ikke dine samtaler."],
     ["Hvordan rapporterer jeg noget?", "Tryk ⋮ i samtalen → “Rapportér”. Du vælger kategori, skriver selv hvad der er sket og kan markere de beskeder, du vil vedhæfte. Du ser en forhåndsvisning, og intet sendes før du bekræfter. Rapporten mailes til Rolffs udvikler (kontakt: nicolaipetersen108@gmail.com) med dit bruger-id. Rolff gemmer kun kategori, tidspunkt og antal vedhæftede beskeder (til at begrænse misbrug) – ikke teksten. Der er ingen døgnvagt og ingen garanti for svar eller handling. Ved akut fare: ring 112."],
-    ["Hvor ligger mine data, og hvor længe?", "På Supabase-servere i Frankfurt (EU). Du vælger selv opbevaring (1 år, 5 år eller ubegrænset) og sky-synk under ⋮ → Privatliv og sletning. Der kan du også downloade alle dine data (ZIP med JSON og CSV). Du sletter din konto under ⋮ → Konto (det sletter alle data i appen og opsiger abonnementet; lav en udskrift først, hvis du vil beholde noget). AI-tonetjekket bruger i testen OpenAI (USA/global behandling, ikke EU; ingen Zero Data Retention endnu; store:false). Læs mere i privatlivspolitikken (⋮ → Privatlivspolitik)."],
+    ["Hvor ligger mine data, og hvor længe?", "På Supabase-servere i Frankfurt (EU). Du vælger selv opbevaring (1 år, 5 år eller ubegrænset) og sky-synk under ⋮ → Privatliv og sletning. Der kan du også downloade alle dine data (ZIP med JSON og CSV). Du sletter din konto under ⋮ → Konto (det sletter alle data med det samme og stopper abonnementet; den resterende periode går tabt, og en eventuel refusion sker via App Store eller Google Play. Lav en udskrift først, hvis du vil beholde noget). Vil du bare stoppe betalingen og beholde kontoen, vælg “Opsig abonnement” under ⋮ → Konto eller Abonnement; så løber planen til periodens slut. AI-tonetjekket bruger i testen OpenAI (USA/global behandling, ikke EU; ingen Zero Data Retention endnu; store:false). Læs mere i privatlivspolitikken (⋮ → Privatlivspolitik)."],
     ["Kan jeg sende billeder og PDF'er?", "Ja, med planen “Premium” (79 kr./md.). Brug papirclipsen til filvalg eller kameraikonet til et nyt billede. Telefonen styrer eventuelle kameratilladelser, når funktionen bruges; filvælgeren giver kun adgang til den valgte fil. En valgt fil sendes først, når du trykker på papirflyet. Du kan sende PNG, JPG, WebP, GIF (ikke animeret) og PDF (højst 4 MB og 5 sider). Du kan sende op til 5 vedhæftninger i døgnet (regnet over de seneste 24 timer). Før filen sendes, tjekker Rolff både billedet og al tekst i det – samme regler som beskeder. Er bare én linje sårende, eller er billedet upassende, bliver filen ikke sendt, og du får at vide hvorfor. Modtagerens blokerede ord gælder også tekst i filen. Under Blokeringer kan du slå fra, at den anden må sende dig fotos eller filer; afsenderen får så at vide, at den type ikke tages imod i samtalen – ikke om en besked er læst eller modtaget. Alle i samtalen kan se vedhæftninger, de modtager, uanset plan. Læsere kan ikke sende filer."],
-    ["Hvad koster Rolff?", "Der er to planer: “Standard” 49 kr./md. med højst 160 tegn pr. besked (én SMS-længde) og “Premium” 79 kr./md. med højst 480 tegn (tre SMS-længder). Planen gælder dig som afsender, så to forældre kan have hver sin plan. Opgradering gælder straks, nedgradering fra næste periode. I testversionen er skiftet en testfunktion uden betaling."],
+    ["Hvad koster Rolff?", "Der er to betalte planer: “Standard” 49 kr./md. med højst 160 tegn pr. besked (én SMS-længde) og “Premium” 79 kr./md. med højst 480 tegn (tre SMS-længder). Planen gælder dig som afsender, så to forældre kan have hver sin plan. Opgradering gælder straks, nedgradering fra næste periode. “Opsig abonnement” (under ⋮ → Konto eller Abonnement) beholder konto og data; planen løber til periodens slut, derefter uden betalt plan (samme muligheder som Standard). “Slet konto” sletter med det samme, og den resterende periode går tabt. I testversionen er skift og opsigelse en testfunktion uden betaling."],
     ["Er det her den rigtige app?", "Nej, det er et testmiljø. Skriv kun opdigtede beskeder. AI-tjekket kører hos OpenAI (se ovenfor)."],
   ] : [
     ["Can I see if my message was received or read?", "No. Rolff never shows whether a message was received or read. That is to protect against pressure and conflicts. You know a message has arrived when you get a reply."],
@@ -321,9 +321,9 @@ function Faq({ lang }: { lang: Lang }) {
     ["What can others see about me?", "You log in with your e-mail. Your e-mail is also the name others in the conversation see – you cannot choose a different name yourself. Each person can give you a private nickname that only they see (press and hold the conversation). Forgot password: use the link on the login page. Change e-mail or password: ⋮ → Account. Account deletion: ⋮ → Account."],
     ["How do I contact Rolff?", "Tap ⋮ → “Contact”. Choose the category Feedback or Problems with the Rolff app and write your message. This is also how you reach customer service. Do not write conversation content or personal data you do not want to share. The message is sent to Rolff with your user id – not your conversations."],
     ["How do I report something?", "Tap ⋮ in the conversation → “Report”. You choose a category, write what happened and can tick the messages you want to attach. You see a preview and nothing is sent until you confirm. The report is e-mailed to Rolff's developer (contact: nicolaipetersen108@gmail.com) with your user id. Rolff stores only category, time and number of attached messages (to limit abuse) – not the text. There is no 24/7 staff and no guarantee of a reply or action. In an emergency: call 112."],
-    ["Where is my data, and for how long?", "On Supabase servers in Frankfurt (EU). You choose retention (1 year, 5 years or unlimited) and cloud sync under ⋮ → Privacy and deletion, where you can also download all your data (ZIP with JSON and CSV). You delete your account under ⋮ → Account (this deletes all data in the app and ends your subscription; make a transcript first if you want to keep anything). The AI tone check uses OpenAI during testing (US/global processing, not EU; no Zero Data Retention yet; store:false). See the privacy policy (⋮ → Privacy policy)."],
+    ["Where is my data, and for how long?", "On Supabase servers in Frankfurt (EU). You choose retention (1 year, 5 years or unlimited) and cloud sync under ⋮ → Privacy and deletion, where you can also download all your data (ZIP with JSON and CSV). You delete your account under ⋮ → Account (this deletes all data immediately and ends the subscription; any remaining paid period is lost, and refunds are handled by the App Store or Google Play. Make a transcript first if you want to keep anything). To stop payment and keep the account, choose “Cancel subscription” under ⋮ → Account or Plan; the plan then runs until the period ends. The AI tone check uses OpenAI during testing (US/global processing, not EU; no Zero Data Retention yet; store:false). See the privacy policy (⋮ → Privacy policy)."],
     ["Can I send images and PDFs?", "Yes, with the “Premium” plan (79 DKK/month). Use the paperclip to choose a file or the camera to take a photo. Your phone manages any camera permission when used; the file picker grants access only to your chosen file. Nothing is sent until you press the paper plane. PNG, JPG, WebP, GIF (not animated) and PDF (max 4 MB, 5 pages). You can send up to 5 attachments per day (counted over the last 24 hours). Before sending, Rolff checks the image and all text in it with the same rules as messages. If one line is hurtful or the image is inappropriate, it is not sent and you are told why. The recipient's blocked words also apply to text in the file. Under Blocking lists you can decline photos or files from the other person; the sender is then told that that type is not accepted in the conversation — not whether a message was read or delivered. Everyone can view attachments they receive, whatever their plan. Readers cannot send files."],
-    ["What does Rolff cost?", "Two plans: “Standard” 49 DKK/month with up to 160 characters per message (one SMS length) and “Premium” 79 DKK/month with up to 480 (three SMS lengths). The plan applies to you as sender, so two parents may have different plans. Upgrades apply immediately, downgrades from the next period. In the test version switching is a test feature without payment."],
+    ["What does Rolff cost?", "Two paid plans: “Standard” 49 DKK/month with up to 160 characters per message (one SMS length) and “Premium” 79 DKK/month with up to 480 (three SMS lengths). The plan applies to you as sender, so two parents may have different plans. Upgrades apply immediately, downgrades from the next period. “Cancel subscription” (under ⋮ → Account or Plan) keeps the account and data; the plan runs until the period ends, then you have no paid plan (same capabilities as Standard). “Delete account” deletes immediately, and any remaining period is lost. In the test version switching and cancellation are a test feature without payment."],
     ["Is this the real app?", "No, this is a test environment. Write made-up messages only. The AI check runs at OpenAI (see above)."],
   ];
   const [open, setOpen] = useState<string | null>(null);
@@ -465,8 +465,8 @@ function DeleteAccountSection({ lang, openPrivacy }: { lang: Lang; openPrivacy: 
       <section className="psec danger-card" aria-labelledby="delete">
       <h3 id="delete" className="psec-h">{da ? "Slet konto" : "Delete account"}</h3>
       <p className="meta">{da
-        ? "Sletningen sker med det samme og fjerner din konto og alle data i appen – blandt andet indstillinger, kaldenavne, farver og feedback på serveren samt alt, Rolff har gemt på denne enhed. Det er ikke kun en deaktivering og kan ikke fortrydes. Hvis du vil beholde noget, skal du først lave en udskrift (i samtalen: ⋮ → Eksportér samtale) eller hente en kopi af dine data. Der er endnu ingen betaling via App Store eller Google Play; testabonnementet ophører med kontoen. Hvis du senere har et abonnement via Apple, skal du selv opsige det hos Apple (Indstillinger eller apps.apple.com/account/subscriptions), ellers kan betalingen fortsætte. Via Google Play: Play Butik → Betalinger og abonnementer."
-        : "Deletion is immediate and removes your account and all data in the app – including settings, nicknames, colours and feedback on the server, plus everything Rolff stored on this device. This is not a mere deactivation and cannot be undone. If you want to keep anything, first make a transcript (in the conversation: ⋮ → Export conversation) or download a copy of your data. There is not yet any App Store or Google Play billing; the test plan ends with the account. If you later have a subscription billed by Apple, you must cancel it with Apple (Settings or apps.apple.com/account/subscriptions), or billing may continue. Via Google Play: Play Store → Payments & subscriptions."}</p>
+        ? "Sletningen sker med det samme og fjerner din konto og alle data i appen – blandt andet indstillinger, kaldenavne, farver og feedback på serveren samt alt, Rolff har gemt på denne enhed. Det er ikke kun en deaktivering og kan ikke fortrydes. Den resterende periode på et betalt abonnement går tabt. En eventuel refusion sker via App Store eller Google Play; Rolff kan ikke betale beløbet tilbage. Vil du beholde kontoen og bruge perioden færdig, så vælg i stedet “Opsig abonnement”. Hvis du vil beholde noget, skal du først lave en udskrift (i samtalen: ⋮ → Eksportér samtale) eller hente en kopi af dine data. Der er endnu ingen betaling via App Store eller Google Play; testabonnementet ophører med kontoen. Hvis du senere har et abonnement via Apple, skal du selv opsige det hos Apple (Indstillinger eller apps.apple.com/account/subscriptions), ellers kan betalingen fortsætte. Via Google Play: Play Butik → Betalinger og abonnementer."
+        : "Deletion is immediate and removes your account and all data in the app – including settings, nicknames, colours and feedback on the server, plus everything Rolff stored on this device. This is not a mere deactivation and cannot be undone. Any remaining paid period is lost. Refunds are handled by the App Store or Google Play; Rolff cannot refund the amount. To keep the account and finish the period, choose “Cancel subscription” instead. If you want to keep anything, first make a transcript (in the conversation: ⋮ → Export conversation) or download a copy of your data. There is not yet any App Store or Google Play billing; the test plan ends with the account. If you later have a subscription billed by Apple, you must cancel it with Apple (Settings or apps.apple.com/account/subscriptions), or billing may continue. Via Google Play: Play Store → Payments & subscriptions."}</p>
       <p className="account-delete-export"><button type="button" className="textbtn strong" onClick={openPrivacy}>{da ? "Hent mine data først" : "Download my data first"}</button></p>
       <p className="notice">{evidenceNote(lang)}</p>
       <form noValidate onSubmit={del}>
@@ -1364,7 +1364,7 @@ function NewPassword({ lang, done }: { lang: Lang; done: () => void }) {
   </form>);
 }
 
-function AccountPanel({ lang, openPrivacy }: { lang: Lang; openPrivacy: () => void }) {
+function AccountPanel({ lang, openPrivacy, openPlans }: { lang: Lang; openPrivacy: () => void; openPlans: () => void }) {
   const da = lang === "da";
   const [email, setEmail] = useState("");
   useEffect(() => { supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? "")); }, []);
@@ -1413,6 +1413,7 @@ function AccountPanel({ lang, openPrivacy }: { lang: Lang; openPrivacy: () => vo
       {eMsg && <p className={eMsg[0] ? "notice" : "err"} role={eMsg[0] ? "status" : "alert"}>{eMsg[1]}</p>}
       <button type="submit" disabled={busy}>{da ? "Skift e-mail" : "Change email"}</button>
     </form>
+    <SubscriptionManage lang={lang} openPlans={openPlans} />
     <DeleteAccountSection lang={lang} openPrivacy={openPrivacy} />
   </>);
 }
@@ -1424,6 +1425,61 @@ export const PLANS = [
   { id: "text", price: 49, da: ["Standard", "Op til 160 tegn pr. besked med AI-tonetjek og samtale med den anden forælder. Du kan se vedhæftninger og deltage, når andre tilføjer dig."], en: ["Standard", "Up to 160 characters per message with AI tone check. You can view attachments others send."] },
   { id: "text_attachments", price: 79, da: ["Premium", "Op til 480 tegn pr. besked, og du kan sende screenshots, billeder og PDF'er (tjekket af AI før afsendelse) og tilføje ekstra personer til samtaler."], en: ["Premium", "Up to 480 characters per message, plus sending screenshots, images and PDFs (checked by AI before sending) and adding extra people to conversations."] },
 ] as const;
+const PAID_PLANS = new Set(["text", "text_attachments"]);
+export const planName = (id: string, da: boolean) => id === "free" ? (da ? "Ingen betalt plan" : "No paid plan") : ((PLANS.find((x) => x.id === id)?.[da ? "da" : "en"] ?? [id])[0]);
+const planEndLabel = (iso: string, da: boolean) => new Date(iso).toLocaleDateString(da ? "da-DK" : "en-GB", { dateStyle: "long" });
+type MyPlan = { plan: string; pending_plan: string | null; period_end: string | null; test_switch: boolean };
+
+function SubscriptionManage({ lang, openPlans, plan, onChange }: { lang: Lang; openPlans?: () => void; plan?: MyPlan | null; onChange?: () => void }) {
+  const da = lang === "da";
+  const [own, setOwn] = useState<MyPlan | null>(null);
+  const [err, setErr] = useState(""); const [busy, setBusy] = useState(false);
+  const load = () => supabase.rpc("get_my_plan").then(({ data }) => { setOwn(data?.[0] ?? null); onChange?.(); });
+  useEffect(() => { if (!plan) load(); }, [plan]);
+  const p = plan ?? own;
+  const cancelling = p?.pending_plan === "free";
+  const paid = !!p && PAID_PLANS.has(p.plan);
+  const cancel = async () => {
+    if (!p || busy) return;
+    const when = p.period_end ? planEndLabel(p.period_end, da) : (da ? "periodens slut" : "the end of the period");
+    const ok = await confirmDialog({
+      title: da ? "Opsig abonnement?" : "Cancel subscription?",
+      body: da
+        ? `Konto og data bliver. ${planName(p.plan, true)} løber til ${when}. Derefter har du ingen betalt plan (samme muligheder som Standard). Du kan fortryde med “Genoptag abonnement” indtil den dato. Der er endnu ingen betaling via App Store eller Google Play. Når der er, opsiges et butiks-abonnement typisk i butikkens indstillinger.`
+        : `The account and data are kept. ${planName(p.plan, false)} runs until ${when}. After that you have no paid plan (the same capabilities as Standard). You can undo with “Resume subscription” until that date. There is not yet any App Store or Google Play billing. When there is, a store subscription is typically cancelled in the store’s settings.`,
+      confirm: da ? "Opsig abonnement" : "Cancel subscription",
+    });
+    if (!ok) return;
+    setBusy(true); setErr("");
+    const r = await supabase.rpc("cancel_my_subscription"); setBusy(false);
+    if (r.error) { setErr(da ? "Abonnementet kunne ikke opsiges. Prøv igen." : "Could not cancel the subscription. Try again."); return; }
+    const d = r.data?.[0]; await load();
+    const end = d?.period_end ? planEndLabel(d.period_end, da) : when;
+    showToast(da ? `Dit abonnement udløber ${end}.` : `Your subscription ends on ${end}.`, { tone: "success", ms: PLAN_TOAST_MS });
+  };
+  const resume = async () => {
+    if (busy) return;
+    setBusy(true); setErr("");
+    const r = await supabase.rpc("resume_my_subscription"); setBusy(false);
+    if (r.error) { setErr(da ? "Abonnementet kunne ikke genoptages. Prøv igen." : "Could not resume the subscription. Try again."); return; }
+    await load();
+    showToast(da ? "Abonnementet er genoptaget." : "The subscription has been resumed.", { tone: "success", ms: PLAN_TOAST_MS });
+  };
+  if (!p) return null;
+  if (!paid && !cancelling) {
+    return openPlans ? <div className="sub-manage"><p className="meta">{da ? "Du har intet betalt abonnement." : "You have no paid subscription."} {openPlans && <button type="button" className="textbtn strong" onClick={openPlans}>{da ? "Vælg en plan" : "Choose a plan"}</button>}</p></div> : null;
+  }
+  return (
+    <div className="sub-manage">
+      <h2>{da ? "Abonnement" : "Subscription"}</h2>
+      {cancelling && p.period_end && <p className="notice" role="status">{da ? `Dit abonnement udløber ${planEndLabel(p.period_end, da)}.` : `Your subscription ends on ${planEndLabel(p.period_end, da)}.`}</p>}
+      {cancelling && <button type="button" className="ghost" disabled={busy} onClick={resume}>{da ? "Genoptag abonnement" : "Resume subscription"}</button>}
+      {paid && !cancelling && <button type="button" disabled={busy} onClick={() => void cancel()}>{da ? "Opsig abonnement" : "Cancel subscription"}</button>}
+      {err && <p className="err" role="alert">{err}</p>}
+    </div>
+  );
+}
+
 function Plans({ lang }: { lang: Lang }) {
   const da = lang === "da";
   const [p, setP] = useState<{ plan: string; pending_plan: string | null; period_end: string | null; test_switch: boolean } | null>(null);
@@ -1440,11 +1496,11 @@ function Plans({ lang }: { lang: Lang }) {
       : (da ? "Planen er skiftet." : "Plan changed."), { tone: "success", ms: PLAN_TOAST_MS });
   };
   if (!p) return <p className="meta" role="status">{da ? "Henter…" : "Loading…"}</p>;
-  const name = (id: string) => (PLANS.find((x) => x.id === id)![da ? "da" : "en"])[0];
+  const name = (id: string) => planName(id, da);
   return (<div>
     <div className="notice" role="note"><strong>{da ? "TESTFUNKTION – ingen betaling." : "TEST FEATURE – no payment."}</strong> {da ? "Du kan skifte frit for at prøve planerne. Der trækkes ingen penge, og der er ikke koblet betaling på endnu." : "Switch freely to try the plans. Nothing is charged; no payment is connected yet."}</div>
     <div className="plans" role="list">
-      {PLANS.map((x) => { const cur = p.plan === x.id; const [title, desc] = x[da ? "da" : "en"]; return (
+      {PLANS.map((x) => { const cur = p.plan === x.id; const [title, desc] = x[da ? "da" : "en"]; const action = p.plan === "free" ? (da ? "Vælg (test)" : "Choose (test)") : x.id === "text_attachments" ? (da ? "Opgradér (test)" : "Upgrade (test)") : (da ? "Nedgradér (test)" : "Downgrade (test)"); return (
         <section key={x.id} role="listitem" className={`card plan${cur ? " current" : ""}`} aria-current={cur ? "true" : undefined} aria-labelledby={`plan-${x.id}`}>
           {/* Quiet label, not a button. The other card gets an invisible spacer so the titles line up. */}
           {cur ? <span className="plan-badge">{da ? "Din plan" : "Your plan"}</span> : <span className="plan-badge plan-badge-spacer" aria-hidden="true">{da ? "Din plan" : "Your plan"}</span>}
@@ -1453,15 +1509,16 @@ function Plans({ lang }: { lang: Lang }) {
           <p className="meta">{desc}</p>
           <div className="plan-foot">
             {p.pending_plan === x.id && <p className="meta">{da ? "Skifter hertil ved næste periode." : "Switches here next period."}</p>}
-            {!cur && <button disabled={busy || !p.test_switch} onClick={() => change(x.id)}>{x.id === "text_attachments" ? (da ? "Opgradér (test)" : "Upgrade (test)") : (da ? "Nedgradér (test)" : "Downgrade (test)")}</button>}
+            {!cur && <button disabled={busy || !p.test_switch} onClick={() => change(x.id)}>{action}</button>}
           </div>
         </section>); })}
     </div>
-    {p.pending_plan && <div className="row"><button className="ghost" disabled={busy} onClick={() => change(p.plan)}>{da ? `Behold ${name(p.plan)}` : `Keep ${name(p.plan)}`}</button>
+    {p.pending_plan && p.pending_plan !== "free" && <div className="row"><button className="ghost" disabled={busy} onClick={() => change(p.plan)}>{da ? `Behold ${name(p.plan)}` : `Keep ${name(p.plan)}`}</button>
       <button className="ghost" disabled={busy} onClick={() => change(p.pending_plan!, true)}>{da ? "Skift straks (kun test)" : "Switch now (test only)"}</button></div>}
+    <SubscriptionManage lang={lang} plan={p} onChange={load} />
     <p className="meta plan-rule">{da ? "Opgradering gælder med det samme. Nedgradering gælder fra næste periode." : "Upgrades apply right away. Downgrades apply from the next period."}</p>
     <p className="meta plan-rule">{da ? "Planen gælder kun dig – den anden forælder kan have en anden plan, og alle kan altid se vedhæftninger, de modtager." : "The plan only applies to you – the other parent may have a different plan, and everyone can always see attachments they receive."}</p>
-    {p.pending_plan && p.period_end && <p className="meta">{da ? "Periode slutter" : "Period ends"}: {new Date(p.period_end).toLocaleDateString(da ? "da-DK" : "en-GB", { dateStyle: "long" })}</p>}
+    {p.pending_plan && p.pending_plan !== "free" && p.period_end && <p className="meta">{da ? "Periode slutter" : "Period ends"}: {planEndLabel(p.period_end, da)}</p>}
     {err && <p className="notice" role="alert">{err}</p>}
   </div>);
 }

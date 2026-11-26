@@ -56,3 +56,25 @@ test('period end is shown only while a downgrade is pending (da)', async () => {
     assert.match(d.body.textContent, /Skifter hertil ved næste periode\./);
   } finally { await f.close(); }
 });
+
+test('Opsig abonnement on the Abonnement sheet keeps the account and shows the end date', async () => {
+  const f = await env(); const { d, w } = f; try {
+    const plans = await openPlans(f);
+    const sheet = d.querySelector('.sheet'); const cancel = [...sheet.querySelectorAll('button')].find(b => b.textContent.trim() === 'Opsig abonnement');
+    assert.ok(cancel, 'cancel on plans sheet');
+    await click(cancel); await delay(60);
+    const card = d.querySelector('.confirm-card'); assert.ok(card);
+    assert.match(card.textContent, /Konto og data bliver/);
+    assert.match(card.textContent, /9\. december 2026/);
+    const ok = [...card.querySelectorAll('button')].find(b => b.textContent.trim() === 'Opsig abonnement');
+    await click(ok); await delay(80);
+    assert.ok(w.QA.calls.some(c => c.name === 'cancel_my_subscription'));
+    assert.match(d.body.textContent, /Dit abonnement udløber 9\. december 2026/);
+    assert.ok(!/Periode slutter/.test(d.body.textContent), 'free pending uses the cancel wording, not the plan-switch line');
+    const resume = [...d.querySelectorAll('button')].find(b => b.textContent.trim() === 'Genoptag abonnement');
+    assert.ok(resume); await click(resume); await delay(80);
+    assert.ok(w.QA.calls.some(c => c.name === 'resume_my_subscription'));
+    assert.match(d.body.textContent, /Abonnementet er genoptaget/);
+    assert.ok([...d.querySelectorAll('button')].some(b => b.textContent.trim() === 'Opsig abonnement'));
+  } finally { await f.close(); }
+});
