@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import { CardSkeleton } from "./CardSkeleton";
+import { peekCard, putCard } from "./cardCache";
 import { pushBuildEnabled, pushController, supportedPush } from "./push";
 import type { PushState } from "./pushController";
 import type { Lang } from "./i18n";
@@ -10,8 +12,8 @@ const errors:Record<string,[string,string]>={
  unavailable:["Notifikationer er ikke tilgængelige endnu.","Notifications are not available yet."],
 };
 export function PushSettings({uid,lang,onboarding=false}:{uid:string;lang:Lang;onboarding?:boolean}){
- const da=lang==="da",[state,setState]=useState<PushState|null>(null),[active,setActive]=useState(false),[binding,setBinding]=useState<string|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(""),[dismissed,setDismissed]=useState(false);
- const load=useCallback(async()=>{if(!pushBuildEnabled)return;try{const r=await pushController.state();setState(r.state);setActive(r.active);setBinding(r.binding??null);}catch{setState(null);setError(da?"Status kunne ikke hentes. Prøv igen senere.":"Could not load status. Try again later.");}},[uid,da]);
+ const da=lang==="da",cached=peekCard<{state:PushState;active:boolean;binding:string|null}>(`push:${uid}`),[state,setState]=useState<PushState|null>(cached?.state??null),[active,setActive]=useState(cached?.active??false),[binding,setBinding]=useState<string|null>(cached?.binding??null),[busy,setBusy]=useState(false),[error,setError]=useState(""),[dismissed,setDismissed]=useState(false);
+ const load=useCallback(async()=>{if(!pushBuildEnabled)return;try{const r=await pushController.state();putCard(`push:${uid}`,{state:r.state,active:r.active,binding:r.binding??null});setState(r.state);setActive(r.active);setBinding(r.binding??null);}catch{setState(null);setError(da?"Status kunne ikke hentes. Prøv igen senere.":"Could not load status. Try again later.");}},[uid,da]);
  useEffect(()=>{let live=true; // component is owner-keyed; controller also fences every await
    if(live)void load();const update=()=>{if(live)void load();};
    navigator.serviceWorker?.addEventListener("message",update);window.addEventListener("focus",update);
@@ -20,7 +22,7 @@ export function PushSettings({uid,lang,onboarding=false}:{uid:string;lang:Lang;o
  const perform=async(fn:()=>Promise<void>)=>{setBusy(true);setError("");try{await fn();await load();}catch(e){const code=e instanceof Error?e.message:"";setError(errors[code]?.[da?0:1]??(da?"Ændringen kunne ikke bekræftes på serveren. Prøv igen senere.":"The change could not be confirmed on the server. Try again later."));setActive(false);}finally{setBusy(false);}};
  if(onboarding && (!pushBuildEnabled || !state?.available || state.offered || dismissed))return null;
  if(!pushBuildEnabled || (state && !state.available))return <p role="status">{errors.unavailable[da?0:1]}</p>;
- if(!state)return <p role="status">{error||(da?"Henter status…":"Loading status…")}</p>;
+ if(!state)return error?<p role="status">{error}</p>:<CardSkeleton lang={lang} label={da?"Henter status…":"Loading status…"} minHeight={220} rows={[90,75,"gap","button","gap",40]} />;
  const lead=da?"Viser afsenderens navn, men aldrig beskedteksten. Slået fra som standard.":"Shows the sender's name, but never the message text. Off by default.";
  if(onboarding)return <section className="card push-offer" aria-label={da?"Notifikationer":"Notifications"}>
    <h3>{da?"Vil du have besked om nye beskeder?":"Would you like new-message notifications?"}</h3>

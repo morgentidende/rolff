@@ -35,7 +35,7 @@ async function openChat(w, d, messages) {
 
 async function toEnglish(d) {
     await click(label(d, 'Menu'));
-    await click(button(d, 'Sprog'));
+    await click(button(d, 'App-sprog'));
     const en = [...d.querySelectorAll('.sheet .choice')].find((c) => c.textContent.includes('English'));
     assert.ok(en);
     await click(en.querySelector('input'));

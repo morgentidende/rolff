@@ -56,7 +56,7 @@ test('FAQ sheet shows the receipt item and contains no model name (da and en)', 
     await click(close); await delay(40);
 
     await click(label(d, 'Menu'));
-    const it = [...d.querySelectorAll('[role=menuitem]')].find(b => b.textContent.trim() === 'Sprog');
+    const it = [...d.querySelectorAll('[role=menuitem]')].find(b => b.textContent.trim() === 'App-sprog');
     await click(it); await delay(60);
     const langSheet = d.querySelector('.sheet');
     const enChoice = [...langSheet.querySelectorAll('.choice')].find(c => c.textContent.includes('English'));

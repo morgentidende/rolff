@@ -89,7 +89,7 @@ test('FAQ opens only one topic at a time, and the open topic can be closed (da a
     await click(close); await delay(40);
 
     await click(label(d, 'Menu'));
-    const it = [...d.querySelectorAll('[role=menuitem]')].find(b => b.textContent.includes('Sprog') || b.textContent.includes('Language'));
+    const it = [...d.querySelectorAll('[role=menuitem]')].find(b => b.textContent.includes('App-sprog') || b.textContent.includes('App language'));
     await click(it); await delay(60);
     const langSheet = d.querySelector('.sheet');
     const enChoice = [...langSheet.querySelectorAll('.choice')].find(c => c.textContent.includes('English'));

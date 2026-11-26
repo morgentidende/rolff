@@ -3,6 +3,8 @@ import { strings, type Lang } from "./i18n";
 import { supabase } from "./supabase";
 import { detectTimezone, searchTimezones, timezoneLabel } from "./timezones";
 import { daysToWindows, mergeWindows, windowIssues, windowsToDays, type DayState, type WindowIssue } from "./receiveWindows";
+import { peekCard, putCard } from "./cardCache";
+import { CardSkeleton } from "./CardSkeleton";
 import { defaultReceiveWindows, invalidateReceiveTimezone, readReceiveSettings, saveReceiveSettings, syncReceiveTimezone, timezoneDevice, type ReceiveSettingsState, type ReceiveWindow } from "./receiveTimezone";
 const toHM=(m:number)=>`${String(Math.floor(m/60)%24).padStart(2,"0")}:${String(m%60).padStart(2,"0")}`;
 const steps=Array.from({length:96},(_,k)=>k*15);
@@ -22,36 +24,49 @@ function nextRange(ranges:{start_minute:number;end_minute:number}[]) {
 
 export function ReceiveSettings({lang,conv}:{lang:Lang;conv:string;onCancel?:()=>void}) {
   const da=lang==="da", t=strings[lang];
-  const [uid,setUid]=useState(""); const [base,setBase]=useState<ReceiveSettingsState|null>(null);
-  const [enabled,setEnabled]=useState(false), [zone,setZone]=useState(""), [mode,setMode]=useState<"auto"|"fixed">("auto");
-  const [days,setDays]=useState<DayState[]>(windowsToDays([])), [query,setQuery]=useState("");
+  // Opens at once: last known settings (cardCache, fetched when the chat opened) are shown instantly and refreshed
+  // in the background. Saving waits for that fresh read (fail-strict).
+  const cacheKey=`receive:${conv}`;
+  const [cached]=useState(()=>peekCard<{uid:string;s:ReceiveSettingsState}>(cacheKey));
+  const shownWindows=(s:ReceiveSettingsState)=>s.enabled && !s.windows.length ? defaultReceiveWindows() : s.windows;
+  const [uid,setUid]=useState(cached?.uid??""); const [base,setBase]=useState<ReceiveSettingsState|null>(cached?.s??null);
+  const [enabled,setEnabled]=useState(cached?.s.enabled??false), [zone,setZone]=useState(cached?(cached.s.timezone??detectTimezone()??""):""), [mode,setMode]=useState<"auto"|"fixed">(cached?.s.mode??"auto");
+  const [days,setDays]=useState<DayState[]>(()=>windowsToDays(cached?shownWindows(cached.s):[])), [query,setQuery]=useState("");
+  const [fresh,setFresh]=useState(false); const dirty=useRef(false);
   const [takeOver,setTakeOver]=useState(false), [detected,setDetected]=useState<string|null>(detectTimezone);
-  const [loading,setLoading]=useState(true), [busy,setBusy]=useState(false), [conflict,setConflict]=useState(false);
+  const [loading,setLoading]=useState(!cached), [busy,setBusy]=useState(false), [conflict,setConflict]=useState(false);
   const [error,setError]=useState(""), [message,setMessage]=useState(""), [issues,setIssues]=useState<WindowIssue[]>([]), [nudge,setNudge]=useState(false);
   const mounted=useRef(true), saving=useRef(false);
   const windowsFromDays=()=>daysToWindows(days);
   const adopt=(s:ReceiveSettingsState)=>{
-    setBase(s);setEnabled(s.enabled);
-    const raw=s.enabled && !s.windows.length ? defaultReceiveWindows() : s.windows;
-    setDays(windowsToDays(raw));
+    setBase(s);setEnabled(s.enabled);dirty.current=false;
+    setDays(windowsToDays(shownWindows(s)));
     setMode(s.mode);setZone(s.timezone??detectTimezone()??"");setTakeOver(false);setConflict(false);setDetected(detectTimezone());
   };
   const load=async()=>{
-    setLoading(true);setError("");setMessage("");
-    try { const user=(await supabase.auth.getSession()).data.session?.user.id; if(!user) throw new Error("unauthenticated"); await syncReceiveTimezone(user,true,conv); const s=await readReceiveSettings(user,conv); if(mounted.current){setUid(user);adopt(s);} }
-    catch { if(mounted.current) setError(da?"Modtagetiderne kunne ikke hentes. Prøv igen.":"Could not load receiving times. Please try again."); }
+    setFresh(false);if(!base)setLoading(true);setError("");setMessage("");
+    try { const user=(await supabase.auth.getSession()).data.session?.user.id; if(!user) throw new Error("unauthenticated"); await syncReceiveTimezone(user,true,conv); const s=await readReceiveSettings(user,conv); putCard(cacheKey,{uid:user,s});
+      if(mounted.current){
+        setUid(user);
+        if(!dirty.current)adopt(s);
+        // Edited on top of the last known values and the server has something else: never save over it silently.
+        else if(JSON.stringify(s)!==JSON.stringify(base)){setBase(s);setConflict(true);setError(da?"Indstillingerne er ændret på en anden enhed. Hent dem igen, før du gemmer.":"Settings changed on another device. Reload them before saving.");}
+        else setBase(s);
+        setFresh(true);
+      } }
+    catch { if(mounted.current){ setBase(null); setError(da?"Modtagetiderne kunne ikke hentes. Prøv igen.":"Could not load receiving times. Please try again."); } }
     finally { if(mounted.current)setLoading(false); }
   };
   useEffect(()=>{ mounted.current=true;void load();return()=>{mounted.current=false;}; },[conv]);
-  const changed=()=>{setMessage("");setError("");setIssues([]);setNudge(false);};
+  const changed=()=>{dirty.current=true;setMessage("");setError("");setIssues([]);setNudge(false);};
   const controllerElsewhere=base?.mode==="auto" && !base.is_controller && !takeOver;
   const requiresDevice=mode==="auto" && !controllerElsewhere;
   const autoAvailable=!!detected && !!uid && !!timezoneDevice(uid);
   const windows=windowsFromDays();
   const needsWindow=enabled && !windows.length;
-  const canSave=!busy&&!conflict&&!!zone&&!(requiresDevice&&!autoAvailable)&&!needsWindow;
+  const canSave=fresh&&!busy&&!conflict&&!!zone&&!(requiresDevice&&!autoAvailable)&&!needsWindow;
   const save=async()=>{
-    if(!base||saving.current||loading)return;
+    if(!base||saving.current||loading||!fresh)return;
     if(enabled&&needsWindow){setNudge(true);return;}
     const found=enabled?windowIssues(windows).filter(x=>x.kind==="same"):[];
     if(found.length){setIssues(found);return;}
@@ -69,6 +84,7 @@ export function ReceiveSettings({lang,conv}:{lang:Lang;conv:string;onCancel?:()=
       const timezone=mode==="auto"&&!controllerElsewhere&&detected?detected:zone;
       const result=await saveReceiveSettings(uid,conv,base,{enabled,windows:toSave,mode,timezone,takeOver});
       invalidateReceiveTimezone(uid);
+      putCard(cacheKey,{uid,s:result});
       if(mounted.current){adopt(result);setMessage(t.saved);setQuery("");}
     } catch(e) {
       if(mounted.current){const isConflict=/settings_conflict|timezone_control_required|timezone_not_controller/.test(String((e as {message?:string})?.message??e));setConflict(isConflict);setError(isConflict?(da?"Indstillingerne er ændret på en anden enhed. Hent dem igen, før du gemmer.":"Settings changed on another device. Reload them before saving."):(da?"Vi kunne ikke bekræfte, at modtagetiderne blev gemt. Prøv igen.":"We could not confirm that receiving times were saved. Please try again."));}
@@ -84,7 +100,7 @@ export function ReceiveSettings({lang,conv}:{lang:Lang;conv:string;onCancel?:()=
     changed();
   };
   const results=searchTimezones(query,zone,lang);
-  if(loading)return <p role="status">{da?"Henter modtagetider…":"Loading receiving times…"}</p>;
+  if(loading)return <CardSkeleton lang={lang} label={da?"Henter modtagetider…":"Loading receiving times…"} minHeight={500} rows={[60,"gap",90,90,90,90,90,90,90,"gap",45,80,"gap","button"]} />;
   if(!base)return <><p className="err" role="alert">{error}</p><button type="button" onClick={()=>void load()}>{da?"Prøv igen":"Try again"}</button></>;
   return <div className="times">
     <fieldset className="receive-fields" disabled={busy}>
@@ -131,6 +147,6 @@ export function ReceiveSettings({lang,conv}:{lang:Lang;conv:string;onCancel?:()=
       </div>
       {message&&<p className="meta times-saved" role="status">{message}</p>}
     </fieldset>
-    {error&&<p className="err" role="alert">{error}</p>}{conflict&&<button type="button" className="ghost" onClick={()=>void load()}>{da?"Hent gemte indstillinger":"Reload saved settings"}</button>}
+    {error&&<p className="err" role="alert">{error}</p>}{conflict&&<button type="button" className="ghost" onClick={()=>{dirty.current=false;void load();}}>{da?"Hent gemte indstillinger":"Reload saved settings"}</button>}
   </div>;
 }

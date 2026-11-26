@@ -2,7 +2,7 @@ import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { useBackLayer } from "./backNavigation";
 import { CardHeader, closeLabel } from "./CardHeader";
-import { useBackdropDismiss, useModalLayer } from "./modalLayer";
+import { useBackdropDismiss, useModalLayer, useUnderChatHeader } from "./modalLayer";
 
 // In-app replacement for window.confirm: Rolff-styled, aria-modal, focus-trapped,
 // Esc / Android back / ✕ = cancel. Promise-based so callers read like confirm().
@@ -33,6 +33,8 @@ function ConfirmView({ req, done }: { req: Req; done: (ok: boolean) => void }) {
   useBackLayer(true, () => done(false));
   useModalLayer(true, layer);
   const backdrop = useBackdropDismiss(() => done(false));
+  // Inside a conversation: same place as every other in-chat card, directly under the chat header.
+  const underHeader = useUnderChatHeader();
   useEffect(() => {
     // Safe default: focus the ✕ (cancel), never the destructive confirm.
     const x = box.current?.querySelector<HTMLButtonElement>(`button[aria-label="${closeLabel()}"]`);
@@ -49,7 +51,7 @@ function ConfirmView({ req, done }: { req: Req; done: (ok: boolean) => void }) {
     e.preventDefault(); f[next].focus();
   };
   return (
-    <div className="overlay confirm-overlay" ref={layer} {...backdrop}>
+    <div className={underHeader !== null ? "overlay confirm-overlay top-overlay" : "overlay confirm-overlay"} ref={layer} style={underHeader !== null ? { paddingTop: underHeader } : undefined} {...backdrop}>
       <div className="confirm-card" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby={req.body ? "confirm-body" : undefined} ref={box} onKeyDown={trap}>
         <CardHeader title={req.title} titleId="confirm-title" onClose={() => done(false)} />
         {req.body && <p id="confirm-body">{req.body}</p>}
