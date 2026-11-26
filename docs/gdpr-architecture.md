@@ -26,15 +26,15 @@ Lokal krypteret kopi   Modtager-enhed (lokal krypteret kopi)
 | Indstilling | Standard | Valg |
 |---|---|---|
 | Lagring | Lokalt på enheden, krypteret (web: IndexedDB, AES-GCM-nøgle fra WebCrypto, ikke-eksporterbar; mobil: Keychain/Keystore) | – |
-| Sky-synk | **Fra** (eksplicit opt-in) | Til/fra. Fra → sky-kopi og synk-nøgle slettes straks |
+| Sky-synk | **Fra** (eksplicit opt-in, kun Premium) | Til/fra på Premium. Fra, eller tab af Premium → sky-kopi og synk-nøgle slettes straks (web-demo: beskeder bliver på serveren). |
 | Opbevaring | **1 år** (loft) | 1 år / 5 år / ubegrænset |
-| Inaktivitet | Sletning efter 90 dage uden login, advarsel 14 og 3 dage før (mail uden indhold) | Kan fravælges |
+| Inaktivitet | Ingen automatisk sletning | – |
 
 Bemærk: lokal kryptering i browseren beskytter mod tilfældig adgang til lagret data, ikke mod en kompromitteret enhed eller browser.
 
 ## 3. Datamodel (ny)
 
-- `user_privacy(user_id pk, cloud_sync bool default false, retention text check in ('1y','5y','unlimited') default '1y', inactivity_delete bool default true, last_seen_at timestamptz, warned_at timestamptz)`
+- `user_privacy(user_id pk, cloud_sync bool default false, retention text check in ('1y','5y','unlimited') default '1y', inactivity_delete bool default false (retired, always false), last_seen_at timestamptz, warned_at timestamptz)`
 - `message_deliveries.fetched_at` (findes delvist) → bruges til "alle har hentet".
 - Synk-nøgle: kun hvis sky-synk: `sync_keys(user_id, wrapped_key bytea)` – nøglen er wrappet på klienten; slettes ved fravalg/sletning.
 
@@ -43,15 +43,15 @@ Bemærk: lokal kryptering i browseren beskytter mod tilfældig adgang til lagret
 | Udløser | Handling |
 |---|---|
 | (a) Bruger sletter konto (⋮ → Slet konto, bekræftelse med tydelig tekst + skriv e-mail) | Edge Function `delete-account` (service role, kun egen bruger): sletter feedback, aliaser, præferencer, synk-nøgle, invitationer oprettet af brugeren, egne beskeder **på serveren**, medlemskaber, og til sidst `auth.users`. Klienten rydder IndexedDB + nøgle. |
-| (b) Inaktivitet | Planlagt job (pg_cron dagligt): advarselsmail (ingen indhold) → sletning som (a). I test: kun bot-adresser. |
+| (b) Inaktivitet | Fjernet. Kontoen slettes ikke automatisk ved inaktivitet. |
 | (c) Art. 17-anmodning | Samme funktion køres af Rolff efter verifikation. |
 | Opbevaringsfrist | Dagligt job sletter serverkopier ældre end den strengeste frist blandt samtalens deltagere; klienten sletter lokalt efter egen frist. |
 
-**Modpartens kopi – BESLUTTET (Nicolai, 2026-11-02): Rolff er en bevis-app.** Når én part sletter (slet-knap, inaktivitet, art. 17), fjernes KUN den slettende parts egne data: egen lokale kopi (localStorage/IndexedDB/cache på enheden), egen sky-kopi, egen synk-nøgle, egne indstillinger/kaldenavne/farver/feedback og auth-brugeren. Modparten beholder fuld adgang til hele samtalen indtil sletningen – uændret (samme beskeder, tekst og tidspunkter; afsender vises som "Slettet bruger"). Beskeder, der var sendt men endnu ikke leveret pga. modpartens modtagetider, leveres stadig. Samtaler uden andre aktive medlemmer slettes helt.
+**Modpartens kopi – BESLUTTET (Nicolai, 2026-11-02): Rolff er en bevis-app.** Når én part sletter (slet-knap, art. 17), fjernes KUN den slettende parts egne data: egen lokale kopi (localStorage/IndexedDB/cache på enheden), egen sky-kopi, egen synk-nøgle, egne indstillinger/kaldenavne/farver/feedback og auth-brugeren. Modparten beholder fuld adgang til hele samtalen indtil sletningen – uændret (samme beskeder, tekst og tidspunkter; afsender vises som "Slettet bruger"). Beskeder, der var sendt men endnu ikke leveret pga. modpartens modtagetider, leveres stadig. Samtaler uden andre aktive medlemmer slettes helt.
 
 Server/sky-model: I dag ligger hver besked som én serverrække, som alle medlemmer læser via `get_messages`; sletning nulstiller kun `sender_id` (FK `on delete set null`) og fjerner den slettendes medlemskab – den slettende mister adgang, modparten mister intet. Når lokal kryptering og sky-synk (trin 3/7) bygges, gøres sky-kopier **ejet pr. part** (`(owner_id, message_id)` krypteret med ejerens synk-nøgle), så én parts sletning eller synk-fra kun fjerner ejerens rækker og aldrig rører den andens. Relay-rækken (server-transit) slettes først, når alle modtagere har fået beskeden og deres egen kopi findes.
 
-Det er ikke en ret til at kræve modpartens kopi slettet; det står i privatlivspolitikken og vises kort ved kontooprettelse, invitation og accept samt ved slet-knappen. Inaktivitetssletning: standard til, 90 dage (30/60/90, kan fravælges), advarselsmail uden indhold 14 dage før; i testmiljø kun til adresser på `TEST_MAIL_ALLOW` (bot-indbakken). Kørsel: pg_cron dagligt → pg_net → Edge Function `inactivity-sweep` (beskyttet af `CRON_SECRET`).
+Det er ikke en ret til at kræve modpartens kopi slettet; det står i privatlivspolitikken og vises kort ved kontooprettelse, invitation og accept samt ved slet-knappen. Sky-synk kræver Premium; ved nedgradering eller opsigelse, når perioden slutter, slås det fra med samme virkning som et manuelt fravalg. Automatisk sletning ved inaktivitet er fjernet. Det daglige pg_cron-job kalder stadig Edge Function `inactivity-sweep` (beskyttet af `CRON_SECRET`), som nu kun kører `retention_sweep()`.
 
 Tests: efter sletning må ingen rækker med brugerens id findes i nogen tabel (generisk test over `information_schema`), auth-bruger væk, modpartens samtale stadig gyldig.
 
