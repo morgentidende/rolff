@@ -50,8 +50,10 @@ function rpc(name: string, args: any) {
     if (name === 'get_my_privacy')
         data = [{ inactivity_delete: true, inactivity_days: 90, cloud_sync: false, retention: '1y' }];
     if (name === 'get_my_plan')
-        data = [{ plan: currentPlan, price: currentPlan === 'text' ? 49 : 79, pending_plan: pendingPlan, period_end: '2026-12-09T00:00:00Z', test_switch: true }];
-    if (name === 'set_my_plan_test') { currentPlan = args?.p_plan ?? currentPlan; data = [{ plan: currentPlan, pending_plan: null, period_end: '2026-12-09T00:00:00Z' }]; }
+        data = [{ plan: currentPlan, price: currentPlan === 'text_attachments' ? 79 : currentPlan === 'text' ? 49 : 0, pending_plan: pendingPlan, period_end: '2026-12-09T00:00:00Z', test_switch: true }];
+    if (name === 'set_my_plan_test') { currentPlan = args?.p_plan ?? currentPlan; pendingPlan = null; data = [{ plan: currentPlan, pending_plan: null, period_end: '2026-12-09T00:00:00Z' }]; }
+    if (name === 'cancel_my_subscription') { pendingPlan = 'free'; data = [{ plan: currentPlan, pending_plan: pendingPlan, period_end: '2026-12-09T00:00:00Z' }]; }
+    if (name === 'resume_my_subscription') { pendingPlan = null; data = [{ plan: currentPlan, pending_plan: null, period_end: '2026-12-09T00:00:00Z' }]; }
     if (name === 'get_my_send_limits')
         data = [{ next_at: null }];
     if (name === 'get_messages_v2' || name === 'get_messages_v3')

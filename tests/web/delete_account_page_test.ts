@@ -14,6 +14,12 @@ Deno.test("slet-konto.html is bilingual, names Rolff, and offers in-app + email 
   assertStringIncludes(page, "Delete account, delete all data and cancel subscription");
   assertStringIncludes(page, "slettes med det samme");
   assertStringIncludes(page, "deleted immediately");
+  assertStringIncludes(page, "resterende periode");
+  assertStringIncludes(page, "remaining paid period is lost");
+  assertStringIncludes(page, "Opsig abonnement");
+  assertStringIncludes(page, "Cancel subscription");
+  assertStringIncludes(page, "Rolff kan ikke betale beløbet tilbage");
+  assertStringIncludes(page, "Rolff cannot refund the amount");
   assertStringIncludes(page, "ikke kun en deaktivering");
   assertStringIncludes(page, "not a mere deactivation");
   assertStringIncludes(page, "mailto:nicolaipetersen108@gmail.com");
