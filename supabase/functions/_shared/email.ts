@@ -67,7 +67,7 @@ const logo192 = () => `${appUrl()}icons/rolff-192.png`;
 export function inviteMail(p: { inviterEmail: string; link: string; expires: string; inviteeEmail?: string; lang?: MailLang }) {
   const lang = mailLang(p.lang);
   const subject = lang === "en" ? `${p.inviterEmail} has invited you to Rolff` : `${p.inviterEmail} har inviteret dig til Rolff`;
-  const { html, text } = renderInviteMail({ lang, inviter: p.inviterEmail, invitee: p.inviteeEmail ?? "", link: p.link, expires: fmt(p.expires, lang), logo: logo192(), subject, footerHtml: FOOT_HTML, footerText: TEXT_FOOT });
+  const { html, text } = renderInviteMail({ lang, inviter: p.inviterEmail, invitee: p.inviteeEmail ?? "", link: p.link, expires: fmt(p.expires, lang), logo: logo192(), subject, footerHtml: FOOT_HTML, footerText: TEXT_FOOT, policyUrl: `${appUrl()}privatliv.html` });
   return { subject, html, text };
 }
 

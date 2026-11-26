@@ -2,7 +2,7 @@ export type Lang = "da" | "en";
 const da = {
   tagline: "Rolig, saglig kommunikation mellem mennesker i konflikt.",
   intro: "Til skilsmisser, arvesager, ekskærester, venskaber, retssager og andre situationer, hvor det er svært at tale sammen. Rolff tjekker hver besked før afsendelse og stopper sårende formuleringer. Du bestemmer selv, hvornår du modtager nye beskeder.",
-  ai: "AI-behandling: Din besked og korte uddrag af op til 5 nyere beskeder sendes til en AI-tjeneste (behandling uden for EU; gemning slået fra).",
+  ai: "AI-behandling: Din besked og korte uddrag af op til 5 nyere beskeder sendes til en AI-tjeneste. Uden en aftale om nul-opbevaring kan tjenesten gemme indholdet i op til 30 dage til misbrugskontrol; det bruges ikke til træning.",
   aiAccept: "Jeg forstår og accepterer", email: "E-mail", password: "Adgangskode",
   login: "Log ind", signup: "Opret konto", logout: "Log ud", authError: "Login mislykkedes. Tjek oplysningerne og prøv igen.",
   conversations: "Samtaler", newConv: "Ny samtale", title: "Titel (valgfri)", create: "Opret", join: "Tilslut med invitationskode", code: "Invitationskode",
@@ -21,11 +21,14 @@ const da = {
   testNotice: "TESTVERSION – skriv ikke rigtige eller følsomme oplysninger.",
   demoWarn: "Testversion: Skriv ikke rigtige eller følsomme oplysninger. Beskeder tjekkes før de sendes. Kun korte uddrag sendes. Ingen garanti for drift. Data kan blive slettet.",
   demoAccept: "Jeg forstår, at det er en testversion",
+  age18: "Jeg er fyldt 18 år",
+  privacyPolicy: "Privatlivspolitik",
+  signupChecks: "Sæt alle flueben for at oprette kontoen.",
 };
 const en: typeof da = {
   tagline: "Calm, factual communication between people in conflict.",
   intro: "For divorces, inheritance disputes, ex-partners, friendships, lawsuits and other situations where talking is hard. Rolff checks every message before it is sent and stops hurtful wording. You decide when new messages reach you.",
-  ai: "AI processing: Your message and short excerpts of up to 5 recent messages are sent to an AI service (processed outside the EU; storage turned off).",
+  ai: "AI processing: Your message and short excerpts of up to 5 recent messages are sent to an AI service. Without a zero-retention agreement the service may keep the content for up to 30 days for abuse monitoring; it is not used for training.",
   aiAccept: "I understand and accept", email: "Email", password: "Password",
   login: "Log in", signup: "Create account", logout: "Log out", authError: "Sign-in failed. Check your details and try again.",
   conversations: "Conversations", newConv: "New conversation", title: "Title (optional)", create: "Create", join: "Join with invitation code", code: "Invitation code",
@@ -44,6 +47,9 @@ const en: typeof da = {
   testNotice: "TEST VERSION – do not enter real or sensitive information.",
   demoWarn: "Test version: Do not enter real or sensitive information. Messages are checked before they are sent. Only short excerpts are sent. No uptime guarantee. Data may be deleted.",
   demoAccept: "I understand this is a test version",
+  age18: "I am 18 or older",
+  privacyPolicy: "Privacy policy",
+  signupChecks: "Tick every box to create the account.",
 };
 export const strings = { da, en };
 export const detectLang = (): Lang => (localStorage.getItem("lang") as Lang) || (navigator.language.startsWith("da") ? "da" : "en");

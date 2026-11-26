@@ -42,3 +42,21 @@ Deno.test("privatliv.html points to the public deletion page and states retentio
   assertStringIncludes(policy, "Modpartens kopi af det, du har sendt, beholdes");
   assertStringIncludes(policy, "The other party’s copy of what you sent is kept");
 });
+
+Deno.test("privatliv.html states legal bases, 18+ age, 30-day abuse monitoring and SCC transfer (not DPF)", () => {
+  assertStringIncludes(policy, "CVR: [CVR]");
+  assertStringIncludes(policy, "[postadresse]");
+  assertStringIncludes(policy, "skal godkendes af jurist");
+  assertStringIncludes(policy, "eu.api.openai.com");
+  assertStringIncludes(policy, "30 dage til misbrugskontrol");
+  assertStringIncludes(policy, "up to 30 days for abuse monitoring");
+  assertStringIncludes(policy, "standardkontraktbestemmelser");
+  assertStringIncludes(policy, "standard contractual clauses");
+  assertStringIncludes(policy, "Vi hævder ikke, at OpenAI er certificeret under EU-USA Data Privacy Framework");
+  assertStringIncludes(policy, "We do not claim that OpenAI is certified under the EU-US Data Privacy Framework");
+  assertStringIncludes(policy, "fyldt 18 år");
+  assertStringIncludes(policy, "aged 18 or older");
+  assertStringIncludes(policy, "Tilbagetrækning af samtykke");
+  assert(!/Brugere under 13|Users under 13/.test(policy));
+  assert(!/globale endpoint|global endpoint – processed in the US/.test(policy));
+});

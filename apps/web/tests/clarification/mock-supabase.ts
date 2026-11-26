@@ -82,6 +82,8 @@ export const supabase: any = {
         getSession,
         onAuthStateChange: (f: any) => { listeners.add(f); return { data: { subscription: { unsubscribe: () => listeners.delete(f) } } }; },
         signOut: async () => { changeUser(null); return { error: null }; },
+        signInWithPassword: async (args: any) => { calls.push({ auth: 'signInWithPassword', args }); return { error: null, data: { session, user: session?.user } }; },
+        signUp: async (args: any) => { calls.push({ auth: 'signUp', args }); return { error: null, data: { user: { id: 'new-user', email: args?.email }, session: null } }; },
         verifyOtp: async () => ({ error: null }), getUser: async () => ({ data: { user: session?.user } }),
     }, from: query, rpc,
 };

@@ -20,6 +20,10 @@ for (const lang of ["da", "en"] as const) {
     assertEquals(m.html.split(`href="${link}"`).length - 1, 2, "button + plain fallback link use the token link");
     assert(m.html.includes(`>${link}</a>`));
     assert(m.html.includes(da ? "Hvis du ikke kender afsenderen, kan du ignorere mailen." : "If you do not know the sender, you can ignore this e-mail."));
+    assert(m.html.includes(da ? "berettiget interesse" : "legitimate interest"));
+    assert(m.html.includes(da ? "udløber efter 3 dage" : "expires after 3 days"));
+    assert(m.html.includes('href="https://example.test/privatliv.html"'));
+    assert(m.html.includes(da ? ">Privatlivspolitik</a>" : ">Privacy policy</a>"));
     assert(m.html.includes(da ? "<strong>12. november kl. 16.30</strong>" : "<strong>12 November at 16:30</strong>") || m.html.includes("12. november 16.30") || m.html.includes("12 November, 16:30"), "expiry date");
     assert(m.html.includes("far@x.test"));
   });
@@ -42,6 +46,8 @@ for (const lang of ["da", "en"] as const) {
   Deno.test(`invitation (${lang}): plain-text part`, () => {
     assert(m.text.includes(link) && m.text.includes(da ? "Deltag i chatten:" : "Join the chat:"));
     assert(m.text.includes(da ? "kan du ignorere mailen" : "you can ignore this e-mail"));
+    assert(m.text.includes(da ? "berettiget interesse" : "legitimate interest"));
+    assert(m.text.includes("https://example.test/privatliv.html"));
     assert(m.text.includes("far@x.test") && m.text.includes("Beskeder tjekkes automatisk, før de leveres") && m.text.toLowerCase().includes("messages are checked automatically before delivery"));
     assert(!/<[a-z][^>]*>/i.test(m.text) && !m.text.includes("&amp;"));
   });

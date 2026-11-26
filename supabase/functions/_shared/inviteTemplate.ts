@@ -5,7 +5,7 @@
 export type InviteMailLang = "da" | "en";
 export type InviteMailParts = {
   lang: InviteMailLang; inviter: string; invitee: string; link: string; expires: string; logo: string;
-  subject: string; footerHtml: string; footerText: string;
+  subject: string; footerHtml: string; footerText: string; policyUrl: string;
 };
 export type CopyMailParts = {
   lang: InviteMailLang; invitee: string; expires: string; appUrl: string; logo: string;
@@ -27,6 +27,8 @@ export const INVITE_COPY = {
     sentTo: (e: string) => `Den er sendt til <strong>${e}</strong>, og kun denne mailadresse kan bruge den.`,
     sentToText: (e: string) => `Den er sendt til ${e}, og kun denne mailadresse kan bruge den.`,
     ignore: "Hvis du ikke kender afsenderen, kan du ignorere mailen.",
+    why: "Du får denne mail, fordi en bruger af Rolff har inviteret dig. Vi bruger din e-mail til at sende invitationen (berettiget interesse). Invitationen udløber efter 3 dage.",
+    policy: "Privatlivspolitik",
     tagline: "Rolig chat med respektfuld tone",
     alt: "Rolff logo",
     notice: "Dette er en testversion – brug ikke rigtige eller følsomme oplysninger.",
@@ -54,6 +56,8 @@ export const INVITE_COPY = {
     sentTo: (e: string) => `It was sent to <strong>${e}</strong>, and only this e-mail address can use it.`,
     sentToText: (e: string) => `It was sent to ${e}, and only this e-mail address can use it.`,
     ignore: "If you do not know the sender, you can ignore this e-mail.",
+    why: "You are receiving this e-mail because a Rolff user invited you. We use your e-mail to deliver the invitation (legitimate interest). The invitation expires after 3 days.",
+    policy: "Privacy policy",
     tagline: "Calm chat with a respectful tone",
     alt: "Rolff logo",
     notice: "This is a test version – do not enter real or sensitive information.",
@@ -152,10 +156,10 @@ export function renderInviteMail(p: InviteMailParts): { html: string; text: stri
     bodyHtml: P("tx", "#1d2a2a", 16, 25, 14, L.hi) + P("tx", "#1d2a2a", 16, 25, 14, esc(L.about)) + P("mut", "#5b6b6a", 15, 23, 28, esc(L.step)),
     cta: { label: L.cta, href: p.link },
     belowCtaHtml: `<tr><td class="px" style="padding:20px 40px 8px"><p class="mut" style="margin:0;font-size:13px;line-height:20px;color:#5b6b6a">${esc(L.fallback)}<br><a class="lnk" href="${link}" target="_blank" style="color:#00788A;word-break:break-all">${link}</a></p></td></tr>`,
-    boxHtml: P("tx", "#1d2a2a", 14, 21, 8, `${L.expiry(esc(p.expires))} ${L.sentTo(esc(p.invitee))}`) + P("mut", "#5b6b6a", 14, 21, 0, esc(L.ignore)),
+    boxHtml: P("tx", "#1d2a2a", 14, 21, 8, `${L.expiry(esc(p.expires))} ${L.sentTo(esc(p.invitee))}`) + P("mut", "#5b6b6a", 14, 21, 8, esc(L.why)) + P("mut", "#5b6b6a", 14, 21, 0, `${esc(L.ignore)} <a class="lnk" href="${esc(p.policyUrl)}" target="_blank" style="color:#00788A">${esc(L.policy)}</a>`),
     footerHtml: p.footerHtml,
   });
-  const text = `${unesc(L.headline(esc(p.inviter)))}\n\n${L.hi}\n\n${L.about}\n${L.step}\n\n${L.cta}: ${p.link}\n\n${L.expiryText(p.expires)}\n${L.sentToText(p.invitee)}\n${L.ignore}\n\n${L.notice}\n--\nRolff · ${L.tagline}\n${p.footerText}`;
+  const text = `${unesc(L.headline(esc(p.inviter)))}\n\n${L.hi}\n\n${L.about}\n${L.step}\n\n${L.cta}: ${p.link}\n\n${L.expiryText(p.expires)}\n${L.sentToText(p.invitee)}\n${L.why}\n${L.ignore}\n${L.policy}: ${p.policyUrl}\n\n${L.notice}\n--\nRolff · ${L.tagline}\n${p.footerText}`;
   return { html, text };
 }
 
