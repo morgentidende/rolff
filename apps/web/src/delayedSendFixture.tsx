@@ -35,7 +35,7 @@ function MenuOpen() {
   const da = lang === "da";
   const items = [
     { label: da ? "Forsinkede beskeder" : "Delayed messages", checked: true },
-    { label: da ? "Deltagere og roller" : "Participants and roles" },
+    { label: da ? "Beskedfrekvens" : "Message frequency" },
     { label: da ? "Eksportér samtale" : "Export conversation" },
     { label: da ? "Blokeringer" : "Blocking lists" },
   ];

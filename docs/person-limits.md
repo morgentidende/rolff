@@ -7,7 +7,7 @@
 - Forslag (ikke bygget): en liste pr. person på tværs af samtaler, fx som `person_limits`. Det kræver et tilvalg, så eksisterende samtalelister ikke ændrer betydning.
 
 ## Frekvens pr. person (`person_limits`)
-- Modtagervalgte længdegrænser er fjernet. Kun afsenderens plan bestemmer beskedlængden:160/480 Unicode-tegn for49/79 kr. Ældre `max_chars`-værdier ignoreres; kompatible RPC-signaturer returnerer NULL for længde og ignorerer det gamle input. Eksisterende frekvensindstillinger slettes ikke.
+- Modtagervalgte længdegrænser er fjernet. Kun afsenderens plan bestemmer beskedlængden: 160/480 Unicode-tegn for Standard/Premium (49/79 kr.). Ældre `max_chars`-værdier ignoreres; kompatible RPC-signaturer returnerer NULL for længde og ignorerer det gamle input. Eksisterende frekvensindstillinger slettes ikke.
 - Sættes af **modtageren** for én **afsender** og gælder i alle fælles samtaler. Kan ændres når som helst. Gælder kun nye beskeder.
 - Frekvens: `null` = ingen grænse, forudindstillet 1/5/60 min, brugerdefineret 1–1.440 min (24 t). Glidende vindue fra afsenderens seneste **leverede** besked til modtageren i alle fælles samtaler (via `message_deliveries`). Afviste beskeder gemmes ikke og tæller ikke. Vedhæftninger tæller som en besked.
 - Flere modtagere: den strengeste grænse gælder; UI siger det.

@@ -139,8 +139,8 @@ export function ComposerInput({ lang, text, onText, textareaRef, plan, cap, busy
       alternative={ask.kind === "camera" && showPaperclip && !recipientBlocks.photos ? { label: da ? "Vælg billede i stedet" : "Choose a photo instead", run: () => choose("file") } : undefined} />}
     <dialog className="composer-upgrade" ref={dialog} aria-labelledby="upgrade-title" onCancel={e => { e.preventDefault(); setUpgrade(false); }} onClick={e => { if (e.target === e.currentTarget) setUpgrade(false); }}>
       <h3 id="upgrade-title">{da ? "Vil du dele billeder og filer?" : "Would you like to share photos and files?"}</h3>
-      <p>{da ? "Med planen til 79 kr./md. kan du bruge kameraet, sende vedhæftninger og skrive op til 480 tegn pr. besked." : "With the 79 DKK/month plan you can use the camera, send attachments and write up to 480 characters per message."}</p>
-      <div className="row end"><button type="button" className="ghost" onClick={() => setUpgrade(false)}>{da ? "Måske senere" : "Maybe later"}</button><button type="button" onClick={() => { setUpgrade(false); openPlans(); }}>{da ? "Se planen til 79 kr." : "See the 79 DKK plan"}</button></div>
+      <p>{da ? "Med Premium (79 kr./md.) kan du bruge kameraet, sende vedhæftninger og skrive op til 480 tegn pr. besked." : "With Premium (79 DKK/month) you can use the camera, send attachments and write up to 480 characters per message."}</p>
+      <div className="row end"><button type="button" className="ghost" onClick={() => setUpgrade(false)}>{da ? "Måske senere" : "Maybe later"}</button><button type="button" onClick={() => { setUpgrade(false); openPlans(); }}>{da ? "Se Premium-planen" : "See the Premium plan"}</button></div>
     </dialog>
   </>;
 }
