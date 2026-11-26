@@ -153,7 +153,7 @@ export async function callFn(name: string, args: any) {
         if (mode === 'blocked') return { status: 200, data: { status: 'blocked', reason_code: 'personal_attack', spans: [], suggestion: '', explanation: 'Beskeden kan virke anklagende.' } };
         if (mode === 'blocked_word') return { status: 200, data: { status: 'blocked_word', word: 'syntetisk' } };
         if (mode === 'private_boundary') return { status: 200, data: { status: 'private_boundary' } };
-        if (mode === 'gone') return { status: 409, data: { error: 'no_longer_pending' } };
+        if (mode === 'gone') { const qa = (globalThis as any).__QA_FIXTURE; if (qa?.messages) qa.messages = qa.messages.filter((x: any) => x.id !== args.resume_message_id); return { status: 409, data: { error: 'no_longer_pending' } }; }
         return { status: 503, data: { status: 'technical_error' } };
     }
     if (name === 'invite-email' && args?.action === 'member')
