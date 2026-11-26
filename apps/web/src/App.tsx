@@ -1486,7 +1486,7 @@ export const planName = (id: string, da: boolean) => id === "free" ? (da ? "Inge
 const planEndLabel = (iso: string, da: boolean) => new Date(iso).toLocaleDateString(da ? "da-DK" : "en-GB", { dateStyle: "long" });
 type MyPlan = { plan: string; pending_plan: string | null; period_end: string | null; test_switch: boolean };
 
-function SubscriptionManage({ lang, openPlans, plan, onChange, ready = true }: { lang: Lang; openPlans?: () => void; plan?: MyPlan | null; onChange?: () => void; ready?: boolean }) {
+function SubscriptionManage({ lang, openPlans, plan, onChange, ready = true, hideTitle = false }: { lang: Lang; openPlans?: () => void; plan?: MyPlan | null; onChange?: () => void; ready?: boolean; hideTitle?: boolean }) {
   const da = lang === "da";
   // Shows the last known plan at once (cardCache); cancelling/resuming waits for a fresh server read (fail-strict).
   const [own, setOwn] = useState<MyPlan | null>(() => peekCard<MyPlan | null>("plan") ?? null);
@@ -1500,14 +1500,25 @@ function SubscriptionManage({ lang, openPlans, plan, onChange, ready = true }: {
   const cancel = async () => {
     if (!p || busy || !canAct) return;
     const when = p.period_end ? planEndLabel(p.period_end, da) : (da ? "periodens slut" : "the end of the period");
-    const ok = await confirmDialog({
+    const onPremium = p.plan === "text_attachments";
+    const choice = await confirmDialog({
       title: da ? "Opsig abonnement?" : "Cancel subscription?",
       body: da
-        ? `Konto og data bliver. ${planName(p.plan, true)} løber til ${when}. Derefter har du ingen betalt plan (samme muligheder som Standard). Du kan fortryde med “Genoptag abonnement” indtil den dato. Der er endnu ingen betaling via App Store eller Google Play. Når der er, opsiges et butiks-abonnement typisk i butikkens indstillinger.`
-        : `The account and data are kept. ${planName(p.plan, false)} runs until ${when}. After that you have no paid plan (the same capabilities as Standard). You can undo with “Resume subscription” until that date. There is not yet any App Store or Google Play billing. When there is, a store subscription is typically cancelled in the store’s settings.`,
+        ? `Konto og data bliver. ${planName(p.plan, true)} løber til ${when}. Opsiger du, har du derefter ingen betalt plan (samme muligheder som Standard). Du kan fortryde med “Genoptag abonnement” indtil den dato. Der er endnu ingen betaling via App Store eller Google Play. Når der er, opsiges et butiks-abonnement typisk i butikkens indstillinger.`
+        : `The account and data are kept. ${planName(p.plan, false)} runs until ${when}. If you cancel, you then have no paid plan (the same capabilities as Standard). You can undo with “Resume subscription” until that date. There is not yet any App Store or Google Play billing. When there is, a store subscription is typically cancelled in the store’s settings.`,
       confirm: da ? "Opsig abonnement" : "Cancel subscription",
+      secondary: onPremium ? (da ? "Skift til Standard i stedet" : "Switch to Standard instead") : undefined,
     });
-    if (!ok) return;
+    if (!choice) return;
+    if (choice === "secondary") {
+      setBusy(true); setErr("");
+      const r = await supabase.rpc("set_my_plan_test", { p_plan: "text", p_now: false }); setBusy(false);
+      if (r.error) { setErr(da ? "Planen kunne ikke skiftes. Prøv igen." : "Could not change plan. Try again."); return; }
+      const d = r.data?.[0]; await load();
+      showToast(d?.pending_plan ? (da ? `Skiftet er planlagt og gælder fra ${planEndLabel(d.period_end, da)}.` : `The change is scheduled from ${planEndLabel(d.period_end, da)}.`)
+        : (da ? "Planen er skiftet." : "Plan changed."), { tone: "success", ms: PLAN_TOAST_MS });
+      return;
+    }
     setBusy(true); setErr("");
     const r = await supabase.rpc("cancel_my_subscription"); setBusy(false);
     if (r.error) { setErr(da ? "Abonnementet kunne ikke opsiges. Prøv igen." : "Could not cancel the subscription. Try again."); return; }
@@ -1529,7 +1540,7 @@ function SubscriptionManage({ lang, openPlans, plan, onChange, ready = true }: {
   }
   return (
     <div className="sub-manage">
-      <h2>{da ? "Abonnement" : "Subscription"}</h2>
+      {!hideTitle && <h2>{da ? "Abonnement" : "Subscription"}</h2>}
       {cancelling && p.period_end && <p className="notice" role="status">{da ? `Dit abonnement udløber ${planEndLabel(p.period_end, da)}.` : `Your subscription ends on ${planEndLabel(p.period_end, da)}.`}</p>}
       {cancelling && <button type="button" className="ghost" disabled={busy || !canAct} onClick={resume}>{da ? "Genoptag abonnement" : "Resume subscription"}</button>}
       {paid && !cancelling && <button type="button" disabled={busy || !canAct} onClick={() => void cancel()}>{da ? "Opsig abonnement" : "Cancel subscription"}</button>}
@@ -1564,7 +1575,7 @@ function Plans({ lang }: { lang: Lang }) {
   return (<div>
     <div className="notice" role="note"><strong>{da ? "TESTFUNKTION – ingen betaling." : "TEST FEATURE – no payment."}</strong> {da ? "Du kan skifte frit for at prøve planerne. Der trækkes ingen penge, og der er ikke koblet betaling på endnu." : "Switch freely to try the plans. Nothing is charged; no payment is connected yet."}</div>
     <div className="plans" role="list">
-      {PLANS.map((x) => { const cur = p.plan === x.id; const [title, desc] = x[da ? "da" : "en"]; const action = p.plan === "free" ? (da ? "Vælg (test)" : "Choose (test)") : x.id === "text_attachments" ? (da ? "Opgradér (test)" : "Upgrade (test)") : (da ? "Nedgradér (test)" : "Downgrade (test)"); return (
+      {PLANS.map((x) => { const cur = p.plan === x.id; const [title, desc] = x[da ? "da" : "en"]; const action = x.id === "text_attachments" ? (da ? "Opgradér til Premium" : "Upgrade to Premium") : p.plan === "free" ? (da ? "Vælg Standard" : "Choose Standard") : (da ? "Nedgradér til Standard" : "Downgrade to Standard"); return (
         <section key={x.id} role="listitem" className={`card plan${cur ? " current" : ""}`} aria-current={cur ? "true" : undefined} aria-labelledby={`plan-${x.id}`}>
           {/* Quiet label, not a button. The other card gets an invisible spacer so the titles line up. */}
           {cur ? <span className="plan-badge">{da ? "Din plan" : "Your plan"}</span> : <span className="plan-badge plan-badge-spacer" aria-hidden="true">{da ? "Din plan" : "Your plan"}</span>}
@@ -1579,7 +1590,7 @@ function Plans({ lang }: { lang: Lang }) {
     </div>
     {p.pending_plan && p.pending_plan !== "free" && <div className="row"><button className="ghost" disabled={!fresh || busy} onClick={() => change(p.plan)}>{da ? `Behold ${name(p.plan)}` : `Keep ${name(p.plan)}`}</button>
       <button className="ghost" disabled={!fresh || busy} onClick={() => change(p.pending_plan!, true)}>{da ? "Skift straks (kun test)" : "Switch now (test only)"}</button></div>}
-    <SubscriptionManage lang={lang} plan={p} onChange={load} ready={fresh} />
+    <SubscriptionManage lang={lang} plan={p} onChange={load} ready={fresh} hideTitle />
     <p className="meta plan-rule">{da ? "Opgradering gælder med det samme. Nedgradering gælder fra næste periode." : "Upgrades apply right away. Downgrades apply from the next period."}</p>
     <p className="meta plan-rule">{da ? "Planen gælder kun dig – den anden forælder kan have en anden plan, og alle kan altid se vedhæftninger, de modtager." : "The plan only applies to you – the other parent may have a different plan, and everyone can always see attachments they receive."}</p>
     {p.pending_plan && p.pending_plan !== "free" && p.period_end && <p className="meta">{da ? "Periode slutter" : "Period ends"}: {planEndLabel(p.period_end, da)}</p>}
