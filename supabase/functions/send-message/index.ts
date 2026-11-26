@@ -101,7 +101,7 @@ Deno.serve(async (req) => {
   const blk = await admin.from("conversation_blocks").select("user_id").eq("conversation_id", conv).neq("user_id", uid).limit(1);
   if (blk.error) return json({ status: "technical_error" }, 503);
   if ((blk.data ?? []).length) return json({ status: "cannot_deliver" }, 200);
-  // Rule pre-checks: recipients' private blocked words (only the matched word is returned, never the list), emoji, caps, repeat.
+  // Rule pre-checks: recipients' private blocked words (only the matched word is returned, never the list), emoji, text emoticons, caps, repeat.
   const snapshot = await admin.rpc("recipient_filter_snapshot", { conv, p_sender: uid });
   let policy;
   try { if (snapshot.error) throw new Error(); policy = validateFilterSnapshot(snapshot.data); }
@@ -109,7 +109,8 @@ Deno.serve(async (req) => {
   const hit = checkRules(body, policy.words, ctx.filter((c: any) => c.mine).map((c: any) => c.body));
   if (hit) {
     await admin.rpc("record_attempt", { p_sender: uid, conv, p_decision: "block", p_reason: "rule" });
-    return json(hit.rule === "blocked_word" ? { status: "blocked_word", word: hit.word } : { status: "rule", rule: hit.rule }, 200);
+    const rule = hit.rule === "emoticon" ? "emoji" : hit.rule;
+    return json(hit.rule === "blocked_word" ? { status: "blocked_word", word: hit.word } : { status: "rule", rule, ...(hit.word ? { word: hit.word } : {}) }, 200);
   }
 
   const lang = await resolveSenderLang(input?.lang, async () => (await admin.rpc("locale_of", { p_uid: uid })).data);

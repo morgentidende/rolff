@@ -15,8 +15,8 @@ Deno.test("new tone copy present (da + en)", () => {
     [app, 'controlling_demand: "teksten kan unødigt provokere til vrede"'],
     [app, 'controlling_demand: "the text may needlessly provoke anger"'],
     [app, "Før en besked sendes, vurderer en AI-tjeneste tonen. Bliver"],
-    [app, "beskeder, der kan opfattes som sårende eller unødigt kan provokere til vrede (tjekket af AI), beskeder med emojis"],
-    [app, "messages that may come across as hurtful or needlessly provoke anger (checked by AI), messages with emojis"],
+    [app, "beskeder med emojis eller tekst-smileys som :-) og :("],
+    [app, "messages with emojis or text emoticons such as :-) and :("],
     [priv, "Beskeder kan afvises, hvis tonen kan opfattes som sårende eller unødigt kan provokere til vrede."],
   ] as [string, string][]) if (!s.includes(want)) throw new Error("missing: " + want);
 });
