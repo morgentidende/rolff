@@ -64,7 +64,7 @@ for (const strict of [false, true])
             assertPrivateHistory(w);
             result.push('Native-dialog cancel preserves Chat');
             await click(label(d, 'Vedhæft fil'));
-            await click(button(d, 'Se planen til 79 kr.'));
+            await click(button(d, 'Se Premium-planen'));
             assert.ok(!d.querySelector('dialog[open]'));
             assert.ok(d.querySelector('.sheet'));
             await back(w);
