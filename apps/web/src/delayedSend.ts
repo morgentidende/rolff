@@ -14,6 +14,11 @@ export function isPendingSend(deliverAfter: string | null | undefined, now = Dat
   return pendingRemainingMs(deliverAfter, now) != null;
 }
 
+/** A delayed message the sender has paused (Ret). It must not look like a sent bubble. */
+export function isHeldMessage(m: { mine?: boolean; held?: boolean } | null | undefined): boolean {
+  return !!m && !!m.mine && !!m.held;
+}
+
 /** Visible countdown whole seconds, between 1 and the full delay (a slightly stale clock never shows 31). */
 export function pendingSeconds(deliverAfter: string | null | undefined, now = Date.now()): number | null {
   const ms = pendingRemainingMs(deliverAfter, now);

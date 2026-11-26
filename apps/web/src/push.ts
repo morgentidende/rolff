@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { PushController, type Binding, type PushOwner } from "./pushController";
+import { memoryStore } from "./pushRenew";
 // Build gate on by default; VITE_WEB_PUSH_ENABLED=false hides it. The DB gate (push_runtime) and the
 // worker gate (WEB_PUSH_ENABLED) still decide availability, and every user starts opted out.
 export const pushBuildEnabled=import.meta.env?.VITE_WEB_PUSH_ENABLED!=="false";
@@ -36,10 +37,24 @@ const controller=new PushController({
    const client=createClient(import.meta.env.VITE_SUPABASE_URL,import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false},global:{headers:{Authorization:`Bearer ${owner.token}`}}});
    const {data,error}=await client.rpc(name,args).abortSignal(AbortSignal.timeout(10000));if(error)throw Error("server_failed");return data;
  },
+  now:()=>Date.now(),
+  remember:memoryStore(typeof localStorage==="undefined"?null:localStorage),
 });
 export const pushController=controller;
 export function setPushOwner(owner:PushOwner|null){
  // Always clear an existing local worker binding on logout, even after a disabled build.
- if(pushBuildEnabled)controller.setOwner(owner);
+ if(pushBuildEnabled){controller.setOwner(owner);if(owner)void controller.maybeRenew();}
  else if(!owner && "serviceWorker" in navigator)void navigator.serviceWorker.getRegistration(new URL("./",document.baseURI).href).then(r=>r?.active?.postMessage({type:"IDENTITY",owner:null})).catch(()=>{});
+}
+
+/** Resume/open hook: renew this device quietly. Does not touch React state. */
+let renewalStarted=false;
+export function startPushRenewal(){
+ if(renewalStarted || !pushBuildEnabled || typeof window==="undefined")return;
+ renewalStarted=true;
+ const kick=()=>{if(document.visibilityState==="visible")void controller.maybeRenew();};
+ document.addEventListener("visibilitychange",kick);
+ window.addEventListener("focus",kick);
+ window.addEventListener("pageshow",kick);
+ window.addEventListener("online",kick);
 }

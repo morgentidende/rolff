@@ -27,11 +27,11 @@ test('Kaldenavn: no autofill of own emails, neutral placeholder, two-button row,
   } finally { await fx.close(); }
 });
 
-test('Deltagere og roller: one-line name + role line, compact Indstillinger, separated outlined Forlad with in-app confirm', { timeout: 8000 }, async () => {
+test('Beskedfrekvens: one-line name + role line, compact Indstillinger, separated outlined Forlad with in-app confirm', { timeout: 8000 }, async () => {
   const fx = await env(false); const { w, d } = fx;
   try {
     await click(d.querySelector('.convbtn')); await delay(40);
-    await click(label(d, 'Menu')); await click(button(d, 'Deltagere og roller')); await delay(40);
+    await click(label(d, 'Menu')); await click(button(d, 'Beskedfrekvens')); await delay(40);
     const rows = [...d.querySelectorAll('.member-list > li')]; assert.equal(rows.length, 2);
     assert.deepEqual(rows.map(r => r.querySelector('.member-name').textContent), ['Dig', 'Testkontakt']);
     assert.deepEqual(rows.map(r => r.querySelector('.member-role').textContent), ['Part', 'Part']);
@@ -148,7 +148,7 @@ test('Day separators: I dag / I går / weekday / date, in da and en; tail stays 
   assert.equal(grouped.length, 2);
   assert.deepEqual(grouped.map(g => [g.start, g.msgs.length]), [[0, 2], [2, 1]]);
   const app = src('App.tsx');
-  assert.match(app, /tailed=\{newDay \|\| !sameSender\(msgs\[i - 1\], m\)\}/, 'tail on the first bubble of each group (WhatsApp style), new group per day');
+  assert.match(app, /tailed=\{newDay \|\| !sameSender\(timelineMsgs\[i - 1\], m\)\}/, 'tail on the first bubble of each group (WhatsApp style), new group per day');
   assert.match(app, /className="day-group"/);
   assert.match(app, /className="day-sep" role="separator"/);
   assert.match(css, /\.day-group\{display:flex;flex-direction:column/);

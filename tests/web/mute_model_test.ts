@@ -41,7 +41,9 @@ Deno.test("mute is wired server-side only, owner-only, and never into delivery o
   const app = await Deno.readTextFile("apps/web/src/App.tsx");
   for (const need of ["set_my_conversation_mute", "clear_my_conversation_mute", "my_conversation_mutes", "convmuted", "MutedBellIcon"]) if (!app.includes(need)) throw new Error("app lacks " + need);
   const push = await Deno.readTextFile("apps/web/src/PushSettings.tsx");
-  for (const need of ["Notifikationer på denne telefon", "Notifications on this phone", "Du kan gøre en enkelt samtale lydløs i samtalens menu", "You can mute a single conversation in its menu", "Mere", "More"]) if (!push.includes(need)) throw new Error("push settings lacks " + need);
+  for (const need of ['da?"Notifikationer":"Notifications"', "Du får besked, når der kommer nye beskeder.", "You get notified when new messages arrive.", "Åbn Indstillinger, og tillad notifikationer til Rolff.", "Open Settings and allow notifications for Rolff."]) if (!push.includes(need)) throw new Error("push settings lacks " + need);
+  for (const gone of ["Forny tilmelding nu", "Renew registration now", "fornyes senest", "renews by", "Tilmeldinger udløber efter 90 dage", "Registrations expire after 90 days", "Notifikationer på denne telefon", "Notifications on this phone", "details.more", "omtaler mine forældre"]) if (push.includes(gone)) throw new Error("push settings still has " + gone);
+  for (const need of ["Tilmeldingen fornyes automatisk, mens du bruger appen", "The registration is renewed automatically while you use the app", "Du kan gøre en enkelt samtale lydløs i samtalens menu", "You can mute a single conversation in its menu"]) if (!app.includes(need)) throw new Error("FAQ lacks " + need);
   const dialog = await Deno.readTextFile("apps/web/src/MuteDialog.tsx");
   for (const model of ["ChatGPT", "GPT", "Gemini", "OpenAI"]) if (dialog.includes(model)) throw new Error("model name in mute UI");
   if (/{da \? "Annuller" : "Cancel"}/.test(dialog) || />Annuller</.test(dialog) || />Cancel</.test(dialog)) throw new Error("mute dialog must close with X, not Annuller");
