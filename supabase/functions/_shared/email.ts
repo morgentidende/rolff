@@ -50,17 +50,17 @@ function shell(title: string, inner: string, lang: MailLang = "da") {
 </tr></table></td></tr>
 <tr><td style="padding:14px 28px;background:#fff4d6;border-bottom:1px solid #f0dfa8;font-size:14px;line-height:1.45;color:#5a4300" role="note">${L.banner}</td></tr>
 <tr><td style="padding:28px;font-size:16px;line-height:1.55">${inner}</td></tr>
-<tr><td style="padding:16px 28px 24px;font-size:12px;color:#7a807e;border-top:1px solid #eeeae3"><strong>Testversion.</strong> Skriv ikke rigtige eller følsomme oplysninger. Beskeder tjekkes af OpenAI (USA/global behandling, ikke EU; ingen Zero Data Retention endnu; gemning slået fra). Ingen garanti for drift, og data kan blive slettet.<br><em>Test version. Do not enter real or sensitive information. Messages are checked by OpenAI (US/global processing, not EU; no Zero Data Retention yet; storage turned off). No uptime guarantee; data may be deleted.</em></td></tr>
+<tr><td style="padding:16px 28px 24px;font-size:12px;color:#7a807e;border-top:1px solid #eeeae3"><strong>Testversion.</strong> Skriv ikke rigtige eller følsomme oplysninger. Beskeder tjekkes automatisk, før de leveres. Ingen garanti for drift, og data kan blive slettet.<br><em>Test version. Do not enter real or sensitive information. Messages are checked automatically before delivery. No uptime guarantee; data may be deleted.</em></td></tr>
 </table></td></tr></table></body></html>`;
 }
 
-/** Bilingual test-version footer of the plain-text part (unchanged wording, same in both languages). */
-const TEXT_FOOT = "Rolff (testversion): Skriv ikke rigtige eller følsomme oplysninger. Beskeder tjekkes af OpenAI (USA/global behandling, ikke EU; ingen Zero Data Retention endnu; gemning slået fra). Ingen garanti for drift; data kan blive slettet. / Test version: do not enter real or sensitive information; messages are checked by OpenAI (US/global processing, not EU; no Zero Data Retention yet; storage turned off); no uptime guarantee; data may be deleted.";
+/** Bilingual test-version footer of the plain-text part (Danish first, then English). */
+const TEXT_FOOT = "Rolff (testversion): Skriv ikke rigtige eller følsomme oplysninger. Beskeder tjekkes automatisk, før de leveres. Ingen garanti for drift; data kan blive slettet. / Test version: do not enter real or sensitive information; messages are checked automatically before delivery; no uptime guarantee; data may be deleted.";
 const TESTWARN = "!! Dette er en testversion af Rolff – brug den ikke til rigtige sager eller følsomme oplysninger. !!\n\n";
 const TESTWARN_EN = "!! This is a test version of Rolff – do not use it for real cases or sensitive information. !!\n\n";
 
-/** Legal/test-version footer (wording unchanged; only the layout is calmer): Danish first, then English. */
-const FOOT_HTML = "<strong>Testversion.</strong> Skriv ikke rigtige eller følsomme oplysninger. Beskeder tjekkes af OpenAI (USA/global behandling, ikke EU; ingen Zero Data Retention endnu; gemning slået fra). Ingen garanti for drift, og data kan blive slettet.<br><br><em>Test version. Do not enter real or sensitive information. Messages are checked by OpenAI (US/global processing, not EU; no Zero Data Retention yet; storage turned off). No uptime guarantee; data may be deleted.</em>";
+/** Legal/test-version footer: Danish first, then English. No provider or model name. */
+const FOOT_HTML = "<strong>Testversion.</strong> Skriv ikke rigtige eller følsomme oplysninger. Beskeder tjekkes automatisk, før de leveres. Ingen garanti for drift, og data kan blive slettet.<br><br><em>Test version. Do not enter real or sensitive information. Messages are checked automatically before delivery. No uptime guarantee; data may be deleted.</em>";
 const logo192 = () => `${appUrl()}icons/rolff-192.png`;
 
 /** The real invitation. `inviterEmail` is the inviter's label as shown to others (their e-mail). */

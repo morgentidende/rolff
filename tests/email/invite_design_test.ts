@@ -4,8 +4,8 @@ Deno.env.set("APP_URL", "https://example.test/");
 const E = await import("../../supabase/functions/_shared/email.ts");
 const exp = "2026-11-12T15:30:00Z"; // 16:30 in Copenhagen
 const link = "https://example.test/#invite=abc123";
-const FOOT_DA = "Beskeder tjekkes af OpenAI (USA/global behandling, ikke EU; ingen Zero Data Retention endnu; gemning slået fra). Ingen garanti for drift, og data kan blive slettet.";
-const FOOT_EN = "Messages are checked by OpenAI (US/global processing, not EU; no Zero Data Retention yet; storage turned off). No uptime guarantee; data may be deleted.";
+const FOOT_DA = "Beskeder tjekkes automatisk, før de leveres. Ingen garanti for drift, og data kan blive slettet.";
+const FOOT_EN = "Messages are checked automatically before delivery. No uptime guarantee; data may be deleted.";
 const split = (html: string) => { const i = html.indexOf("Testversion."); assert(i > 0, "footer present"); return { body: html.slice(0, i), foot: html.slice(i) }; };
 
 for (const lang of ["da", "en"] as const) {
@@ -31,9 +31,9 @@ for (const lang of ["da", "en"] as const) {
     assert(m.html.includes('bgcolor="#00788A"'), "brand teal with bgcolor fallback");
     assert(!/<script|<link |<iframe/i.test(m.html) && !/src="http:/.test(m.html));
   });
-  Deno.test(`invitation (${lang}): no model/provider name in the body; footer wording kept; slim notice, no yellow block`, () => {
+  Deno.test(`invitation (${lang}): no model/provider name in body or footer; slim notice, no yellow block`, () => {
     const { body, foot } = split(m.html);
-    assert(!/OpenAI|GPT|Gemini|Zero Data/i.test(body), "provider only in the footer");
+    assert(!/OpenAI|GPT|Gemini|Zero Data|store:false/i.test(m.html + "\n" + m.text), "no provider or model name in the invitation");
     assert(foot.includes(FOOT_DA) && foot.includes(FOOT_EN));
     assert(!m.html.includes("#fff4d6") && !m.html.includes("⚠"));
     assert(m.html.includes(da ? "Dette er en testversion – brug ikke rigtige eller følsomme oplysninger." : "This is a test version – do not enter real or sensitive information."));
@@ -42,7 +42,7 @@ for (const lang of ["da", "en"] as const) {
   Deno.test(`invitation (${lang}): plain-text part`, () => {
     assert(m.text.includes(link) && m.text.includes(da ? "Deltag i chatten:" : "Join the chat:"));
     assert(m.text.includes(da ? "kan du ignorere mailen" : "you can ignore this e-mail"));
-    assert(m.text.includes("far@x.test") && m.text.includes("Beskeder tjekkes af OpenAI") && m.text.toLowerCase().includes("messages are checked by openai"));
+    assert(m.text.includes("far@x.test") && m.text.includes("Beskeder tjekkes automatisk, før de leveres") && m.text.toLowerCase().includes("messages are checked automatically before delivery"));
     assert(!/<[a-z][^>]*>/i.test(m.text) && !m.text.includes("&amp;"));
   });
 
@@ -56,7 +56,7 @@ for (const lang of ["da", "en"] as const) {
     assert(c.html.includes(da ? "Af sikkerhedshensyn er linket kun med i modtagerens mail." : "For security, the link is only in the recipient&#39;s e-mail."));
     assert(c.html.includes("far@x.test") && c.text.includes(da ? "Åbn Rolff: https://example.test/" : "Open Rolff: https://example.test/"));
     const { body, foot } = split(c.html);
-    assert(!/OpenAI/i.test(body) && foot.includes(FOOT_DA) && foot.includes(FOOT_EN) && c.text.includes("Beskeder tjekkes af OpenAI"));
+    assert(!/OpenAI|GPT|Gemini|Zero Data|store:false/i.test(c.html + "\n" + c.text) && foot.includes(FOOT_DA) && foot.includes(FOOT_EN) && c.text.includes("Beskeder tjekkes automatisk, før de leveres"));
     assert(!c.html.includes("#fff4d6") && c.html.includes(da ? "Dette er en testversion" : "This is a test version"));
   });
 }
