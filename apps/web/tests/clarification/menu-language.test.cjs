@@ -11,7 +11,7 @@ async function closeSheet(d) { const x = d.querySelector('.sheet [aria-label="Lu
 
 test('all front-page menu sheets open as a top card anchored to ⋮ (like "Tilføj person")', async () => {
   const f = await env(); const { d } = f; try {
-    for (const name of ['Sprog', 'Tema', 'FAQ', 'Abonnement', 'Konto (e-mail og adgangskode)', 'Privatliv og sletning', 'Feedback', 'Inviter person']) {
+    for (const name of ['Sprog', 'Tema', 'FAQ', 'Abonnement', 'Konto (e-mail og adgangskode)', 'Privatliv og sletning', 'Kontakt', 'Inviter person']) {
       await click(label(d, 'Menu')); const it = items(d).find(b => b.textContent.trim() === name);
       if (!it) { assert.fail(`missing ${name}: ${items(d).map(i => i.textContent).join(', ')}`); }
       await click(it); await delay(60);
@@ -56,15 +56,17 @@ test('language: switching applies at once (menu, html lang, storage) and invitat
     assert.equal(d.querySelector('.sheet h2').textContent, 'Language', 'open sheet re-renders in English without reload');
     await closeSheet(d);
     await click(label(d, 'Menu')); const labels = items(d).map(i => i.textContent.trim()); await click(label(d, 'Menu'));
-    assert.ok(labels.includes('Plan') && labels.includes('Privacy and deletion') && labels.includes('Invite person'), labels.join(', '));
+    assert.ok(labels.includes('Plan') && labels.includes('Privacy and deletion') && labels.includes('Contact') && labels.includes('Invite person'), labels.join(', '));
     assert.equal(await inviteLang('Invite person', /Send|Invite/), 'en');
   } finally { await f.close(); }
 });
 
-test('Feedback: only Forslag/Klage, fixed-size box with 2000 limit and counter', async () => {
+test('Kontakt: only Feedback / Problemer med Rolff-appen, fixed-size box with 2000 limit and counter', async () => {
   const f = await env(); const { w, d } = f; try {
-    const s = await openItem(d, 'Feedback');
-    assert.deepEqual([...s.querySelectorAll('#fc option')].map(o => [o.value, o.textContent]), [['suggestion', 'Forslag'], ['complaint', 'Klage']]);
+    const s = await openItem(d, 'Kontakt');
+    assert.equal(s.getAttribute('aria-label'), 'Kontakt');
+    assert.match(s.textContent, /kundeservice/);
+    assert.deepEqual([...s.querySelectorAll('#fc option')].map(o => [o.value, o.textContent]), [['feedback', 'Feedback'], ['app_problem', 'Problemer med Rolff-appen']]);
     const ta = s.querySelector('#fb'); assert.equal(ta.maxLength, 2000); assert.ok(ta.classList.contains('feedback-text'));
     assert.equal(s.querySelector('#fb-count').textContent, '0/2000'); assert.equal(ta.getAttribute('aria-describedby'), 'fb-count');
     const setter = Object.getOwnPropertyDescriptor(w.HTMLTextAreaElement.prototype, 'value').set; setter.call(ta, 'Hej æøå'); ta.dispatchEvent(new w.Event('input', { bubbles: true })); await delay(20);

@@ -80,13 +80,13 @@ test('Non-credential fields never invite address/email autofill', () => {
   assert.match(bl, /id="blocked-topic"[^>]*autoComplete="off"/);
 });
 
-test('Feedback and Slet konto: tapping an incomplete form explains why and moves focus', { timeout: 8000 }, async () => {
+test('Kontakt and Slet konto: tapping an incomplete form explains why and moves focus', { timeout: 8000 }, async () => {
   const fx = await env(false); const { w, d } = fx;
   try {
-    await click(label(d, 'Menu')); await click(button(d, 'Feedback')); await delay(30);
-    const send = button(d, 'Send feedback'); assert.equal(send.disabled, false); assert.equal(send.getAttribute('aria-disabled'), 'true');
+    await click(label(d, 'Menu')); await click(button(d, 'Kontakt')); await delay(30);
+    const send = button(d, 'Send'); assert.equal(send.disabled, false); assert.equal(send.getAttribute('aria-disabled'), 'true');
     send.closest('form').requestSubmit(); await delay(20);
-    assert.equal(d.getElementById('fb-hint').textContent, 'Skriv din feedback for at sende.'); assert.equal(d.activeElement, d.getElementById('fb'));
+    assert.equal(d.getElementById('fb-hint').textContent, 'Skriv din besked for at sende.'); assert.equal(d.activeElement, d.getElementById('fb'));
     assert.ok(!w.QA.calls.some(c => c.name === 'feedback'));
     await click(d.querySelector('.sheethead button.icon')); await delay(20);
     await click(label(d, 'Menu')); await click(button(d, 'Konto (e-mail og adgangskode)')); await delay(40);

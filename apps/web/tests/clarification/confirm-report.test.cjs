@@ -18,7 +18,7 @@ test('conversation ⋮ menu holds only conversation actions, Rapportér + Bloké
 test('front-page ⋮ keeps every app-wide item', async () => {
   const f = await env(); const { d } = f; try {
     const labels = (await menu(d)).map(b => b.textContent);
-    for (const l of ['Sprog', 'Tema', 'FAQ', 'Abonnement', 'Konto (e-mail og adgangskode)', 'Privatliv og sletning', 'Privatlivspolitik', 'Feedback', 'Inviter person', 'Log ud']) assert.ok(labels.includes(l), l);
+    for (const l of ['Sprog', 'Tema', 'FAQ', 'Abonnement', 'Konto (e-mail og adgangskode)', 'Privatliv og sletning', 'Privatlivspolitik', 'Kontakt', 'Inviter person', 'Log ud']) assert.ok(labels.includes(l), l);
     assert.ok(!labels.includes('Modtagetider'), 'Modtagetider moved to the conversation menu');
   } finally { await f.close(); }
 });

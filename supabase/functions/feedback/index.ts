@@ -1,13 +1,19 @@
-// POST {category: suggestion|complaint, body ≤2000 chars (also a DB check)} (logged-in only, explicit click) -> saves feedback (rate limited in SQL) and mails it to FEEDBACK_TO (server-side env).
+// POST {category: feedback|app_problem (also suggestion|complaint, mapped), body ≤2000 chars (also a DB check)} (logged-in only, explicit click) -> saves feedback (rate limited in SQL) and mails it to FEEDBACK_TO (server-side env).
 // Logs never contain the feedback text.
 import { authed, cors, json } from "../_shared/http.ts";
 import { feedbackMail, sendMail } from "../_shared/email.ts";
 const EMAIL = /^[^\s@<>",;]+@[^\s@<>",;]+\.[^\s@<>",;]+$/;
+const CATEGORIES: Record<string, "feedback" | "app_problem"> = {
+  feedback: "feedback",
+  app_problem: "app_problem",
+  suggestion: "feedback",
+  complaint: "app_problem",
+};
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
   const a = await authed(req); if (a instanceof Response) return a;
   let i: any; try { i = await req.json(); } catch { return json({ error: "bad_request" }, 400); }
-  const category = ["suggestion", "complaint"].includes(i?.category) ? i.category : null;
+  const category = CATEGORIES[i?.category] ?? null;
   if (!category) return json({ error: "bad_input" }, 400);
   const body = String(i?.body ?? "").trim();
   if (!body || [...body].length > 2000) return json({ error: "bad_input" }, 400);
