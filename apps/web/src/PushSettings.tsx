@@ -11,7 +11,6 @@ const errors:Record<string,[string,string]>={
  offline:["Du er offline. Notifikationer er ikke slået til på serveren.","You are offline. Notifications have not been enabled on the server."],
  unavailable:["Notifikationer er ikke tilgængelige endnu.","Notifications are not available yet."],
 };
-const day=(iso:string,da:boolean)=>{try{return new Date(iso).toLocaleDateString(da?"da-DK":"en-GB",{day:"numeric",month:"short",year:"numeric"});}catch{return iso.slice(0,10);}};
 export function PushSettings({uid,lang,onboarding=false}:{uid:string;lang:Lang;onboarding?:boolean}){
  const da=lang==="da",[state,setState]=useState<PushState|null>(null),[active,setActive]=useState(false),[binding,setBinding]=useState<string|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(""),[dismissed,setDismissed]=useState(false);
  const load=useCallback(async()=>{if(!pushBuildEnabled)return;try{const r=await pushController.state();setState(r.state);setActive(r.active);setBinding(r.binding??null);}catch{setState(null);setError(da?"Status kunne ikke hentes. Prøv igen senere.":"Could not load status. Try again later.");}},[uid,da]);
@@ -36,9 +35,7 @@ export function PushSettings({uid,lang,onboarding=false}:{uid:string;lang:Lang;o
    </div>
  </section>;
  const denied=typeof Notification!=="undefined" && Notification.permission==="denied", supported=supportedPush();
- const mine=state.devices.find(d=>d.id===binding);
  const status=active?(da?"Aktiv":"On"):denied?(da?"Blokeret i telefonens indstillinger":"Blocked in your phone settings"):!supported?(da?"Ikke understøttet her":"Not supported here"):(da?"Fra":"Off");
- const renewal=active&&mine?`${da?"Aktiv · fornyes senest":"On · renews by"} ${day(mine.expires_at,da)}`:null;
  const canToggle=!busy&&(active||(supported&&!denied));
  const toggle=()=>void perform(()=>active?pushController.disable():pushController.enable(state));
  const help=denied?deniedHelp("notifications",deviceOf(navigator.userAgent,runtime()),runtime(),da?"da":"en"):null;
@@ -56,14 +53,12 @@ export function PushSettings({uid,lang,onboarding=false}:{uid:string;lang:Lang;o
    {help && <div className="notice push-help" role="status"><strong>{help.title}</strong><ol className="permission-steps">{help.steps.map((x,i)=><li key={i}>{x}</li>)}</ol></div>}
    <details className="more">
      <summary>{da?"Mere":"More"}</summary>
-     {renewal && <p className="push-renewal" role="status">{renewal}</p>}
-     {active && <button type="button" className="text-link push-renew" disabled={busy} onClick={()=>void perform(()=>pushController.enable(state))}>{da?"Forny tilmelding nu":"Renew registration now"}</button>}
      {state.devices.length>0 && <div className="push-devices">
        <h3 className="sheet-subhead">{da?"Tilmeldte enheder":"Registered devices"}</h3>
        <ul className="device-list">{state.devices.map((d,i)=>{const label=`${da?"Enhed":"Device"} ${i+1}`;return <li key={d.id}>
-         <span className="device-text"><span className="device-name">{label}{d.id===binding&&<span className="tag">{da?"Denne enhed":"This device"}</span>}</span><span className="meta">{da?"Udløber":"Expires"} {day(d.expires_at,da)}</span></span>
+         <span className="device-text"><span className="device-name">{label}{d.id===binding&&<span className="tag">{da?"Denne enhed":"This device"}</span>}</span></span>
          <button type="button" className="text-link" disabled={busy} aria-label={`${da?"Fjern":"Remove"} ${label}`} onClick={()=>void perform(()=>pushController.disable(d.id))}>{da?"Fjern":"Remove"}</button></li>;})}</ul>
-       <p className="meta">{da?"Tilmeldinger udløber efter 90 dage. Enheder vises uden navn.":"Registrations expire after 90 days. Devices are shown without names."}</p>
+       <p className="meta">{da?"Tilmeldingen fornyes automatisk, mens du bruger appen. Enheder, der ikke har været brugt i 90 dage, fjernes. Enheder vises uden navn.":"Registration is renewed automatically while you use the app. Devices unused for 90 days are removed. Devices are shown without names."}</p>
      </div>}
      <p>{da?"Notifikationen lyder fx “Ny besked fra Far” og “Åbn Rolff for at læse den.” Navnet er det, du selv har givet personen i Rolff. Har du ikke givet personen et navn, står personens e-mailadresse der i stedet. Navnet kan ses på låseskærmen, men beskedteksten vises aldrig. Når nogen accepterer din invitation, får du fx “Far har accepteret din invitation”.":"The notice reads e.g. “New message from Dad” and “Open Rolff to read it.” The name is the one you gave that person in Rolff. If you have not named them, their e-mail address is shown instead. The name can be seen on the lock screen, but the message text never is. When someone accepts your invitation you get e.g. “Dad accepted your invitation”."}</p>
      <p>{da?"Har du modtagetider slået til, sendes en notifikation først, når beskederne frigives. En notifikation, der allerede er på vej, kan stadig nå frem, selv om du ændrer tider eller slår fra.":"If receive times are on, a notification is only sent once messages are released. A notification already on its way may still arrive after you change times or turn it off."}</p>

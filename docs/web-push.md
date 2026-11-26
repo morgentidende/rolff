@@ -56,8 +56,11 @@ or real message was used. Source-only commit/PR validation is separate from rele
   then expires within 90 days, and cannot display against the new local binding.
 - No endpoint/key client table access. RLS enabled, explicit execute/table grants; RPCs
   derive ownership from auth.uid(), cap eight devices and replace old bindings on renewal.
-  Clients receive only their safe device metadata. Subscriptions expire after 90 days;
-  browser-expired endpoints are removed on 404/410. Re-enable explicitly to renew.
+  Clients receive only their safe device metadata. Subscriptions are renewed automatically
+  while the signed-in app is used (when expiry is within 30 days, at most once per 24 hours,
+  or sooner if the push endpoint or native token changed). They are removed after 90 days
+  without use, as cleanup for unused devices. Browser-expired endpoints are removed on 404/410.
+  After 90 days unused, turn notifications on again to re-enroll.
 - Existing `_release_for(uid,false)` is used, unchanged. Minute sweep advances a bounded
   recipient cursor so closed/locked recipients do not starve everyone after the first 100.
   Existing force-receive stays a separate explicit user action and is NEVER a scheduler
@@ -150,8 +153,8 @@ pending in an arbitrary queue is already a physical send. No further user-level 
 choice is needed for the original voluntary-notification request; real CI/Edge/mobile
 verification and release approval remain outstanding.
 
-Other honest limitations: expired/invalidated subscriptions require an explicit logged-in
-renewal; no background anonymous re-subscribe. There is no unseen-count badge or read
+Other honest limitations: a registration unused for 90 days is removed and then needs an explicit logged-in
+re-enable; there is no background anonymous re-subscribe. While the app is used, renewal is automatic and silent. There is no unseen-count badge or read
 status. A generic notice only means a delivery was released, not that it is unread.
 
 ## Scheduling choice (not provisioned)
