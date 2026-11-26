@@ -144,8 +144,8 @@ export function ComposerInput({ lang, text, onText, textareaRef, plan, cap, busy
     <dialog className="composer-upgrade" ref={dialog} aria-labelledby="upgrade-title" onCancel={e => { e.preventDefault(); setUpgrade(false); }} {...upgradeBackdrop}>
       {upgrade && <>
         <CardHeader title={da ? "Vil du dele billeder og filer?" : "Would you like to share photos and files?"} titleId="upgrade-title" lang={lang} onClose={() => setUpgrade(false)} />
-        <p>{da ? "Med planen til 79 kr./md. kan du bruge kameraet, sende vedhæftninger og skrive op til 480 tegn pr. besked." : "With the 79 DKK/month plan you can use the camera, send attachments and write up to 480 characters per message."}</p>
-        <div className="row end"><button type="button" onClick={() => { setUpgrade(false); openPlans(); }}>{da ? "Se planen til 79 kr." : "See the 79 DKK plan"}</button></div>
+        <p>{da ? "Med Premium (79 kr./md.) kan du bruge kameraet, sende vedhæftninger og skrive op til 480 tegn pr. besked." : "With Premium (79 DKK/month) you can use the camera, send attachments and write up to 480 characters per message."}</p>
+        <div className="row end"><button type="button" onClick={() => { setUpgrade(false); openPlans(); }}>{da ? "Se Premium-planen" : "See the Premium plan"}</button></div>
       </>}
     </dialog>
   </>;

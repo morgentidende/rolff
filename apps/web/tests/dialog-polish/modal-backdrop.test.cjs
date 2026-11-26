@@ -141,8 +141,8 @@ test('inside a chat: Modtagetider and Lydløs hang directly under the chat heade
     await tap(w, d);
     assert.ok(!d.querySelector('.sheet'), 'backdrop tap closes it'); assert.ok(chatOpen(d));
     await delay(400);
-    await click(label(d, 'Menu')); await click(button(d, 'Lydløs'));
-    const mute = d.querySelector('.confirm-overlay.top-overlay'); assert.ok(mute, 'Lydløs is a top card too');
+    await click(label(d, 'Menu')); await click(button(d, 'Slå notifikationer fra'));
+    const mute = d.querySelector('.confirm-overlay.top-overlay'); assert.ok(mute, 'mute dialog is a top card too');
     assert.equal(mute.style.paddingTop, '112px');
     await tap(w, d); assert.ok(!d.querySelector('.confirm-overlay')); assert.ok(chatOpen(d));
     w.Element.prototype.getBoundingClientRect = orig;
@@ -238,10 +238,10 @@ test('every card, sheet, dialog and menu closes on a backdrop tap; the page behi
     assert.ok(chatOpen(d), 'chat opened');
     const back = () => label(d, 'Tilbage');
     await assertBackdropCloses(w, d, 'chat ⋮ menu', '.menu', async () => { await click(label(d, 'Menu')); await delay(20); }, back, seen);
-    await assertBackdropCloses(w, d, 'Lydløs', '.mute-card', () => openMenuItem(d, 'Lydløs'), back, seen);
+    await assertBackdropCloses(w, d, 'Slå notifikationer fra', '.mute-card', () => openMenuItem(d, 'Slå notifikationer fra'), back, seen);
     await assertBackdropCloses(w, d, 'Blokér confirm', '.confirm-card', () => openMenuItem(d, 'Blokér samtale'), back, seen);
     await assertBackdropCloses(w, d, 'Modtagetider', '.sheet', () => openMenuItem(d, 'Modtagetider'), back, seen);
-    await assertBackdropCloses(w, d, 'Deltagere og roller', '.sheet', () => openMenuItem(d, 'Deltagere og roller'), back, seen);
+    await assertBackdropCloses(w, d, 'Beskedfrekvens', '.sheet', () => openMenuItem(d, 'Beskedfrekvens'), back, seen);
     await assertBackdropCloses(w, d, 'Rapportér', '.sheet', () => openMenuItem(d, 'Rapportér'), back, seen);
     await assertBackdropCloses(w, d, 'Eksportér samtale', '.sheet', () => openMenuItem(d, 'Eksportér samtale'), back, seen);
     await assertBackdropCloses(w, d, 'Tilføj person', '.sheet', async () => { await click(label(d, 'Tilføj person')); await delay(40); }, back, seen);

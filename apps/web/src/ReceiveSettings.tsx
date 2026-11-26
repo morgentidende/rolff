@@ -24,7 +24,7 @@ export function ReceiveSettings({lang,conv}:{lang:Lang;conv:string;onCancel?:()=
   const da=lang==="da", t=strings[lang];
   const [uid,setUid]=useState(""); const [base,setBase]=useState<ReceiveSettingsState|null>(null);
   const [enabled,setEnabled]=useState(false), [zone,setZone]=useState(""), [mode,setMode]=useState<"auto"|"fixed">("auto");
-  const [days,setDays]=useState<DayState[]>(windowsToDays([])), [expanded,setExpanded]=useState(false), [query,setQuery]=useState("");
+  const [days,setDays]=useState<DayState[]>(windowsToDays([])), [query,setQuery]=useState("");
   const [takeOver,setTakeOver]=useState(false), [detected,setDetected]=useState<string|null>(detectTimezone);
   const [loading,setLoading]=useState(true), [busy,setBusy]=useState(false), [conflict,setConflict]=useState(false);
   const [error,setError]=useState(""), [message,setMessage]=useState(""), [issues,setIssues]=useState<WindowIssue[]>([]), [nudge,setNudge]=useState(false);
@@ -69,7 +69,7 @@ export function ReceiveSettings({lang,conv}:{lang:Lang;conv:string;onCancel?:()=
       const timezone=mode==="auto"&&!controllerElsewhere&&detected?detected:zone;
       const result=await saveReceiveSettings(uid,conv,base,{enabled,windows:toSave,mode,timezone,takeOver});
       invalidateReceiveTimezone(uid);
-      if(mounted.current){adopt(result);setMessage(t.saved);setExpanded(false);setQuery("");}
+      if(mounted.current){adopt(result);setMessage(t.saved);setQuery("");}
     } catch(e) {
       if(mounted.current){const isConflict=/settings_conflict|timezone_control_required|timezone_not_controller/.test(String((e as {message?:string})?.message??e));setConflict(isConflict);setError(isConflict?(da?"Indstillingerne er ændret på en anden enhed. Hent dem igen, før du gemmer.":"Settings changed on another device. Reload them before saving."):(da?"Vi kunne ikke bekræfte, at modtagetiderne blev gemt. Prøv igen.":"We could not confirm that receiving times were saved. Please try again."));}
     } finally {saving.current=false;if(mounted.current)setBusy(false);}
@@ -83,21 +83,21 @@ export function ReceiveSettings({lang,conv}:{lang:Lang;conv:string;onCancel?:()=
     if(on && !days.some(d=>d.on)) setDays(windowsToDays(defaultReceiveWindows()));
     changed();
   };
-  const results=searchTimezones(query,zone,lang), choices=results.slice(0,80);
+  const results=searchTimezones(query,zone,lang);
   if(loading)return <p role="status">{da?"Henter modtagetider…":"Loading receiving times…"}</p>;
   if(!base)return <><p className="err" role="alert">{error}</p><button type="button" onClick={()=>void load()}>{da?"Prøv igen":"Try again"}</button></>;
   return <div className="times">
     <fieldset className="receive-fields" disabled={busy}>
       <label className="switch"><input type="checkbox" checked={enabled} onChange={e=>toggleEnabled(e.target.checked)}/><span>{t.windowsOn}</span></label>
-      <div className="timezone-summary"><div className="timezone-current"><span className="meta">{t.tz}</span><strong>{timezoneLabel(mode==="auto"&&!controllerElsewhere&&detected?detected:zone,lang)}</strong><span className="timezone-note">{mode==="fixed"?(da?"Fast tidszone. Tryk Skift for at følge telefonen.":"Fixed timezone. Tap Change to follow your phone."):controllerElsewhere?(da?"Følger tidszonen på din anden enhed.":"Follows the timezone on your other device."):(da?"Følger telefonens tidszone, også på rejser. Tryk Skift for at vælge selv.":"Follows your phone’s timezone, also when travelling. Tap Change to choose yourself.")}</span></div><button type="button" className="ghost compact-btn" aria-expanded={expanded} aria-controls="timezone-choices" onClick={()=>setExpanded(!expanded)}>{expanded?(da?"Luk valg":"Close choices"):(da?"Skift":"Change")}</button></div>
-      {expanded && <fieldset id="timezone-choices" className="timezone-choices"><legend>{da?"Vælg tidszone":"Choose timezone"}</legend>
+      <fieldset id="timezone-choices" className="timezone-choices"><legend>{da?"Vælg tidszone":"Choose timezone"}</legend>
         <label className="switch"><input type="radio" name="timezone-mode" value="auto" checked={mode==="auto"} onChange={()=>{setMode("auto");setTakeOver(false);setZone(base.mode==="auto"&&!base.is_controller?(base.timezone??""):(detectTimezone()??""));setDetected(detectTimezone());changed();}}/><span>{da?"Følg denne enheds tidszone":"Follow this device’s timezone"}</span></label>
+        {mode==="auto"&&!controllerElsewhere&&detected&&<p className="meta timezone-detected">{timezoneLabel(detected,lang)}</p>}
         <label className="switch"><input type="radio" name="timezone-mode" value="fixed" checked={mode==="fixed"} onChange={()=>{setMode("fixed");setTakeOver(false);changed();}}/><span>{da?"Brug en fast tidszone":"Use a fixed timezone"}</span></label>
-        {mode==="fixed" && <><label htmlFor="timezone-search">{da?"Søg efter by eller land":"Search for city or country"}</label><input id="timezone-search" name="timezone-search" type="search" autoComplete="off" enterKeyHint="search" value={query} onChange={e=>setQuery(e.target.value)}/><label htmlFor="timezone-results">{da?"Tidszoner":"Timezones"}</label><select id="timezone-results" size={6} value={choices.includes(zone)?zone:""} onChange={e=>{if(e.target.value){setZone(e.target.value);changed();}}}><option value="">{da?"Vælg tidszone…":"Choose timezone…"}</option>{choices.map(z=><option key={z} value={z}>{timezoneLabel(z,lang)}</option>)}</select>{!results.length&&<p role="status">{da?"Ingen tidszoner fundet.":"No timezones found."}</p>}{results.length>80&&<p className="meta">{da?"Søg mere præcist for at se flere tidszoner.":"Refine your search to see more timezones."}</p>}</>}
+        {mode==="fixed" && <><label htmlFor="timezone-search">{da?"Søg efter by eller land":"Search for city or country"}</label><input id="timezone-search" name="timezone-search" type="search" autoComplete="off" enterKeyHint="search" value={query} onChange={e=>setQuery(e.target.value)}/><label htmlFor="timezone-results">{da?"Tidszoner":"Timezones"}</label><select id="timezone-results" size={8} value={results.includes(zone)?zone:""} onChange={e=>{if(e.target.value){setZone(e.target.value);changed();}}}>{results.map(z=><option key={z} value={z}>{timezoneLabel(z,lang)}</option>)}</select>{!results.length&&<p role="status">{da?"Ingen tidszoner fundet.":"No timezones found."}</p>}</>}
         {mode==="auto" && controllerElsewhere && <div className="notice"><p>{da?"Modtagetiderne følger en anden enhed.":"Receiving times follow another device."}</p><button type="button" className="ghost" disabled={!autoAvailable} onClick={()=>{setTakeOver(true);setZone(detected??"");changed();}}>{da?"Brug denne enhed":"Use this device"}</button></div>}
         {mode==="auto"&&takeOver&&<p className="notice">{da?"Denne enhed vil fremover bestemme tidszonen for dine modtagetider. Tryk Gem for at bekræfte.":"This device will control your receiving timezone. Press Save to confirm."}</p>}
-      </fieldset>}
-      {requiresDevice&&!autoAvailable&&<p className="notice">{da?"Vi kunne ikke følge denne enheds tidszone. Vælg en fast tidszone under Skift.":"We could not follow this device’s timezone. Choose a fixed timezone under Change."}</p>}
+      </fieldset>
+      {requiresDevice&&!autoAvailable&&<p className="notice">{da?"Vi kunne ikke følge denne enheds tidszone. Vælg en fast tidszone.":"We could not follow this device’s timezone. Choose a fixed timezone."}</p>}
       {enabled && <div className="daylist" role="list">
         {days.map(day=>{
           const dayName=t.days[day.weekday-1];
