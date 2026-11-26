@@ -66,7 +66,7 @@ test('other reasons are unchanged (explanation + retry line)', async () => {
   const f = await env(); try {
     const box = await send(f, { status: 'blocked', reason_code: 'personal_attack', spans: [], suggestion: '', explanation: 'Tonen kan virke hård.' });
     assert.equal(box.querySelector('.blockbox-reason').textContent, 'Beskeden blev ikke sendt. Tonen kan virke hård. Ret den og prøv igen.');
-    assert.ok(box.querySelector('.blockbox-guide'));
+    assert.equal(box.querySelector('.blockbox-guide'), null); assert.ok(!/Vejledning/.test(box.textContent));
   } finally { await f.close(); }
 });
 

@@ -31,6 +31,17 @@ Deno.test("meta-råd i suggestion -> tom (ikke sendbar)", () => {
   assertEquals(sanitizeSuggestion("Prøv en anmodning i stedet for en ordre", "Du skal", "controlling_demand"), "");
   assertEquals(sanitizeSuggestion("Skriv, hvad der skete, og hvad du gerne vil have anderledes – uden at kritisere den anden.", "x", "other_harmful"), "");
 });
+Deno.test("calm rewrite of sarcastic wording is kept; Prøv fx-prefix is stripped", () => {
+  const msg = "Er du glad nu?";
+  const sug = "Jeg blev ked af det, der skete. Kan vi tale om det?";
+  assertEquals(sanitizeSuggestion(sug, msg, "sarcasm_or_irony"), sug);
+  assertEquals(sanitizeSuggestion("Prøv fx: " + sug, msg, "sarcasm_or_irony"), sug);
+});
+Deno.test("suggestion that reintroduces a blocked word or slur is dropped", () => {
+  assertEquals(sanitizeSuggestion("Du er en idiot, kan vi tale?", "Er du glad nu?", "personal_attack"), "");
+  assertEquals(sanitizeSuggestion("Kan vi tale om skolen?", "Er du glad nu?", "sarcasm_or_irony", { bannedWords: ["skolen"] }), "");
+  assertEquals(sanitizeSuggestion("Kan vi tale om det?", "Er du glad nu?", "sarcasm_or_irony", { bannedWords: ["skole"] }), "Kan vi tale om det?");
+});
 Deno.test("allow med modstridende suggestion afvises", () => {
   assertThrows(() => validateResult({ decision: "allow", reason_code: "none", spans: [], suggestion: "hemmelig" }, "hej"), ModerationTechnicalError, "inconsistent");
 });
@@ -45,10 +56,14 @@ Deno.test("prefilter lader blandet skældsord+praktisk ønske til AI", () => {
   assertEquals(prefilter("Du er idiot, hent tasken kl 16"), null);
 });
 Deno.test("prefilter lader neutral tekst passere til AI", () => assertEquals(prefilter("Kan du hente kl. 16?"), null));
-Deno.test("prompt kræver tom suggestion uden praktisk kerne", () => {
+Deno.test("prompt asks for a calm rewrite or an empty suggestion when unsure", () => {
   if (!SYSTEM_PROMPT.includes("controlling_demand")) throw new Error("missing code");
-  if (!/NO concrete legitimate practical wish/i.test(SYSTEM_PROMPT)) throw new Error("missing empty-suggestion rule");
+  if (!/Prefer one short, complete, calm rewrite/i.test(SYSTEM_PROMPT)) throw new Error("missing rewrite rule");
+  if (!/Jeg blev ked af det, der skete/i.test(SYSTEM_PROMPT)) throw new Error("missing example rewrite");
+  if (!/If you are not confident you have a good, safe rewrite/i.test(SYSTEM_PROMPT)) throw new Error("missing omit-if-unsure rule");
   if (!/set "suggestion" to ""/i.test(SYSTEM_PROMPT)) throw new Error("missing empty quote");
+  if (!/Mention earlier messages ONLY if they actually influenced the block/i.test(SYSTEM_PROMPT)) throw new Error("missing context rule");
+  if (!/NEVER write that earlier messages played no role/i.test(SYSTEM_PROMPT)) throw new Error("missing never-no-role rule");
 });
 Deno.test("fallbackSuggestion er altid tom", () => {
   assertEquals(fallbackSuggestion("controlling_demand", "Du skal gøre det nu"), "");

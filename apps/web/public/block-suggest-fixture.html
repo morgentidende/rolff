@@ -16,14 +16,14 @@ mark{background:var(--warn-b);color:#000;border-radius:3px}
 h2{font-size:15px;margin:0 0 8px}
 </style></head><body><main class="wrap">
 <h1>Fixture: blokering (to tilstande)</h1>
-<p class="meta">Opdigtet UI uden login. A) kan omformuleres → «Brug forslaget». B) kan ikke → kun vejledning (ikke kopierbar til afsendelse).</p>
+<p class="meta">Opdigtet UI uden login. A) Luna har et forslag → «Brug forslaget». B) intet godt forslag → sektionen vises ikke.</p>
 
 <section class="notice" role="alert" aria-labelledby="h-can">
   <h2 id="h-can">A) Kan omformuleres (praktisk kerne)</h2>
   <p style="margin:0">Beskeden blev ikke sendt. Den kan opfattes som sårende eller som en ordre til den anden. Ret den og prøv igen.</p>
   <p class="meta">Markeret tekst: <mark>Du skal</mark> hente kl. 16, punktum.</p>
   <div class="suggest">
-    <p class="meta"><strong>Forslag til omformulering</strong></p>
+    <p class="meta"><strong>Forslag</strong></p>
     <p id="sug">Kan vi aftale afhentning kl. 16?</p>
     <button type="button" class="ghost" id="use" aria-controls="t-can">Brug forslaget</button>
     <p class="meta">Forslaget kopieres til skrivefeltet. Du sender selv — det tjekkes igen.</p>
@@ -37,11 +37,7 @@ h2{font-size:15px;margin:0 0 8px}
   <h2 id="h-cannot">B) Kan ikke omformuleres (ren kritik)</h2>
   <p style="margin:0">Beskeden blev ikke sendt. Den kan opfattes som sårende eller som en ordre til den anden. Ret den og prøv igen.</p>
   <p class="meta">Markeret tekst: <mark>Du er altid så sur</mark></p>
-  <div class="suggest">
-    <p class="meta"><strong>Vejledning</strong></p>
-    <p class="meta" id="guide">Skriv, hvad der skete, og hvad du gerne vil have anderledes – uden at kritisere den anden.</p>
-    <!-- ingen «Brug forslaget» — vejledning er ikke sendbar -->
-  </div>
+  <!-- intet forslag, når Luna ikke har et relevant og roligt omformuleringsforslag -->
   <label class="meta" for="t-cannot">Skrivefelt</label>
   <textarea id="t-cannot">Du er altid så sur</textarea>
 </section>
