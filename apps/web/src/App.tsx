@@ -34,7 +34,7 @@ import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useRef, useSt
 import type { Session } from "@supabase/supabase-js";
 import { callFn, supabase } from "./supabase";
 import { detectLang, strings, type Lang } from "./i18n";
-import { passwordsMatch, pwText, toggleLabel } from "./pw";
+import { passwordPairState, passwordsMatch, pwText, toggleLabel } from "./pw";
 import { cacheClear, cacheGet, cacheSet } from "./localStore";
 import { LunaIndicator } from "./LunaRobot";
 import { applySuggestion } from "./suggestion";
@@ -78,7 +78,7 @@ function readOpenConversation(): string | null {
   return OPEN_ID.test(m[1]) ? m[1].toLowerCase() : null;
 }
 
-type Sheet = "notifications" | "members" | "privacy" | "words" | null | "lang" | "times" | "faq" | "feedback" | "invite" | "export" | "addMember" | "report" | "account" | "newpw" | "plans";
+type Sheet = "notifications" | "members" | "privacy" | "words" | null | "lang" | "times" | "faq" | "feedback" | "invite" | "export" | "addMember" | "report" | "account" | "newpw" | "recover" | "plans";
 export type MenuItem = { label: string; run: () => void; danger?: boolean; divider?: boolean; checked?: boolean };
 
 export function App() {
@@ -94,6 +94,8 @@ export function App() {
   const conv = isPendingOnly(rawConv) ? null : rawConv;
   useEffect(() => { if (rawConv && !conv) setConv(null); }, [rawConv, conv]);
   const [sheet, setSheet, resetSheet] = usePanelState<Sheet>(null);
+  const [recoverEmail, setRecoverEmail] = useState("");
+  const [recoverFrom, setRecoverFrom] = useState<"account" | null>(null);
   const [homeKey, setHomeKey] = useState(0);
   const [renameContacts, setRenameContacts] = useState<Other[] | null>(null);
   // Nothing to nickname (e.g. an invitation that expired long ago): do not open an empty dialog.
@@ -188,7 +190,11 @@ export function App() {
     { label: da ? "Inviter person" : "Invite person", run: () => setSheet("invite") },
     { label: t.logout, run: () => { homeCache.clear(); chatCache.clear(); setCardCacheOwner(null); setPushOwner(null); resetBackNavigation(); setConv(null); resetSheet(); cacheClear().finally(() => supabase.auth.signOut()); }, danger: true },
   ];
-  const close = () => setSheet(null);
+  const close = () => {
+    if (sheet === "recover" && recoverFrom === "account") { setSheet("account"); setRecoverFrom(null); return; }
+    setSheet(null); setRecoverFrom(null);
+  };
+  const openRecover = (email: string, from: "account" | null = null) => { setRecoverEmail(email); setRecoverFrom(from); setSheet("recover"); };
   // All sheets from the ⋮ menu open as a card under the ⋮ button at the top, like "Tilføj person".
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const [policyOpen, setPolicyOpen] = useState(false);
@@ -216,7 +222,7 @@ export function App() {
       <div className="notice" role="note">{t.testNotice}</div>
       {inviteMsg && <div className="notice" role="status">{inviteMsg}</div>}
       {session && !conv && !sheet && <PushSettings key={`push-offer:${session.user.id}`} uid={session.user.id} lang={lang} onboarding />}
-      {!session ? <Auth lang={lang} peek={inviteToken ? peek : undefined} />
+      {!session ? <Auth lang={lang} peek={inviteToken ? peek : undefined} onForgot={(email) => openRecover(email)} />
         : conv ? <Chat session={session} key={`${session.user.id}:${conv.id}`} lang={lang} conv={conv} rename={openRename} back={backToList} openPlans={() => setSheet("plans")} planKey={sheet} menuButtonRef={menuButtonRef} />
         : <Home key={`home:${session.user.id}`} uid={session.user.id} refreshKey={homeKey} lang={lang} open={openFromList} rename={openRename} invite={() => setSheet("invite")} />}
       {sheet === "lang" && <SheetView title={t.lang} close={close} lang={lang} anchor={menuButtonRef}><Choice name="lang" value={lang} set={(v) => setLang(v as Lang)} opts={[["da", "Dansk"], ["en", "English"]]} /></SheetView>}
@@ -226,7 +232,8 @@ export function App() {
       {session && renameContacts && <ContactAliasDialog key={`alias:${session.user.id}`} lang={lang} contacts={renameContacts}
         close={() => setRenameContacts(null)} save={async (id, alias, pending) => { const uid=session.user.id; const { error } = await (pending ? supabase.rpc("set_invitation_alias", { p_invitation: id, p_alias: alias }) : supabase.rpc("set_contact_alias", { p_contact: id, p_alias: alias })).setHeader("Authorization", `Bearer ${session.access_token}`); if (error) throw error; if((await supabase.auth.getSession()).data.session?.user.id!==uid)return; const name=alias.trim()||null; setConv(c => c ? (pending ? (c.pending_invitation_id === id ? { ...c, pending_alias: name } : c) : { ...c, others: c.others.map(o => o.user_id === id ? { ...o, alias:name } : o) }) : c); setHomeKey(k => k + 1); }}
         saved={() => setRenameContacts(null)} />}
-      {sheet === "account" && <SheetView title={da ? "Konto" : "Account"} close={close} lang={lang} anchor={menuButtonRef}><AccountPanel lang={lang} openPrivacy={() => setSheet("privacy")} openPlans={() => setSheet("plans")} /></SheetView>}
+      {sheet === "account" && <SheetView title={da ? "Konto" : "Account"} close={close} lang={lang} anchor={menuButtonRef}><AccountPanel lang={lang} openPrivacy={() => setSheet("privacy")} openPlans={() => setSheet("plans")} onForgot={(email) => openRecover(email, "account")} /></SheetView>}
+      {sheet === "recover" && <SheetView title={da ? "Glemt adgangskode" : "Forgot password"} close={close} lang={lang} anchor={session ? menuButtonRef : undefined}><RecoverPassword lang={lang} initialEmail={recoverEmail} /></SheetView>}
       {sheet === "newpw" && session && <SheetView title={da ? "Vælg ny adgangskode" : "Choose a new password"} close={close} lang={lang} anchor={menuButtonRef}><NewPassword lang={lang} done={close} /></SheetView>}
       {sheet === "privacy" && <SheetView title={da ? "Privatliv og sletning" : "Privacy and deletion"} close={close} lang={lang} anchor={menuButtonRef}><PrivacyPanel lang={lang} /></SheetView>}
       {sheet === "feedback" && <SheetView title={da ? "Kontakt" : "Contact"} close={close} lang={lang} anchor={menuButtonRef}><FeedbackForm lang={lang} /></SheetView>}
@@ -314,7 +321,7 @@ function Faq({ lang }: { lang: Lang }) {
     ["Hvad er “Blokerede ord”?", "Et valgfrit filter (slået fra som standard): Under ⋮ → “Blokerede ord” kan du tilføje enkeltord, udtryk på flere ord eller hele sætninger (op til 120 tegn), som ikke må nå frem til dig. Store/små bogstaver og accenter er ligegyldige (fx matcher “dårlig far” også “DÅRLIG FAR” og “darlig far”), og ordene skal stå i samme rækkefølge. Afslutter du med * (fx “pis*”), rammes også ord, der begynder sådan. Listen gælder den samtale, du står i, og er privat. Rammer en besked noget på listen, bliver den ikke leveret – afsenderen får at vide præcis hvilket ord eller udtryk, og at modtageren har blokeret det, og kan omformulere. Derfor skal du bekræfte det for hvert ord. Du kan fjerne ord igen når som helst."],
     ["Kan jeg begrænse hvor tit en person skriver?", "Ja. Åbn “Beskedfrekvens” og tryk “Indstillinger” ud for personen. Vælg højst 1 besked pr. minut, pr. 5 minutter, pr. time eller et brugerdefineret antal minutter (1 til 1.440 = 24 timer). Standard er ingen grænse. Det regnes fra personens seneste leverede besked til dig i alle jeres samtaler; afviste beskeder tæller ikke, vedhæftninger tæller som en besked. For tidlige beskeder gemmes ikke, og afsenderen får at vide, hvornår der kan sendes igen. Er I flere, gælder den strengeste grænse."],
     ["Hvem kan tilføje en ekstra person til en samtale?", "At invitere den anden forælder, når du opretter en samtale, kan alle. At tilføje en ekstra person (fx advokat eller bedsteforælder) kræver, at DU som inviterer har planen “Premium” (79 kr./md.). De andre deltagere og den inviterede må gerne have Standard-planen. Nedgraderer du senere, bliver de nuværende deltagere."],
-    ["Hvad kan de andre se om mig?", "Du logger ind med din e-mail. Din e-mail er også det navn, de andre i samtalen ser – du kan ikke selv vælge et andet navn. Hver person kan give dig et privat kaldenavn, som kun de selv ser (hold fingeren på samtalen). Glemt adgangskode: brug linket på login-siden. Skift e-mail eller adgangskode: ⋮ → Konto. Sletning af konto: ⋮ → Konto."],
+    ["Hvad kan de andre se om mig?", "Du logger ind med din e-mail. Din e-mail er også det navn, de andre i samtalen ser – du kan ikke selv vælge et andet navn. Hver person kan give dig et privat kaldenavn, som kun de selv ser (hold fingeren på samtalen). Glemt adgangskode: brug linket på login-siden eller under ⋮ → Konto. Skift e-mail eller adgangskode: ⋮ → Konto. Sletning af konto: ⋮ → Konto."],
     ["Hvordan kontakter jeg Rolff?", "Tryk ⋮ → “Kontakt”. Du vælger kategorien Feedback eller Problemer med Rolff-appen og skriver din besked. Det er også sådan, du skriver til kundeservice. Skriv ikke samtaleindhold eller personoplysninger, du ikke vil dele. Beskeden sendes til Rolff med dit bruger-id – ikke dine samtaler."],
     ["Hvordan rapporterer jeg noget?", "Tryk ⋮ i samtalen → “Rapportér”. Du vælger kategori, skriver selv hvad der er sket og kan markere de beskeder, du vil vedhæfte. Du ser en forhåndsvisning, og intet sendes før du bekræfter. Rapporten mailes til Rolffs udvikler (kontakt: nicolaipetersen108@gmail.com) med dit bruger-id. Rolff gemmer kun kategori, tidspunkt og antal vedhæftede beskeder (til at begrænse misbrug) – ikke teksten. Der er ingen døgnvagt og ingen garanti for svar eller handling. Ved akut fare: ring 112."],
     ["Hvor ligger mine data, og hvor længe?", "På Supabase-servere i Frankfurt (EU). Du vælger selv opbevaring (1 år, 5 år eller ubegrænset) og sky-synk under ⋮ → Privatliv og sletning. Der kan du også downloade alle dine data (ZIP med JSON og CSV). Du sletter din konto under ⋮ → Konto (det sletter alle data med det samme og stopper abonnementet; den resterende periode går tabt, og en eventuel refusion sker via App Store eller Google Play. Lav en udskrift først, hvis du vil beholde noget). Vil du bare stoppe betalingen og beholde kontoen, vælg “Opsig abonnement” under ⋮ → Konto eller Abonnement; så løber planen til periodens slut. AI-tonetjekket sender i testen beskeden til en AI-tjeneste (behandling uden for EU; gemning slået fra). Læs mere i privatlivspolitikken (⋮ → Privatlivspolitik)."],
@@ -336,7 +343,7 @@ function Faq({ lang }: { lang: Lang }) {
     ["What are “Blocked words”?", "An optional filter (off by default): under ⋮ → “Blocked words” you can add single words, multi-word expressions or whole sentences (up to 120 characters) that must not reach you. Case and accents are ignored, and words must appear in the same order. Ending with * (e.g. “pis*”) also matches words starting that way. The list applies to the current conversation and is private. If a message hits it, it is not delivered – the sender is told exactly which word or phrase and that the recipient blocked it, and can rephrase. That is why you confirm each word. You can remove words at any time."],
     ["Can I limit how often a person writes?", "Yes. Open “Message frequency”, then tap “Settings” next to the person. Choose at most 1 message per minute, per 5 minutes, per hour, or a custom number of minutes (1 to 1,440 = 24 hours). Default: no limit. It counts from the person's latest delivered message to you in any of your conversations; rejected messages do not count; attachments count as a message. Early messages are not stored and the sender is told when they can send again. With several recipients the strictest applies."],
     ["Who can add an extra person to a conversation?", "Anyone can invite the other parent when creating a conversation. Adding an extra person (e.g. a lawyer) requires that YOU, the inviter, are on “Premium” (79 DKK/month). Other members and the invitee may be on Standard. If you downgrade later, existing members stay."],
-    ["What can others see about me?", "You log in with your e-mail. Your e-mail is also the name others in the conversation see – you cannot choose a different name yourself. Each person can give you a private nickname that only they see (press and hold the conversation). Forgot password: use the link on the login page. Change e-mail or password: ⋮ → Account. Account deletion: ⋮ → Account."],
+    ["What can others see about me?", "You log in with your e-mail. Your e-mail is also the name others in the conversation see – you cannot choose a different name yourself. Each person can give you a private nickname that only they see (press and hold the conversation). Forgot password: use the link on the login page or under ⋮ → Account. Change e-mail or password: ⋮ → Account. Account deletion: ⋮ → Account."],
     ["How do I contact Rolff?", "Tap ⋮ → “Contact”. Choose the category Feedback or Problems with the Rolff app and write your message. This is also how you reach customer service. Do not write conversation content or personal data you do not want to share. The message is sent to Rolff with your user id – not your conversations."],
     ["How do I report something?", "Tap ⋮ in the conversation → “Report”. You choose a category, write what happened and can tick the messages you want to attach. You see a preview and nothing is sent until you confirm. The report is e-mailed to Rolff's developer (contact: nicolaipetersen108@gmail.com) with your user id. Rolff stores only category, time and number of attached messages (to limit abuse) – not the text. There is no 24/7 staff and no guarantee of a reply or action. In an emergency: call 112."],
     ["Where is my data, and for how long?", "On Supabase servers in Frankfurt (EU). You choose retention (1 year, 5 years or unlimited) and cloud sync under ⋮ → Privacy and deletion, where you can also download all your data (ZIP with JSON and CSV). You delete your account under ⋮ → Account (this deletes all data immediately and ends the subscription; any remaining paid period is lost, and refunds are handled by the App Store or Google Play. Make a transcript first if you want to keep anything). To stop payment and keep the account, choose “Cancel subscription” under ⋮ → Account or Plan; the plan then runs until the period ends. During testing, the AI tone check sends the message to an AI service (processed outside the EU; storage turned off). See the privacy policy (⋮ → Privacy policy)."],
@@ -466,14 +473,15 @@ function PrivacyPanel({ lang }: { lang: Lang }) {
 
 function DeleteAccountSection({ lang, openPrivacy }: { lang: Lang; openPrivacy: () => void }) {
   const da = lang === "da";
-  const [pw, setPw] = useState(""); const [ok, setOk] = useState(false); const [state, setState] = useState<"" | "busy" | "wrong" | "err" | "nopw" | "noack">("");
+  const [pw, setPw] = useState(""); const [ok, setOk] = useState(false); const [transcript, setTranscript] = useState(true);
+  const [state, setState] = useState<"" | "busy" | "wrong" | "err" | "export" | "nopw" | "noack">("");
   const del = async (e: React.FormEvent) => {
     e.preventDefault(); if (state === "busy") return;
     if (!pw) { setState("nopw"); focusField(document.getElementById("delpw")); return; }
     if (!ok) { setState("noack"); focusField(document.getElementById("delack")); return; }
     setState("busy");
-    let r; try { r = await callFn("delete-account", { password: pw }); } catch { r = { status: 0, data: null as any }; }
-    if (r.status !== 200) { setState(r.status === 403 ? "wrong" : "err"); return; }
+    let r; try { r = await callFn("delete-account", { password: pw, email_transcript: transcript, lang }); } catch { r = { status: 0, data: null as any }; }
+    if (r.status !== 200) { setState(r.status === 403 ? "wrong" : r.data?.error === "export_failed" || r.status === 502 ? "export" : "err"); return; }
     try { localStorage.clear(); sessionStorage.clear(); if ("caches" in window) for (const k of await caches.keys()) await caches.delete(k);
       const dbs = (indexedDB as any).databases ? await (indexedDB as any).databases() : []; for (const d of dbs) if (d.name) indexedDB.deleteDatabase(d.name); } catch { /* best effort */ }
     setPushOwner(null); await cacheClear(); await supabase.auth.signOut({ scope: "local" }); location.replace(location.pathname + "?deleted=1");
@@ -491,10 +499,13 @@ function DeleteAccountSection({ lang, openPrivacy }: { lang: Lang; openPrivacy: 
         <label htmlFor="delpw">{da ? "Bekræft med din adgangskode" : "Confirm with your password"}</label>
         <PasswordInput id="delpw" lang={lang} value={pw} onChange={(v) => { setPw(v); if (state !== "busy" && state !== "noack") setState(""); }} minLength={1} autoComplete="current-password" invalid={state === "nopw"} describedBy="delpw-hint" />
         {state === "nopw" && <p id="delpw-hint" className="field-hint" role="alert">{da ? "Skriv din adgangskode for at slette kontoen." : "Enter your password to delete your account."}</p>}
+        <CheckRow id="delexport" checked={transcript} onChange={setTranscript} label={da ? "Send mig en fuld udskrift af alle mine samtaler, før kontoen slettes" : "Email me a full transcript of all my conversations before my account is deleted"} />
+        <p className="meta">{da ? "Udskriften sendes til din e-mail. Hvis afsendelsen ikke lykkes, slettes kontoen ikke." : "The transcript is sent to your e-mail. If sending fails, your account is not deleted."}</p>
         <CheckRow id="delack" checked={ok} onChange={(v) => { setOk(v); if (v && state === "noack") setState(""); }} label={da ? "Jeg forstår, at sletningen er endelig." : "I understand that deletion is final."} attention={state === "noack"} describedBy={state === "noack" ? "delack-hint" : undefined} />
         {state === "noack" && <p id="delack-hint" className="field-hint" role="alert">{da ? "Sæt flueben i ”Jeg forstår …” for at slette." : "Tick “I understand …” to delete."}</p>}
         <div className="row end"><button type="submit" className="danger" disabled={state === "busy"} aria-disabled={!ok || !pw || undefined}>{da ? "Slet konto, slet alle data og opsig abonnement" : "Delete account, delete all data and cancel subscription"}</button></div>
         {state === "wrong" && <p className="err" role="alert">{da ? "Forkert adgangskode." : "Wrong password."}</p>}
+        {state === "export" && <p className="err" role="alert">{da ? "Udskriften kunne ikke sendes. Kontoen er ikke slettet. Prøv igen, eller fjern fluebenet hvis du vil slette uden udskrift." : "The transcript could not be sent. Your account has not been deleted. Try again, or untick the box if you want to delete without a transcript."}</p>}
         {state === "err" && <p className="err" role="alert">{da ? "Sletningen mislykkedes. Prøv igen." : "Deletion failed. Please try again."}</p>}
       </form>
       </section>
@@ -608,22 +619,60 @@ function FeedbackForm({ lang }: { lang: Lang }) {
   );
 }
 
-function Auth({ lang, peek }: { lang: Lang; peek?: Peek | null }) {
+function PasswordPairStatus({ lang, a, b, id }: { lang: Lang; a: string; b: string; id?: string }) {
+  const state = passwordPairState(a, b);
+  if (state === "empty") return null;
+  return (
+    <p id={id} className={`pw-pair ${state === "match" ? "is-match" : "is-mismatch"}`} role="status" aria-live="polite">
+      {state === "match" ? <span className="pw-pair-mark" aria-hidden="true">✓</span> : null}
+      {pwText[lang][state]}
+    </p>
+  );
+}
+
+function RecoverPassword({ lang, initialEmail = "" }: { lang: Lang; initialEmail?: string }) {
+  const da = lang === "da";
   const t = strings[lang];
-  const [mode, setMode] = useState<"login" | "signup" | "forgot">("login"); const [sent, setSent] = useState(false);
+  const [email, setEmail] = useState(initialEmail);
+  const [sent, setSent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try { await callFn("account-mail", { action: "recover", email: email.trim(), lang }); } catch { /* same message whether the address exists */ }
+    setBusy(false);
+    setSent(true);
+  };
+  return (
+    <form onSubmit={submit}>
+      {sent
+        ? <p className="notice" role="status">{da ? "Hvis adressen findes, har vi sendt et link. Tjek også spam." : "If the address exists, we have sent a link. Check spam too."}</p>
+        : <>
+            <label htmlFor="re">{t.email}</label>
+            <input id="re" type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <p className="meta">{da ? "Vi sender et link til at vælge en ny adgangskode." : "We will send a link to choose a new password."}</p>
+            <button type="submit" disabled={busy} style={{ marginTop: 12 }}>{da ? "Send link" : "Send link"}</button>
+          </>}
+    </form>
+  );
+}
+
+function Auth({ lang, peek, onForgot }: { lang: Lang; peek?: Peek | null; onForgot: (email: string) => void }) {
+  const t = strings[lang];
+  const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState(""); const [pw, setPw] = useState(""); const [pw2, setPw2] = useState("");
   useEffect(() => { if (peek) { setMode("signup"); setEmail(peek.invitee_email); } }, [peek]); const [ai, setAi] = useState(false);
   const [err, setErr] = useState(""); const [busy, setBusy] = useState(false);
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setErr("");
-    if (mode === "forgot") { setBusy(true); try { await callFn("account-mail", { action: "recover", email, lang }); } catch { /* same message */ } setBusy(false); setSent(true); return; }
-    if (mode === "signup" && !passwordsMatch(pw, pw2)) { setErr(pwText[lang].mismatch); return; }
+    if (mode === "signup" && !passwordsMatch(pw, pw2)) return;
     setBusy(true);
     const r = mode === "login" ? await supabase.auth.signInWithPassword({ email, password: pw })
       : await supabase.auth.signUp({ email, password: pw });
     setBusy(false);
     if (r.error) setErr(t.authError); // generic: does not reveal whether account exists
   };
+  const pair = mode === "signup" ? passwordPairState(pw, pw2) : "empty";
   return (
     <div className="card">
       <div style={{ textAlign: "center" }}><img src="./icons/rolff-192.png" alt="Rolff logo" width={96} height={96} style={{ borderRadius: 22 }} /><h1 style={{ marginTop: 8 }}>Rolff</h1></div>
@@ -632,31 +681,23 @@ function Auth({ lang, peek }: { lang: Lang; peek?: Peek | null }) {
       {new URLSearchParams(location.search).has("deleted") && <div className="notice" role="status">{lang === "da" ? "Din konto er slettet." : "Your account has been deleted."}</div>}
       <div className="notice" role="note"><strong>{t.demoWarn}</strong></div>
       <p>{t.tagline}</p><p>{t.intro}</p>
-      {mode === "forgot" ? <form onSubmit={submit}>
-        <h2>{lang === "da" ? "Glemt adgangskode" : "Forgot password"}</h2>
-        {sent ? <p className="notice" role="status">{lang === "da" ? "Hvis der findes en konto med den e-mail, har vi sendt et link til at vælge en ny adgangskode. Tjek også spam." : "If an account exists for that email, we have sent a link to choose a new password. Check spam too."}</p>
-          : <><label htmlFor="fe">{t.email}</label><input id="fe" type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} /></>}
-        <div className="row" style={{ marginTop: 12 }}>
-          {!sent && <button type="submit" disabled={busy}>{lang === "da" ? "Send link" : "Send link"}</button>}
-          <button type="button" className="ghost" onClick={() => { setMode("login"); setSent(false); }}>{t.login}</button>
-        </div>
-      </form> : <form onSubmit={submit}>
+      <form onSubmit={submit}>
         <label htmlFor="e">{t.email}</label><input id="e" type="email" required autoComplete="email" readOnly={!!peek} value={email} onChange={(e) => setEmail(e.target.value)} />
         <label htmlFor="p">{t.password}</label>
         <PasswordInput id="p" lang={lang} value={pw} onChange={setPw} minLength={mode === "signup" ? 8 : 1} autoComplete={mode === "login" ? "current-password" : "new-password"} />
         {mode === "signup" && <><label htmlFor="p2">{pwText[lang].repeat}</label>
-          <PasswordInput id="p2" lang={lang} value={pw2} onChange={(v) => { setPw2(v); setErr(""); }} minLength={8} autoComplete="new-password" invalid={pw2.length > 0 && !passwordsMatch(pw, pw2)} describedBy="pwerr" /></>}
+          <PasswordInput id="p2" lang={lang} value={pw2} onChange={(v) => { setPw2(v); setErr(""); }} minLength={8} autoComplete="new-password" invalid={pair === "mismatch"} describedBy="pwerr" /></>}
+        {mode === "signup" && <PasswordPairStatus lang={lang} a={pw} b={pw2} id="pwerr" />}
         {mode === "signup" && <p className="meta" role="note">{evidenceNote(lang)} {emailVisibleNote(lang)}</p>}
         {mode === "signup" && <p><label style={{ display: "flex", gap: 8 }}><input type="checkbox" style={{ width: 24, minHeight: 24 }} required />{t.demoAccept}</label></p>}
         {mode === "signup" && <p><label style={{ display: "flex", gap: 8 }}><input type="checkbox" style={{ width: 24, minHeight: 24 }} checked={ai} onChange={(e) => setAi(e.target.checked)} required />{t.ai} {t.aiAccept}</label></p>}
-        {err ? <p className="err" id="pwerr" role="alert">{err}</p>
-          : mode === "signup" && pw2.length > 0 && !passwordsMatch(pw, pw2) ? <p className="err" id="pwerr" aria-live="polite">{pwText[lang].mismatch}</p> : null}
+        {err ? <p className="err" id="autherr" role="alert">{err}</p> : null}
         <div className="row" style={{ marginTop: 12 }}>
           <button type="submit" disabled={busy}>{mode === "login" ? t.login : t.signup}</button>
           <button type="button" className="ghost" onClick={() => { setMode(mode === "login" ? "signup" : "login"); setPw2(""); setErr(""); }}>{mode === "login" ? t.signup : t.login}</button>
         </div>
-        {mode === "login" && !peek && <p><button type="button" className="linkish" onClick={() => { setMode("forgot"); setErr(""); }}>{lang === "da" ? "Glemt adgangskode?" : "Forgot password?"}</button></p>}
-      </form>}
+        {mode === "login" && <p><button type="button" className="linkish" onClick={() => onForgot(email)}>{lang === "da" ? "Glemt adgangskode?" : "Forgot password?"}</button></p>}
+      </form>
     </div>
   );
 }
@@ -1405,8 +1446,9 @@ function AddMember({ lang, conv, done, openPlans }: { lang: Lang; conv: string; 
 function NewPassword({ lang, done }: { lang: Lang; done: () => void }) {
   const da = lang === "da";
   const [pw, setPw] = useState(""); const [pw2, setPw2] = useState(""); const [msg, setMsg] = useState(""); const [ok, setOk] = useState(false);
+  const pair = passwordPairState(pw, pw2);
   const submit = async (e: React.FormEvent) => {
-    e.preventDefault(); if (!passwordsMatch(pw, pw2)) { setMsg(pwText[lang].mismatch); return; }
+    e.preventDefault(); if (!passwordsMatch(pw, pw2)) return;
     const r = await supabase.auth.updateUser({ password: pw });
     if (r.error) setMsg(da ? "Adgangskoden kunne ikke gemmes. Den skal være mindst 8 tegn." : "The password could not be saved. It must be at least 8 characters.");
     else { setOk(true); setMsg(da ? "Ny adgangskode gemt." : "New password saved."); }
@@ -1414,13 +1456,15 @@ function NewPassword({ lang, done }: { lang: Lang; done: () => void }) {
   if (ok) return <><p className="notice" role="status">{msg}</p><button type="button" onClick={done}>OK</button></>;
   return (<form onSubmit={submit}>
     <label htmlFor="np">{da ? "Ny adgangskode" : "New password"}</label><PasswordInput id="np" lang={lang} value={pw} onChange={setPw} minLength={8} autoComplete="new-password" />
-    <label htmlFor="np2">{pwText[lang].repeat}</label><PasswordInput id="np2" lang={lang} value={pw2} onChange={setPw2} minLength={8} autoComplete="new-password" />
+    <label htmlFor="np2">{pwText[lang].repeat}</label>
+    <PasswordInput id="np2" lang={lang} value={pw2} onChange={(v) => { setPw2(v); setMsg(""); }} minLength={8} autoComplete="new-password" invalid={pair === "mismatch"} describedBy="nperr" />
+    <PasswordPairStatus lang={lang} a={pw} b={pw2} id="nperr" />
     {msg && <p className="err" role="alert">{msg}</p>}
     <button type="submit" style={{ marginTop: 12 }}>{da ? "Gem" : "Save"}</button>
   </form>);
 }
 
-function AccountPanel({ lang, openPrivacy, openPlans }: { lang: Lang; openPrivacy: () => void; openPlans: () => void }) {
+function AccountPanel({ lang, openPrivacy, openPlans, onForgot }: { lang: Lang; openPrivacy: () => void; openPlans: () => void; onForgot: (email: string) => void }) {
   const da = lang === "da";
   const [email, setEmail] = useState("");
   useEffect(() => { supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? "")); }, []);
@@ -1428,7 +1472,7 @@ function AccountPanel({ lang, openPrivacy, openPlans }: { lang: Lang; openPrivac
   const [ne, setNe] = useState(""); const [ep, setEp] = useState(""); const [eMsg, setEMsg] = useState<[boolean, string] | null>(null); const [busy, setBusy] = useState(false);
   const changePw = async (e: React.FormEvent) => {
     e.preventDefault(); setPwMsg(null);
-    if (!passwordsMatch(pw, pw2)) { setPwMsg([false, pwText[lang].mismatch]); return; }
+    if (!passwordsMatch(pw, pw2)) return;
     setBusy(true);
     const re = await supabase.auth.signInWithPassword({ email, password: cur });
     if (re.error) { setBusy(false); setPwMsg([false, da ? "Nuværende adgangskode er forkert." : "Current password is wrong."]); return; }
@@ -1452,12 +1496,15 @@ function AccountPanel({ lang, openPrivacy, openPlans }: { lang: Lang; openPrivac
     if (r.status === 200) setEp("");
   };
   return (<>
-    <p className="meta">{da ? "Din e-mail: " : "Your email: "}<strong>{email}</strong></p>
+    <p className="account-email">{da ? "Din e-mail: " : "Your email: "}<strong>{email}</strong></p>
     <form onSubmit={changePw}>
       <h2>{da ? "Skift adgangskode" : "Change password"}</h2>
       <label htmlFor="cp">{da ? "Nuværende adgangskode" : "Current password"}</label><PasswordInput id="cp" lang={lang} value={cur} onChange={setCur} minLength={1} autoComplete="current-password" />
+      <p><button type="button" className="linkish" onClick={() => onForgot(email)}>{da ? "Glemt adgangskode?" : "Forgot password?"}</button></p>
       <label htmlFor="cp1">{da ? "Ny adgangskode" : "New password"}</label><PasswordInput id="cp1" lang={lang} value={pw} onChange={setPw} minLength={8} autoComplete="new-password" />
-      <label htmlFor="cp2">{pwText[lang].repeat}</label><PasswordInput id="cp2" lang={lang} value={pw2} onChange={setPw2} minLength={8} autoComplete="new-password" />
+      <label htmlFor="cp2">{pwText[lang].repeat}</label>
+      <PasswordInput id="cp2" lang={lang} value={pw2} onChange={setPw2} minLength={8} autoComplete="new-password" invalid={passwordPairState(pw, pw2) === "mismatch"} describedBy="cperr" />
+      <PasswordPairStatus lang={lang} a={pw} b={pw2} id="cperr" />
       {pwMsg && <p className={pwMsg[0] ? "notice" : "err"} role={pwMsg[0] ? "status" : "alert"}>{pwMsg[1]}</p>}
       <button type="submit" disabled={busy} style={{ marginTop: 12 }}>{da ? "Skift adgangskode" : "Change password"}</button>
     </form>

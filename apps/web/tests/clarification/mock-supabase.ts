@@ -82,7 +82,14 @@ export const supabase: any = {
         getSession,
         onAuthStateChange: (f: any) => { listeners.add(f); return { data: { subscription: { unsubscribe: () => listeners.delete(f) } } }; },
         signOut: async () => { changeUser(null); return { error: null }; },
-        verifyOtp: async () => ({ error: null }), getUser: async () => ({ data: { user: session?.user } }),
+        verifyOtp: async () => { if (!session) changeUser(uid); return { error: null }; },
+        updateUser: async (args: any) => {
+            calls.push({ function: 'auth.updateUser', args });
+            if (!session) return { data: { user: null }, error: { message: 'no session' } };
+            if (typeof args?.password === 'string' && args.password.length >= 8) return { data: { user: session.user }, error: null };
+            return { data: { user: null }, error: { message: 'Password should be at least 8 characters' } };
+        },
+        getUser: async () => ({ data: { user: session?.user } }),
     }, from: query, rpc,
 };
 // Optional: hold send-* calls open so tests can observe the "checking" state.
@@ -105,8 +112,22 @@ export function setNextSend(data: any, status = 200) { nextSend = data; nextSend
 // Optional: a pending downgrade (plan stays text_attachments, switch to 'text' at period_end).
 let pendingPlan: string | null = null;
 export function setPendingPlan(p: string | null) { pendingPlan = p; }
+let recoverResult: { status: number; data: any } | 'throw' | null = null;
+export function setRecoverResult(r: typeof recoverResult) { recoverResult = r; }
+let deleteResult: { status: number; data: any } | 'throw' | null = null;
+export function setDeleteResult(r: typeof deleteResult) { deleteResult = r; }
 export async function callFn(name: string, args: any) {
     calls.push({ function: name, args });
+    if (name === 'account-mail' && args?.action === 'recover') {
+        if (recoverResult === 'throw') { recoverResult = null; throw new Error('synthetic recover failure'); }
+        if (recoverResult) { const r = recoverResult; recoverResult = null; return r; }
+        return { status: 200, data: { data: { ok: true } } };
+    }
+    if (name === 'delete-account') {
+        if (deleteResult === 'throw') { deleteResult = null; throw new Error('synthetic delete failure'); }
+        if (deleteResult) { const r = deleteResult; deleteResult = null; return r; }
+        return { status: 200, data: { data: { deleted: true, transcript_sent: !!args?.email_transcript } } };
+    }
     if (nextSend && name.startsWith('send-')) { const data = nextSend; nextSend = null; return { status: nextSendStatus, data }; }
     if (holdSend && name.startsWith('send-')) {
         const status = await new Promise<string>(r => heldSends.push(r));
