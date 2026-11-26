@@ -213,6 +213,15 @@ export async function sendMailResult(to: string, m: MailMsg, kind: MailKind = "o
 export async function sendMail(to: string, m: MailMsg, kind: MailKind = "other"): Promise<boolean> {
   return (await sendMailResult(to, m, kind)).ok;
 }
+const EMAIL_RE = /^[^\s@<>",;]+@[^\s@<>",;]+\.[^\s@<>",;]+$/;
+/** Inbox for in-app "Rapportér" mails. REPORT_EMAIL_TO wins; FEEDBACK_TO is the fallback. Change the secret to move the inbox (e.g. later info@rolffapp.com). */
+export function reportRecipient(): string | null {
+  for (const k of ["REPORT_EMAIL_TO", "FEEDBACK_TO"] as const) {
+    const to = (env(k) ?? "").trim();
+    if (EMAIL_RE.test(to)) return to;
+  }
+  return null;
+}
 
 const btn = (link: string, label: string) => `<table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="#016C72" style="border-radius:10px;background:#016C72"><a href="${esc(link)}" style="display:inline-block;padding:14px 26px;color:#ffffff;text-decoration:none;font-weight:600;font-size:16px">${esc(label)}</a></td></tr></table>`;
 export function inactivityMail(p: { link: string; lang?: MailLang }) {
@@ -238,15 +247,35 @@ ${btn(p.link, "Log ind")}
 }
 
 export const REPORT_LABELS: Record<string, string> = { harassment: "Chikane/trusler", inappropriate: "Upassende indhold", child_safety: "Børns sikkerhed", other: "Andet" };
-export function reportMail(p: { category: string; body: string; senderName: string; senderId: string; conversationId: string; messages: { sender_name: string; body: string; created_at: string }[] }) {
+export type ReportMailMessage = { sender_id?: string; sender_email?: string; body: string; created_at: string };
+const reportWhen = (s: string) => { const t = Date.parse(s); return Number.isFinite(t) ? fmt(s) : s; };
+const whoLine = (id?: string, email?: string) => [email, id].filter(Boolean).map((x) => String(x)) as string[];
+/** Report to the developer inbox. All user-supplied and looked-up fields are escaped. */
+export function reportMail(p: { category: string; body: string; reportId: string; reporterId: string; reporterEmail?: string; conversationId: string; messages: ReportMailMessage[] }) {
   const cat = REPORT_LABELS[p.category] ?? "Andet";
   const subject = `Rolff rapport: ${cat}`;
-  const msgs = p.messages.map((m) => `<div style="margin:0 0 10px;padding:10px 14px;background:#f6f4ef;border-radius:10px"><div style="font-size:12px;color:#7a807e">${esc(m.sender_name)} · ${esc(String(m.created_at))}</div><div style="white-space:pre-wrap;word-break:break-word">${esc(m.body)}</div></div>`).join("");
-  const html = shell(subject, `<p style="margin:0 0 6px;font-size:13px;color:#7a807e">Kategori</p><p style="margin:0 0 16px"><strong>${esc(cat)}</strong></p>
-<p style="margin:0 0 6px;font-size:13px;color:#7a807e">Fra (bruger-id) · samtale</p><p style="margin:0 0 16px">${senderPrefix(p.senderName)}<code>${esc(p.senderId)}</code> · <code>${esc(p.conversationId)}</code></p>
+  const reporterPlain = [p.reporterEmail, p.reporterId].filter(Boolean).join(" · ") || "–";
+  const seen = new Set<string>();
+  const reportedPlain: string[] = [];
+  for (const m of p.messages) {
+    const key = `${m.sender_id ?? ""}|${m.sender_email ?? ""}`;
+    if ((!m.sender_id && !m.sender_email) || seen.has(key)) continue;
+    seen.add(key);
+    reportedPlain.push(whoLine(m.sender_id, m.sender_email).join(" · "));
+  }
+  const msgs = p.messages.map((m) => {
+    const who = whoLine(m.sender_id, m.sender_email).map(esc).join(" · ") || "–";
+    const when = esc(reportWhen(String(m.created_at ?? "")));
+    return `<div style="margin:0 0 10px;padding:10px 14px;background:#f6f4ef;border-radius:10px"><div style="font-size:12px;color:#7a807e">${who} · ${when}</div><div style="white-space:pre-wrap;word-break:break-word">${esc(m.body)}</div></div>`;
+  }).join("");
+  const html = shell(subject, `<p style="margin:0 0 6px;font-size:13px;color:#7a807e">Rapport-id</p><p style="margin:0 0 16px"><code>${esc(p.reportId || "–")}</code></p>
+<p style="margin:0 0 6px;font-size:13px;color:#7a807e">Kategori</p><p style="margin:0 0 16px"><strong>${esc(cat)}</strong></p>
+<p style="margin:0 0 6px;font-size:13px;color:#7a807e">Rapportør (e-mail · bruger-id)</p><p style="margin:0 0 16px">${reporterPlain.split(" · ").map(esc).join(" · ")}</p>
+<p style="margin:0 0 6px;font-size:13px;color:#7a807e">Indberettet bruger (e-mail · bruger-id)</p><p style="margin:0 0 16px">${reportedPlain.length ? reportedPlain.map((x) => esc(x)).join("<br>") : "–"}</p>
+<p style="margin:0 0 6px;font-size:13px;color:#7a807e">Samtale-id</p><p style="margin:0 0 16px"><code>${esc(p.conversationId)}</code></p>
 <p style="margin:0 0 6px;font-size:13px;color:#7a807e">Beskrivelse</p><div style="margin:0 0 16px;padding:14px 16px;background:#f6f4ef;border-radius:10px;white-space:pre-wrap;word-break:break-word">${esc(p.body || "–")}</div>
 <p style="margin:0 0 6px;font-size:13px;color:#7a807e">Vedhæftede beskeder valgt af brugeren (${p.messages.length})</p>${msgs || "<p>–</p>"}`);
-  const text = `Rolff rapport\n\nKategori: ${cat}\nFra: ${p.senderName} (${p.senderId})\nSamtale: ${p.conversationId}\n\n${p.body || "–"}\n\nVedhæftede beskeder (${p.messages.length}):\n` + p.messages.map((m) => `[${m.created_at}] ${m.sender_name}: ${m.body}`).join("\n") + "\n";
+  const text = `Rolff rapport\n\nRapport-id: ${p.reportId || "–"}\nKategori: ${cat}\nRapportør: ${reporterPlain}\nIndberettet: ${reportedPlain.length ? reportedPlain.join("; ") : "–"}\nSamtale: ${p.conversationId}\n\n${p.body || "–"}\n\nVedhæftede beskeder (${p.messages.length}):\n` + p.messages.map((m) => `[${reportWhen(String(m.created_at ?? ""))}] ${whoLine(m.sender_id, m.sender_email).join(" · ") || "–"}: ${m.body}`).join("\n") + "\n";
   return { subject, html, text };
 }
 
