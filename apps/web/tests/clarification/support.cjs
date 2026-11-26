@@ -15,13 +15,13 @@ async function appBundle() {
     }).then(r => r.outputFiles[0].text);
 }
 const delay = ms => new Promise(r => setTimeout(r, ms));
-async function env(strict = false, pauseAuth = false) {
+async function env(strict = false, pauseAuth = false, search = '') {
     const errors = [], network = [], vc = new VirtualConsole();
     vc.on('jsdomError', e => errors.push(e.message));
     vc.on('error', (...args) => errors.push(args.map(String).join(' | ')));
     vc.on('warn', (...args) => errors.push(args.map(String).join(' | ')));
     const dom = new JSDOM('<!doctype html><div id="root"></div>', {
-        url: 'https://synthetic.invalid/fixture' + (strict ? '?strict=1' : ''),
+        url: 'https://synthetic.invalid/fixture' + ([strict ? 'strict=1' : '', search ? String(search).replace(/^\?/, '') : ''].filter(Boolean).join('&') ? ('?' + [strict ? 'strict=1' : '', search ? String(search).replace(/^\?/, '') : ''].filter(Boolean).join('&')) : ''),
         runScripts: 'outside-only', pretendToBeVisual: true, virtualConsole: vc,
         // No resources option: jsdom never loads subresources. Only bundled code runs.
         beforeParse(w) {
