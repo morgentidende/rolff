@@ -730,3 +730,7 @@ dialog[open]::backdrop{animation:rolff-fade-in var(--card-in-ms) ease-out both}
 .card-skeleton .sk-gap{height:6px}
 @keyframes sk-shimmer{from{background-position:150% 0}to{background-position:-50% 0}}
 @media (prefers-reduced-motion:reduce){.card-skeleton .sk-bar{animation:none}}
+
+/* The sticky card header (title + X) never covers what is scrolled into view (focus, an opened FAQ question). */
+.sheet,.contact-alias-dialog{scroll-padding-top:64px}
+.faq-item{scroll-margin-top:64px}

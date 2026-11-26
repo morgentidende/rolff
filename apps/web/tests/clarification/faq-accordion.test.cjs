@@ -110,3 +110,9 @@ test('FAQ opens only one topic at a time, and the open topic can be closed (da a
     assert.equal(en.querySelectorAll('button.faq-q[aria-expanded="true"]').length, 1);
   } finally { await f.close(); }
 });
+
+test('FAQ: a question scrolled into view is never hidden under the sticky card header', () => {
+  const css = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../src/styles.css'), 'utf8');
+  require('node:assert/strict').match(css, /\.sheet,\.contact-alias-dialog\{scroll-padding-top:64px\}/);
+  require('node:assert/strict').match(css, /\.faq-item\{scroll-margin-top:64px\}/);
+});
