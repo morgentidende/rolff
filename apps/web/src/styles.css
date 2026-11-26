@@ -683,9 +683,54 @@ html.modal-open,html.modal-open body,:root:has(dialog[open]),:root:has(dialog[op
 .overlay.top-overlay{align-items:flex-start;justify-content:center;padding:56px max(12px,env(safe-area-inset-right)) 12px max(12px,env(safe-area-inset-left));box-sizing:border-box}
 .overlay.top-overlay .sheet{width:100%;max-width:560px;max-height:100%;border:1px solid var(--border);border-radius:16px;padding:8px 16px 16px;box-shadow:0 12px 36px rgba(0,0,0,.3);overflow-y:auto;overscroll-behavior:contain;animation:anchored-in .14s ease-out}
 .overlay.top-overlay .confirm-card{max-height:100%;overflow-y:auto;overscroll-behavior:contain}
+/* Never fold a card into a strip on a short screen (keyboard open): keep a usable minimum; content scrolls inside. --vv-h is already the
+   visible height ABOVE the keyboard, so the keyboard inset must never be subtracted from it a second time. */
+.overlay.top-overlay .sheet,.overlay.top-overlay .confirm-card{min-height:min(180px,100%);flex-shrink:0;box-sizing:border-box}
 .overlay.top-overlay .sheethead{top:-8px}
 @media (prefers-reduced-motion:reduce){.overlay.top-overlay .sheet{animation:none}}
-/* Nickname card (native <dialog>) inside a conversation: same place, under the header. */
-:root:has(.topbar.chat) .contact-alias-dialog{inset:calc(env(safe-area-inset-top,0px) + 60px) auto auto 50%;bottom:auto;transform:translateX(-50%);width:min(calc(100% - 24px),560px);max-height:calc(var(--vv-h,100dvh) - env(safe-area-inset-top,0px) - 72px - var(--kbd-inset,0px));border-radius:16px;box-shadow:0 12px 36px rgba(0,0,0,.3);padding-bottom:max(16px,0px)}
+/* Nickname card (native <dialog>) inside a conversation: same place, under the header (top is set inline from the
+   shared chatCardTop(); the values here are the fallback). */
+:root:has(.topbar.chat) .contact-alias-dialog{inset:calc(env(safe-area-inset-top,0px) + 60px) auto auto 50%;bottom:auto;transform:translateX(-50%);width:min(calc(100% - 24px),560px);max-height:max(180px,calc(var(--vv-h,100dvh) - env(safe-area-inset-top,0px) - 76px));min-height:min(180px,calc(var(--vv-h,100dvh) - 16px));box-sizing:border-box;overflow-y:auto;overscroll-behavior:contain;border-radius:16px;box-shadow:0 12px 36px rgba(0,0,0,.3);padding-bottom:max(16px,0px)}
 .pending-invite-actions{display:grid;gap:10px;margin-top:10px}.pending-invite-actions button{width:100%;min-height:48px;justify-content:center;border-color:var(--border);color:var(--text)}
 .pending-invite-actions button.pending-invite-cancel{color:#c0392b}[data-theme=dark] .pending-invite-actions button.pending-invite-cancel{color:#ff8a80}
+
+/* ---- Card motion (WhatsApp-like) -----------------------------------------------------------------------------
+   Every card, sheet, dialog and menu opens with a fade + scale-up from 92 %, and its dim/blur backdrop fades in.
+   Closing plays the reverse on an inert copy (modalLayer.ts exitGhost, [data-ghost]). `scale` (not transform) so
+   cards that are centred with transform keep their place; opacity/scale only, so nothing reflows or jumps. */
+:root{--card-in-ms:240ms;--card-out-ms:200ms;--card-ease-in:cubic-bezier(.2,.8,.2,1);--card-ease-out:cubic-bezier(.4,0,.6,1)}
+@keyframes rolff-fade-in{from{opacity:0}to{opacity:1}}
+@keyframes rolff-fade-out{from{opacity:1}to{opacity:0}}
+@keyframes rolff-card-in{from{opacity:0;scale:.92}to{opacity:1;scale:1}}
+@keyframes rolff-card-out{from{opacity:1;scale:1}to{opacity:0;scale:.94}}
+.overlay,.overlay.confirm-overlay,.menu-scrim,.message-overlay{animation:rolff-fade-in var(--card-in-ms) ease-out both}
+.overlay .sheet,.overlay.top-overlay .sheet,.sheet.anchored-card,.overlay .confirm-card,.menu,.palette,.message-panel.placed-below,.message-panel.placed-above,dialog[open]{animation:rolff-card-in var(--card-in-ms) var(--card-ease-in) both}
+dialog[open]::backdrop{animation:rolff-fade-in var(--card-in-ms) ease-out both}
+.overlay.top-overlay .sheet,.overlay.top-overlay .confirm-card,.message-panel.placed-below{transform-origin:top center}
+.menu,.sheet.anchored-card{transform-origin:top right}.message-panel.placed-above{transform-origin:bottom center}
+[data-ghost],[data-ghost] *{pointer-events:none!important}
+.overlay[data-ghost],.message-overlay[data-ghost],.menu-scrim[data-ghost]{animation:rolff-fade-out var(--card-out-ms) ease-in both!important}
+[data-ghost] .sheet,[data-ghost] .confirm-card,[data-ghost] .message-panel,.menu[data-ghost],dialog[data-ghost]{animation:rolff-card-out var(--card-out-ms) var(--card-ease-out) both!important}
+@media (prefers-reduced-motion:reduce){
+  .overlay,.overlay.confirm-overlay,.menu-scrim,.message-overlay,.overlay .sheet,.overlay.top-overlay .sheet,.sheet.anchored-card,.overlay .confirm-card,.menu,.palette,.message-panel.placed-below,.message-panel.placed-above,dialog[open],dialog[open]::backdrop,[data-ghost],[data-ghost] *{animation:none!important}
+  [data-ghost]{display:none!important}
+}
+
+/* ---- Page transitions (pageTransition.ts) -------------------------------------------------------------------
+   The copy of the page that is leaving: fixed, inert, under (forward) or over (back) the new page, below every card. */
+.page-ghost{position:fixed;inset:0;overflow:hidden;pointer-events:none;background:var(--bg);will-change:transform}
+.page-ghost-forward{z-index:-1}.page-ghost-back{z-index:25}
+.page-ghost > .wrap{pointer-events:none}
+@media (prefers-reduced-motion:reduce){.page-ghost{display:none!important}}
+
+/* ---- Card skeleton (CardSkeleton.tsx): full-size placeholder while a card's data loads, no tiny loading card. */
+.card-skeleton{display:flex;flex-direction:column;gap:12px;padding:4px 0 2px}
+.card-skeleton .sk-bar{height:14px;border-radius:7px;background:color-mix(in srgb,var(--text) 10%,transparent);background-image:linear-gradient(90deg,transparent 0,color-mix(in srgb,var(--text) 7%,transparent) 50%,transparent 100%);background-size:200% 100%;background-repeat:no-repeat;animation:sk-shimmer 1.2s ease-in-out infinite}
+.card-skeleton .sk-button{height:44px;border-radius:12px;width:100%}
+.card-skeleton .sk-gap{height:6px}
+@keyframes sk-shimmer{from{background-position:150% 0}to{background-position:-50% 0}}
+@media (prefers-reduced-motion:reduce){.card-skeleton .sk-bar{animation:none}}
+
+/* The sticky card header (title + X) never covers what is scrolled into view (focus, an opened FAQ question). */
+.sheet,.contact-alias-dialog{scroll-padding-top:64px}
+.faq-item{scroll-margin-top:64px}

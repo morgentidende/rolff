@@ -162,7 +162,7 @@ test('mute is only per-user client state: the app never sends mute data in messa
 
 test('English: Mute notifications, 8 hours, 1 week, Always, Close/OK, then Unmute notifications', async () => {
     const e = await setup(); const { d, w } = e;
-    await click(label(d, 'Menu')); await click(button(d, 'Sprog'));
+    await click(label(d, 'Menu')); await click(button(d, 'App-sprog'));
     await click([...d.querySelectorAll('.sheet .choice')].find((c) => c.textContent.includes('English')));
     await delay(40);
     await openChat(w, d); await openMenu(d);

@@ -26,7 +26,7 @@ test('Home → Privatlivspolitik opens in-app (Danish) → Back returns to Home,
 test('back arrow closes it too; English app shows only the English part', async () => {
   const f = await env(); const { w, d } = f; try {
     serve(w);
-    await menuItem(d, 'Sprog'); const en = [...d.querySelectorAll('.sheet .choice')].find(c => c.textContent.includes('English')); await click(en.querySelector('input')); await delay(40);
+    await menuItem(d, 'App-sprog'); const en = [...d.querySelectorAll('.sheet .choice')].find(c => c.textContent.includes('English')); await click(en.querySelector('input')); await delay(40);
     await click(d.querySelector('.sheet [aria-label="Close"]')); await delay(40);
     await menuItem(d, 'Privacy policy');
     const v = d.querySelector('.docview'); const t = v.querySelector('.policy').textContent;
@@ -43,7 +43,7 @@ test('conversation menu has no app-wide items; policy stays reachable from the f
     await click(d.querySelector('.convbtn')); await delay(120); assert.ok(d.querySelector('.topbar.chat'), 'in chat');
     await click(d.querySelector('[aria-label="Menu"]'));
     const labels = [...d.querySelectorAll('[role=menuitem]')].map(b => b.textContent.trim());
-    assert.ok(!labels.includes('Privatlivspolitik') && !labels.includes('Sprog'), labels.join(', '));
+    assert.ok(!labels.includes('Privatlivspolitik') && !labels.includes('App-sprog'), labels.join(', '));
     await click(d.querySelector('[aria-label="Menu"]'));
     await back(w); assert.equal(d.querySelector('.topbar.chat'), null);
     await menuItem(d, 'Privatlivspolitik'); assert.ok(d.querySelector('.docview'));

@@ -1,6 +1,7 @@
 // "Udskrift af samtale": requested here, built and signed on the SERVER (export-conversation) and
 // e-mailed. Nothing is generated or downloaded on the device. 79 DKK plan only (enforced server-side).
 import { useCallback, useEffect, useRef, useState } from "react";
+import { CardSkeleton } from "./CardSkeleton";
 import { callFn, supabase } from "./supabase";
 import { focusField } from "./formHint";
 
@@ -78,7 +79,7 @@ export function ConversationExport({ lang, conv, plan: planProp, ownEmail, openP
     <p className="field-hint" role="alert">{da ? "Udskriften kunne ikke hentes lige nu. Tjek din internetforbindelse og prøv igen." : "The transcript could not be loaded right now. Check your internet connection and try again."}</p>
     <div className="export-retry"><button type="button" onClick={fetchPlan}>{da ? "Prøv igen" : "Try again"}</button></div>
   </div>;
-  if (plan === null) return <p className="meta" role="status">{da ? "Henter…" : "Loading…"}</p>;
+  if (plan === null) return <CardSkeleton lang={da ? "da" : "en"} minHeight={480} rows={[90, 70, "gap", 35, 60, 60, "gap", 35, 80, 80, "gap", "button"]} />;
   if (plan !== "text_attachments") return <ExportUpgrade lang={lang} openPlans={openPlans} />;
   const recipient = who === "self" ? ownEmail : other.trim().toLowerCase();
   const pIssue: PeriodIssue = scope === "all" ? "" : periodIssue(from, to, today);

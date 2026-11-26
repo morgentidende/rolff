@@ -26,12 +26,12 @@ async function tap(w, d, gap = 0) {
 }
 const chatOpen = d => !!d.querySelector('.topbar.chat');
 
-test('Tema card: a tap on the dimmed background only closes the card, the chat behind never opens', { timeout: 10000 }, async () => {
+test('App-sprog card: a tap on the dimmed background only closes the card, the chat behind never opens', { timeout: 10000 }, async () => {
   const fx = await env(false); const { w, d } = fx;
   try {
     installHitTest(w, d, () => d.querySelector('.convbtn'));
-    await click(label(d, 'Menu')); await click(button(d, 'Tema'));
-    const overlay = d.querySelector('.overlay.anchored-overlay'); assert.ok(overlay && d.querySelector('.sheet'), 'Tema card is open over the chat list');
+    await click(label(d, 'Menu')); await click(button(d, 'App-sprog'));
+    const overlay = d.querySelector('.overlay.anchored-overlay'); assert.ok(overlay && d.querySelector('.sheet'), 'App-sprog card is open over the chat list');
     assert.ok(d.documentElement.classList.contains('modal-open'), 'background scroll is locked');
     assert.ok(d.querySelector('.convbtn').closest('[inert]'), 'the chat list behind is inactive (inert)');
     assert.ok(!overlay.closest('[inert]') && !d.querySelector('.sheet').closest('[inert]'), 'the card itself stays active');
@@ -55,7 +55,7 @@ test('a tap that starts inside the card and ends on the backdrop does not dismis
   const fx = await env(false); const { w, d } = fx;
   try {
     installHitTest(w, d, () => d.querySelector('.convbtn'));
-    await click(label(d, 'Menu')); await click(button(d, 'Tema'));
+    await click(label(d, 'Menu')); await click(button(d, 'App-sprog'));
     const overlay = d.querySelector('.overlay');
     d.querySelector('.sheet').dispatchEvent(new w.Event('pointerdown', { bubbles: true }));
     overlay.click(); await delay(30);
@@ -83,7 +83,7 @@ test('stacked layers: confirm over a sheet keeps both backgrounds inactive and r
   const fx = await env(false); const { w, d } = fx;
   try {
     installHitTest(w, d, () => d.querySelector('.convbtn'));
-    await click(label(d, 'Menu')); await click(button(d, 'Tema'));
+    await click(label(d, 'Menu')); await click(button(d, 'App-sprog'));
     const sheetOverlay = d.querySelector('.overlay');
     // Tab trap: from the last control, Tab wraps to the first; Shift+Tab from the first wraps to the last.
     const f = [...sheetOverlay.querySelectorAll('button,input,select')].filter(x => !x.disabled);
@@ -126,8 +126,8 @@ test('inside a chat: Modtagetider and Lydløs hang directly under the chat heade
   const fx = await env(false); const { w, d } = fx;
   try {
     installHitTest(w, d, () => d.querySelector('.topbar.chat'));
-    // Front page: the Tema card is NOT moved.
-    await click(label(d, 'Menu')); await click(button(d, 'Tema'));
+    // Front page: the App-sprog card is NOT moved.
+    await click(label(d, 'Menu')); await click(button(d, 'App-sprog'));
     assert.ok(d.querySelector('.overlay.anchored-overlay') && !d.querySelector('.top-overlay'), 'front-page card keeps its position');
     await click(label(d, 'Luk'));
     await click(d.querySelector('.convbtn')); assert.ok(chatOpen(d));
@@ -135,7 +135,7 @@ test('inside a chat: Modtagetider and Lydløs hang directly under the chat heade
     w.Element.prototype.getBoundingClientRect = function () { if (this.classList?.contains('topbar') && this.classList.contains('chat')) return { top: 0, bottom: 104, left: 0, right: 390, width: 390, height: 104, x: 0, y: 0, toJSON() { } }; return orig.call(this); };
     await click(label(d, 'Menu')); await click(button(d, 'Modtagetider'));
     const ov = d.querySelector('.overlay.top-overlay'); assert.ok(ov, 'Modtagetider is a top card');
-    assert.equal(ov.style.paddingTop, '104px', 'it starts at the header\'s bottom edge');
+    assert.equal(ov.style.paddingTop, '112px', 'it starts at the shared in-chat card top (header bottom 104 + 8)');
     assert.ok(ov.querySelector('.sheet') && !d.querySelector('.anchored-card'));
     assert.ok(d.querySelector('.topbar.chat').closest('[inert]'), 'the chat behind is inactive');
     await tap(w, d);
@@ -143,7 +143,7 @@ test('inside a chat: Modtagetider and Lydløs hang directly under the chat heade
     await delay(400);
     await click(label(d, 'Menu')); await click(button(d, 'Slå notifikationer fra'));
     const mute = d.querySelector('.confirm-overlay.top-overlay'); assert.ok(mute, 'mute dialog is a top card too');
-    assert.equal(mute.style.paddingTop, '112px');
+    assert.equal(mute.style.paddingTop, '112px', 'same top as Modtagetider');
     await tap(w, d); assert.ok(!d.querySelector('.confirm-overlay')); assert.ok(chatOpen(d));
     w.Element.prototype.getBoundingClientRect = orig;
   } finally { await fx.close(); }
@@ -224,7 +224,7 @@ test('every card, sheet, dialog and menu closes on a backdrop tap; the page behi
   try {
     const listRow = () => d.querySelector('.convbtn');
     await assertBackdropCloses(w, d, '⋮ menu', '.menu', async () => { await click(label(d, 'Menu')); await delay(20); }, listRow, seen);
-    for (const [name, item] of [['Sprog', 'Sprog'], ['Tema', 'Tema'], ['FAQ', 'FAQ'], ['Abonnement', 'Abonnement'], ['Kontakt', 'Kontakt'], ['Konto', 'Konto (e-mail og adgangskode)'], ['Inviter person', 'Inviter person']]) {
+    for (const [name, item] of [['App-sprog', 'App-sprog'], ['Notifikationer', 'Notifikationer'], ['FAQ', 'FAQ'], ['Abonnement', 'Abonnement'], ['Kontakt', 'Kontakt'], ['Konto', 'Konto (e-mail og adgangskode)'], ['Inviter person', 'Inviter person']]) {
       await assertBackdropCloses(w, d, name, '.sheet', () => openMenuItem(d, item), listRow, seen);
     }
     await assertBackdropCloses(w, d, 'Kontaktens kaldenavn', 'dialog.contact-alias-dialog[open]', async () => {

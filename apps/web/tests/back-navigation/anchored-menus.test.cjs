@@ -197,7 +197,7 @@ for (const strict of [false, true])
             const card = d.querySelector('.overlay.top-overlay .sheet');
             assert.ok(card, 'card under the chat header');
             assert.ok(!d.querySelector('.anchored-card') && !d.querySelector('.anchored-overlay'));
-            assert.equal(d.querySelector('.overlay.top-overlay').style.paddingTop, '56px', "starts at the header's bottom edge");
+            assert.equal(d.querySelector('.overlay.top-overlay').style.paddingTop, '64px', "starts at the shared in-chat card top (header bottom + 8px)");
             assert.equal(icon.getAttribute('aria-expanded'), 'true');
             assert.equal(card.getAttribute('role'), 'dialog');
             assert.equal(card.querySelector('h2').textContent, 'Tilføj person');

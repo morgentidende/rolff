@@ -87,6 +87,8 @@ function assertPrivateHistory(w) {
     assert.ok(Object.values(marker).every(v => typeof v !== 'function' && typeof v !== 'object'), 'No callbacks or payload objects in history');
 }
 async function openConversation(d) {
+    // De-flake: on a slow CI runner the list may not have rendered yet (max 2 s, same as back-navigation/support.cjs).
+    for (let i = 0; i < 40 && !d.querySelector('.convbtn'); i++) await delay(50);
     const row = d.querySelector('.convbtn');
     assert.ok(row, 'conversation row');
     row.click();

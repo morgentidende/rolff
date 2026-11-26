@@ -4,7 +4,7 @@ import { BlockingLists } from "./BlockingLists";
 import { setReloadBlocked } from "./versionCheck";
 import { resetBackNavigation, useBackLayer, useBackNavigationRoot, usePanelState } from "./backNavigation";
 import { ReceiveSettings } from "./ReceiveSettings";
-import { setReceiveTimezoneUser, syncReceiveTimezone } from "./receiveTimezone";
+import { readReceiveSettings, setReceiveTimezoneUser, syncReceiveTimezone } from "./receiveTimezone";
 import { ContactAliasDialog, ContactButton } from "./ContactAlias";
 import { focusField } from "./formHint";
 import { ComposerInput } from "./ComposerInput";
@@ -24,6 +24,9 @@ import { onDeepLink } from "./native/deepLinks";
 import { isNative } from "./native/platform";
 import { afterSettle } from "./viewportSettle";
 import { useBackdropDismiss, useModalLayer, useUnderChatHeader } from "./modalLayer";
+import { playPage, preparePage, type PendingPage } from "./pageTransition";
+import { fetchCard, peekCard, prefetchCard, setCardCacheOwner } from "./cardCache";
+import { CardSkeleton } from "./CardSkeleton";
 import { rectOf, useAnchoredPlacement, visibleViewport } from "./anchoredPosition";
 import type React from "react";
 import { createPortal } from "react-dom";
@@ -75,7 +78,7 @@ function readOpenConversation(): string | null {
   return OPEN_ID.test(m[1]) ? m[1].toLowerCase() : null;
 }
 
-type Sheet = "notifications" | "members" | "privacy" | "words" | null | "lang" | "theme" | "times" | "faq" | "feedback" | "invite" | "export" | "addMember" | "report" | "account" | "newpw" | "plans";
+type Sheet = "notifications" | "members" | "privacy" | "words" | null | "lang" | "times" | "faq" | "feedback" | "invite" | "export" | "addMember" | "report" | "account" | "newpw" | "plans";
 export type MenuItem = { label: string; run: () => void; danger?: boolean; divider?: boolean; checked?: boolean };
 
 export function App() {
@@ -84,7 +87,6 @@ export function App() {
   const [peek, setPeek] = useState<Peek | null | undefined>(undefined);
   const [inviteMsg, setInviteMsg] = useState("");
   const [lang, setLang] = useState<Lang>(detectLang());
-  const [theme, setTheme] = useState(localStorage.getItem("theme") || "system");
   const [session, setSession] = useState<Session | null>(null);
   const [rawConv, setConv] = useState<Conv | null>(null);
   // A conversation nobody has accepted yet has no chat: whatever route asks for it (list, #open=, push tap, accept link)
@@ -100,14 +102,17 @@ export function App() {
   const t = strings[lang]; const da = lang === "da";
   useEffect(() => { localStorage.setItem("lang", lang); document.documentElement.lang = lang; }, [lang]);
   useEffect(() => { if (session) void supabase.rpc("set_my_locale", { p_locale: lang }); }, [session, lang]);
+  // Rolff always follows the phone's light/dark setting, live, like WhatsApp (no Tema menu item). A fixed theme chosen
+  // in an earlier version is dropped so everybody follows the system.
   useEffect(() => {
-    localStorage.setItem("theme", theme);
-    const apply = () => { const dark = theme === "dark" || (theme === "system" && matchMedia("(prefers-color-scheme: dark)").matches); document.documentElement.dataset.theme = dark ? "dark" : "light"; };
-    apply(); const mq = matchMedia("(prefers-color-scheme: dark)"); mq.addEventListener("change", apply); return () => mq.removeEventListener("change", apply);
-  }, [theme]);
+    try { localStorage.removeItem("theme"); } catch { /* private mode */ }
+    const mq = matchMedia("(prefers-color-scheme: dark)");
+    const apply = () => { document.documentElement.dataset.theme = mq.matches ? "dark" : "light"; };
+    apply(); mq.addEventListener("change", apply); return () => mq.removeEventListener("change", apply);
+  }, []);
   useEffect(() => {
     let uid:string|null=null, active=true, observed=0;
-    const apply=(s:Session|null)=>{if(!active)return;const next=s?.user.id??null;setReceiveTimezoneUser(next);setPushOwner(s?{id:s.user.id,token:s.access_token}:null);if(uid!==next){resetBackNavigation();setConv(null);resetSheet();setRenameContacts(null);uid=next;}setSession(s);};
+    const apply=(s:Session|null)=>{if(!active)return;const next=s?.user.id??null;setReceiveTimezoneUser(next);setPushOwner(s?{id:s.user.id,token:s.access_token}:null);if(uid!==next){homeCache.clear();setCardCacheOwner(next);resetBackNavigation();setConv(null);resetSheet();setRenameContacts(null);uid=next;}setSession(s);};
     const { data } = supabase.auth.onAuthStateChange((event, s) => {if(event==="INITIAL_SESSION"&&observed)return;observed++;apply(s);});
     const start=observed;
     supabase.auth.getSession().then(({ data }) => {if(observed===start)apply(data.session);});
@@ -161,6 +166,8 @@ export function App() {
     else authLinkRef.current(l.type, l.th);
   }), []);
   useEffect(() => { if (session) supabase.rpc("touch_seen").then(() => {}); }, [session]);
+  // Abonnement opens at once with the current plan (cardCache).
+  useEffect(() => { if (!session) return; const t = setTimeout(() => { void loadMyPlan().catch(() => {}); }, 800); return () => clearTimeout(t); }, [session?.user.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const uid=session?.user.id; if(!uid)return;
     const sync=()=>{if(document.visibilityState!=="hidden")void syncReceiveTimezone(uid,true);};
@@ -170,7 +177,6 @@ export function App() {
   const menu: MenuItem[] = [
     // Front page only: app-wide settings. The conversation ⋮ menu has conversation actions only.
     { label: t.lang, run: () => setSheet("lang") },
-    { label: t.theme, run: () => setSheet("theme") },
     { label: da ? "Notifikationer" : "Notifications", run: () => setSheet("notifications") },
     { label: "FAQ", run: () => setSheet("faq") },
     { label: da ? "Abonnement" : "Plan", run: () => setSheet("plans") },
@@ -180,30 +186,40 @@ export function App() {
     { label: da ? "Privatlivspolitik" : "Privacy policy", run: () => setPolicyOpen(true) },
     { label: da ? "Kontakt" : "Contact", run: () => setSheet("feedback") },
     { label: da ? "Inviter person" : "Invite person", run: () => setSheet("invite") },
-    { label: t.logout, run: () => { setPushOwner(null); resetBackNavigation(); setConv(null); resetSheet(); cacheClear().finally(() => supabase.auth.signOut()); }, danger: true },
+    { label: t.logout, run: () => { homeCache.clear(); setCardCacheOwner(null); setPushOwner(null); resetBackNavigation(); setConv(null); resetSheet(); cacheClear().finally(() => supabase.auth.signOut()); }, danger: true },
   ];
   const close = () => setSheet(null);
   // All sheets from the ⋮ menu open as a card under the ⋮ button at the top, like "Tilføj person".
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const [policyOpen, setPolicyOpen] = useState(false);
   useBackNavigationRoot();
-  useBackLayer(!!conv,()=>setConv(null),"view");
+  // WhatsApp-like page slide between the list and a chat (pageTransition.ts). Only taps on a list row, the chat's ← and
+  // Android Back/gesture animate; deep links, notifications, logout and account switches change page instantly.
+  const wrapRef = useRef<HTMLDivElement>(null), pendingPage = useRef<PendingPage | null>(null), homeScroll = useRef<number | null>(null);
+  const openFromList = (c: Conv) => { if (!isPendingOnly(c)) { homeScroll.current = window.scrollY; pendingPage.current = preparePage("forward", wrapRef.current); } setConv(c); };
+  const backToList = () => { pendingPage.current = preparePage("back", wrapRef.current); setConv(null); };
+  const page = session && conv ? `chat:${conv.id}` : session ? "home" : "auth";
+  useLayoutEffect(() => {
+    const p = pendingPage.current; pendingPage.current = null;
+    // Back on the list: same scroll position as when the chat was opened (the list renders from homeCache at once).
+    if (page === "home" && homeScroll.current !== null) { if (window.scrollY !== homeScroll.current) window.scrollTo(0, homeScroll.current); homeScroll.current = null; }
+    if (p && (p.dir === "forward" ? page.startsWith("chat:") : page === "home")) playPage(p, wrapRef.current);
+  }, [page]);
+  useBackLayer(!!conv,backToList,"view");
   useBackLayer(!!renameContacts,()=>setRenameContacts(null));
   return (
-    <div className={session && conv ? "wrap chat-wrap" : "wrap"}>
+    <div ref={wrapRef} className={session && conv ? "wrap chat-wrap" : "wrap"}>
       {!(session && conv) && <header className="topbar"><img src="./favicon.svg" alt="" width={30} height={30} style={{ borderRadius: 8 }} /><strong className="brand">Rolff</strong><span className="spacer" />
         {session ? <Menu lang={lang} items={menu} buttonRef={menuButtonRef} /> : <>
-          <select aria-label={t.lang} className="compact" value={lang} onChange={(e) => setLang(e.target.value as Lang)}><option value="da">Dansk</option><option value="en">English</option></select>
-          <select aria-label={t.theme} className="compact" value={theme} onChange={(e) => setTheme(e.target.value)}><option value="system">{t.system}</option><option value="light">{t.light}</option><option value="dark">{t.dark}</option></select></>}
+          <select aria-label={t.lang} className="compact" value={lang} onChange={(e) => setLang(e.target.value as Lang)}><option value="da">Dansk</option><option value="en">English</option></select></>}
       </header>}
       <div className="notice" role="note">{t.testNotice}</div>
       {inviteMsg && <div className="notice" role="status">{inviteMsg}</div>}
       {session && !conv && !sheet && <PushSettings key={`push-offer:${session.user.id}`} uid={session.user.id} lang={lang} onboarding />}
       {!session ? <Auth lang={lang} peek={inviteToken ? peek : undefined} />
-        : conv ? <Chat session={session} key={`${session.user.id}:${conv.id}`} lang={lang} conv={conv} rename={openRename} back={() => setConv(null)} openPlans={() => setSheet("plans")} planKey={sheet} menuButtonRef={menuButtonRef} />
-        : <Home key={`home:${session.user.id}`} refreshKey={homeKey} lang={lang} open={setConv} rename={openRename} invite={() => setSheet("invite")} />}
+        : conv ? <Chat session={session} key={`${session.user.id}:${conv.id}`} lang={lang} conv={conv} rename={openRename} back={backToList} openPlans={() => setSheet("plans")} planKey={sheet} menuButtonRef={menuButtonRef} />
+        : <Home key={`home:${session.user.id}`} uid={session.user.id} refreshKey={homeKey} lang={lang} open={openFromList} rename={openRename} invite={() => setSheet("invite")} />}
       {sheet === "lang" && <SheetView title={t.lang} close={close} lang={lang} anchor={menuButtonRef}><Choice name="lang" value={lang} set={(v) => setLang(v as Lang)} opts={[["da", "Dansk"], ["en", "English"]]} /></SheetView>}
-      {sheet === "theme" && <SheetView title={t.theme} close={close} lang={lang} anchor={menuButtonRef}><Choice name="theme" value={theme} set={setTheme} opts={[["dark", t.dark], ["light", t.light], ["system", t.system]]} /></SheetView>}
       {sheet === "notifications" && session && <SheetView title={da ? "Notifikationer" : "Notifications"} close={close} lang={lang} anchor={menuButtonRef}><PushSettings key={`push-settings:${session.user.id}`} uid={session.user.id} lang={lang} /></SheetView>}
       {sheet === "plans" && <SheetView title={da ? "Abonnement" : "Plan"} close={close} lang={lang} anchor={menuButtonRef}><Plans lang={lang} /></SheetView>}
       {sheet === "faq" && <SheetView title="FAQ" close={close} lang={lang} anchor={menuButtonRef}><Faq lang={lang} /></SheetView>}
@@ -287,6 +303,7 @@ function Faq({ lang }: { lang: Lang }) {
     ["Kan jeg se, om min besked er modtaget eller læst?", "Nej. Rolff viser aldrig, om en besked er modtaget eller læst. Det er for at undgå pres og konflikter. Du ved, at beskeden er nået frem, når du får et svar."],
     ["Kan den anden se, om jeg har læst en besked eller er online?", "Nej. Rolff har ingen læsekvitteringer, ingen online-status og ingen “skriver…”-indikator."],
     ["Hvad gør AI-tonetjekket?", "Før en besked sendes, vurderer en AI-tjeneste tonen. Bliver den afvist, leveres den ikke. Har beskeden et konkret legitimt praktisk ønske, kan du få et valgfrit omformuleringsforslag; ellers kun vejledning (ikke sendbar). Beskeden og korte uddrag (højst 300 tegn) af op til 5 tidligere beskeder sendes til tjenesten. I testen: kun opdigtede beskeder."],
+    ["Hvilke sprog kan jeg skrive på?", "Rolff finder selv ud af, hvilket sprog du skriver på. Den kan også håndtere, at du blander flere sprog i samme besked eller endda i samme sætning. Filteret er dog mest præcist, når du holder dig til ét sprog."],
     ["Kan jeg få notifikationer?", "Notifikationer er slået fra, indtil du selv slår dem til. Du kan vælge Ja eller Ikke nu på oversigten og ændre valget under ⋮ → Notifikationer. Notifikationen viser afsenderens navn (det du selv har kaldt personen, ellers personens e-mail), men aldrig beskedteksten. Når nogen accepterer din invitation, får du også besked. Du kan gøre en enkelt samtale lydløs i samtalens menu. Tilmeldingen fornyes automatisk, mens du bruger appen; har enheden ikke været brugt i 90 dage, skal du slå notifikationer til igen. Under Enheder kan du fjerne en telefon eller slå fra på alle. På iPhone/iPad kræves iOS/iPadOS 16.4+ og hjemmeskærm-installation. Aktuelle modtagetider kontrolleres, når afsendelsen sættes i gang. En afsendelse, der allerede er sat i gang, kan stadig nå frem efter ændring af tider eller fravalg. Telefon og netværk kan forsinke eller undlade visning. Ingen garanti for præcist tidspunkt."],
     ["Hvad er modtagetider?", "I hver samtale kan du under ⋮ → Modtagetider vælge, hvornår på ugen nye beskeder i den samtale når frem til dig. Tiderne gælder kun den samtale. Beskeder uden for tiderne venter, til næste modtagetid – eller til du i samtalen trykker “Modtag beskeder nu”."],
     ["Hvordan kommer man ind i en samtale?", "Kun via invitation på e-mail. Ekstra deltagere (fx advokat eller sagsbehandler) får først adgang, når alle i samtalen har godkendt, og de ser ingen beskeder fra før, de kom med."],
@@ -308,6 +325,7 @@ function Faq({ lang }: { lang: Lang }) {
     ["Can I see if my message was received or read?", "No. Rolff never shows whether a message was received or read. That is to protect against pressure and conflicts. You know a message has arrived when you get a reply."],
     ["Can the other person see if I read a message or am online?", "No. Rolff has no read receipts, no online status and no typing indicator."],
     ["What does the AI tone check do?", "Before a message is sent, an AI service assesses the tone. If rejected, it is not delivered. With a concrete legitimate practical wish you may get an optional rewrite; otherwise guidance only (not sendable). The message and short excerpts (max 300 characters) of up to 5 earlier messages are sent to the service. In the test: synthetic messages only."],
+    ["Which languages can I write in?", "Rolff works out by itself which language you write in. It can also handle you mixing several languages in the same message or even the same sentence. The filter is most precise, though, when you stick to one language."],
     ["Can I get notifications?", "Notifications are off unless you turn them on. You can choose Yes or Not now on the overview and change this under ⋮ → Notifications. The notification shows the sender's name (the nickname you gave them, otherwise their email), but never the message text. When someone accepts your invitation, you are notified too. You can mute a single conversation in its menu. The registration is renewed automatically while you use the app; if the device has not been used for 90 days, turn notifications on again. Under Devices you can remove a phone or turn them off on all devices. iPhone/iPad requires iOS/iPadOS 16.4+ and a Home Screen installation. Current receive times are checked when dispatch is started. A dispatch already started may still arrive after changing times or opting out. Phone and network may delay or omit display. Exact timing is not guaranteed."],
     ["What are receive times?", "In each conversation you can choose, under ⋮ → Receive times, when during the week new messages in that conversation reach you. The times apply only to that conversation. Messages arriving outside your times wait until the next receive time – or until you tap “Receive messages now” in the conversation."],
     ["How do people join a conversation?", "Only by e-mail invitation. Extra participants (e.g. a lawyer or caseworker) only get access when everyone in the conversation has approved, and they see no messages from before they joined."],
@@ -688,11 +706,14 @@ type ConvRow = Conv & ConvPreview;
 
 /** Person with a plus: used on the front-page "Inviter person" button. Decorative (the text is the label). */
 const InviteIcon = () => <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c.6-3.6 3.3-5.5 6.5-5.5s5.9 1.9 6.5 5.5" /><path d="M19 8v6M16 11h6" /></svg>;
-function Home({ lang, open, invite, rename, refreshKey }: { lang: Lang; open: (c: Conv) => void; invite: () => void; rename: (contacts: Other[]) => void; refreshKey: number }) {
+/** Last list per user, so Back from a chat shows the list at once (and at the same scroll position) while it refreshes. */
+const homeCache = new Map<string, { convs: ConvRow[]; mutes: MuteRow[] }>();
+function Home({ uid, lang, open, invite, rename, refreshKey }: { uid: string; lang: Lang; open: (c: Conv) => void; invite: () => void; rename: (contacts: Other[]) => void; refreshKey: number }) {
   const t = strings[lang]; const da = lang === "da";
-  const [convs, setConvs] = useState<ConvRow[] | null>(null);
+  const [convs, setConvs] = useState<ConvRow[] | null>(() => homeCache.get(uid)?.convs ?? null);
   // Own mutes only: shows a small muted icon on the row (nobody else can see it).
-  const [mutes, setMutes] = useState<MuteRow[]>([]);
+  const [mutes, setMutes] = useState<MuteRow[]>(() => homeCache.get(uid)?.mutes ?? []);
+  useEffect(() => { if (convs) homeCache.set(uid, { convs, mutes }); }, [uid, convs, mutes]);
   // The press-and-hold tip is shown until it is dismissed or the gesture has been used once.
   const [pendingMenu, setPendingMenu] = useState<ConvRow | null>(null);
   const [hintGone, setHintGone] = useState(() => { try { return localStorage.getItem(CONV_HINT_KEY) === "1"; } catch { return false; } });
@@ -800,6 +821,12 @@ function markAll(text: string, q: string, current: boolean): (string | React.Rea
 const Icon = ({ d }: { d: React.ReactNode }) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">{d}</svg>;
 
 function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButtonRef }: { session: Session; lang: Lang; conv: Conv; back: () => void; openPlans: () => void; planKey: Sheet; rename: (contacts: Other[]) => void; menuButtonRef?: React.RefObject<HTMLButtonElement | null> }) {
+  // Cards from the ⋮ menu open at once: fetch what Modtagetider and Beskedfrekvens show shortly after the chat opens.
+  useEffect(() => {
+    const uid = session.user.id, id = conv.id;
+    const t = setTimeout(() => { prefetchCard(`receive:${id}`, async () => ({ uid, s: await readReceiveSettings(uid, id) })); void fetchMembers(id).catch(() => {}); }, 300);
+    return () => clearTimeout(t);
+  }, [conv.id, session.user.id]);
   const [plan, setPlan] = useState<string | null>(null);
   // One retry on failure/timeout; the export sheet also loads the plan itself if this never lands.
   const loadPlan = useCallback(() => {
@@ -1234,8 +1261,8 @@ export const roleName = (r: string, da: boolean) => r === "parent" ? (da ? "Part
 function Members({ lang, conv, isParent, left, openWords }: { lang: Lang; conv: string; isParent: boolean; left: () => void; openWords: () => void }) {
   const [open, setOpen] = useState<string | null>(null);
   const da = lang === "da";
-  const [ms, setMs] = useState<Member[] | null>(null); const [err, setErr] = useState("");
-  const load = useCallback(async () => { const { data, error } = await supabase.rpc("list_conversation_members", { conv }); if (error) setErr(da ? "Kunne ikke hente deltagere." : "Could not load participants."); else setMs((data as Member[]) ?? []); }, [conv, da]);
+  const [ms, setMs] = useState<Member[] | null>(() => peekCard<Member[]>(`members:${conv}`) ?? null); const [err, setErr] = useState("");
+  const load = useCallback(async () => { try { const data = await fetchMembers(conv); setMs(data); } catch { setErr(da ? "Kunne ikke hente deltagere." : "Could not load participants."); } }, [conv, da]);
   useEffect(() => { load(); }, [load]);
   const act = async (fn: string, args: Record<string, unknown>, c: { title: string; body?: string; confirm: string; danger?: boolean; done?: string }) => {
     if (!await confirmDialog({ ...c, cancel: da ? "Annuller" : "Cancel" })) return; setErr("");
@@ -1245,7 +1272,7 @@ function Members({ lang, conv, isParent, left, openWords }: { lang: Lang; conv: 
     if (done) showToast(done, { tone: "success", at: "top", ms: 3000 });
     if (fn === "leave_conversation") left(); else load();
   };
-  if (!ms) return <p className="meta" role="status">{err || (da ? "Henter…" : "Loading…")}</p>;
+  if (!ms) return err ? <p className="meta" role="status">{err}</p> : <CardSkeleton lang={lang} minHeight={300} rows={[35, 25, "gap", 45, 25, "gap", 95, 90, 70, "gap", "button"]} />;
   const me = ms.find((m) => m.me);
   return (
     <div>
@@ -1424,13 +1451,20 @@ export const PLANS = [
   { id: "text", price: 49, da: ["Standard", "Op til 160 tegn pr. besked med AI-tonetjek og samtale med den anden forælder. Du kan se vedhæftninger og deltage, når andre tilføjer dig."], en: ["Standard", "Up to 160 characters per message with AI tone check. You can view attachments others send."] },
   { id: "text_attachments", price: 79, da: ["Premium", "Op til 480 tegn pr. besked, og du kan sende screenshots, billeder og PDF'er (tjekket af AI før afsendelse) og tilføje ekstra personer til samtaler."], en: ["Premium", "Up to 480 characters per message, plus sending screenshots, images and PDFs (checked by AI before sending) and adding extra people to conversations."] },
 ] as const;
+type MyPlan = { plan: string; pending_plan: string | null; period_end: string | null; test_switch: boolean };
+/** Fresh plan read; also refreshes the card cache (prefetched when the app opens, so Abonnement opens at once). */
+const loadMyPlan = () => fetchCard<MyPlan | null>("plan", async () => { const { data, error } = await supabase.rpc("get_my_plan"); if (error) throw error; return (data?.[0] as MyPlan) ?? null; });
+/** Participants of a conversation; cached per conversation so Beskedfrekvens opens at once. */
+const fetchMembers = (conv: string) => fetchCard<Member[]>(`members:${conv}`, async () => { const { data, error } = await supabase.rpc("list_conversation_members", { conv }); if (error) throw error; return (data as Member[]) ?? []; });
 function Plans({ lang }: { lang: Lang }) {
   const da = lang === "da";
-  const [p, setP] = useState<{ plan: string; pending_plan: string | null; period_end: string | null; test_switch: boolean } | null>(null);
-  const [err, setErr] = useState(""); const [busy, setBusy] = useState(false);
-  const load = () => supabase.rpc("get_my_plan").then(({ data }) => setP(data?.[0] ?? null));
+  // Last known plan shows at once (cardCache); switching waits for the fresh read (fail-strict).
+  const [p, setP] = useState<MyPlan | null>(() => peekCard<MyPlan | null>("plan") ?? null);
+  const [err, setErr] = useState(""); const [busy, setBusy] = useState(false); const [fresh, setFresh] = useState(false);
+  const load = () => loadMyPlan().then((v) => { setP(v); setFresh(true); }, () => { setFresh(false); setErr(da ? "Planen kunne ikke hentes. Prøv igen." : "Could not load the plan. Try again."); });
   useEffect(() => { load(); }, []);
   const change = async (plan: string, now = false) => {
+    if (!fresh) return;
     setBusy(true); setErr("");
     const r = await supabase.rpc("set_my_plan_test", { p_plan: plan, p_now: now }); setBusy(false);
     if (r.error) { setErr(da ? "Planen kunne ikke skiftes. Prøv igen." : "Could not change plan. Try again."); return; }
@@ -1439,7 +1473,7 @@ function Plans({ lang }: { lang: Lang }) {
     showToast(d?.pending_plan ? (da ? `Skiftet er planlagt og gælder fra ${new Date(d.period_end).toLocaleDateString("da-DK", { dateStyle: "long" })}.` : `The change is scheduled from ${new Date(d.period_end).toLocaleDateString("en-GB", { dateStyle: "long" })}.`)
       : (da ? "Planen er skiftet." : "Plan changed."), { tone: "success", ms: PLAN_TOAST_MS });
   };
-  if (!p) return <p className="meta" role="status">{da ? "Henter…" : "Loading…"}</p>;
+  if (!p) return err ? <p className="err" role="alert">{err}</p> : <CardSkeleton lang={lang} minHeight={560} rows={[95, 85, "gap", 40, 30, 90, 90, 80, "gap", "button", "gap", 90, 70]} />;
   const name = (id: string) => (PLANS.find((x) => x.id === id)![da ? "da" : "en"])[0];
   return (<div>
     <div className="notice" role="note"><strong>{da ? "TESTFUNKTION – ingen betaling." : "TEST FEATURE – no payment."}</strong> {da ? "Du kan skifte frit for at prøve planerne. Der trækkes ingen penge, og der er ikke koblet betaling på endnu." : "Switch freely to try the plans. Nothing is charged; no payment is connected yet."}</div>
@@ -1453,12 +1487,12 @@ function Plans({ lang }: { lang: Lang }) {
           <p className="meta">{desc}</p>
           <div className="plan-foot">
             {p.pending_plan === x.id && <p className="meta">{da ? "Skifter hertil ved næste periode." : "Switches here next period."}</p>}
-            {!cur && <button disabled={busy || !p.test_switch} onClick={() => change(x.id)}>{x.id === "text_attachments" ? (da ? "Opgradér (test)" : "Upgrade (test)") : (da ? "Nedgradér (test)" : "Downgrade (test)")}</button>}
+            {!cur && <button disabled={!fresh || busy || !p.test_switch} onClick={() => change(x.id)}>{x.id === "text_attachments" ? (da ? "Opgradér (test)" : "Upgrade (test)") : (da ? "Nedgradér (test)" : "Downgrade (test)")}</button>}
           </div>
         </section>); })}
     </div>
-    {p.pending_plan && <div className="row"><button className="ghost" disabled={busy} onClick={() => change(p.plan)}>{da ? `Behold ${name(p.plan)}` : `Keep ${name(p.plan)}`}</button>
-      <button className="ghost" disabled={busy} onClick={() => change(p.pending_plan!, true)}>{da ? "Skift straks (kun test)" : "Switch now (test only)"}</button></div>}
+    {p.pending_plan && <div className="row"><button className="ghost" disabled={!fresh || busy} onClick={() => change(p.plan)}>{da ? `Behold ${name(p.plan)}` : `Keep ${name(p.plan)}`}</button>
+      <button className="ghost" disabled={!fresh || busy} onClick={() => change(p.pending_plan!, true)}>{da ? "Skift straks (kun test)" : "Switch now (test only)"}</button></div>}
     <p className="meta plan-rule">{da ? "Opgradering gælder med det samme. Nedgradering gælder fra næste periode." : "Upgrades apply right away. Downgrades apply from the next period."}</p>
     <p className="meta plan-rule">{da ? "Planen gælder kun dig – den anden forælder kan have en anden plan, og alle kan altid se vedhæftninger, de modtager." : "The plan only applies to you – the other parent may have a different plan, and everyone can always see attachments they receive."}</p>
     {p.pending_plan && p.period_end && <p className="meta">{da ? "Periode slutter" : "Period ends"}: {new Date(p.period_end).toLocaleDateString(da ? "da-DK" : "en-GB", { dateStyle: "long" })}</p>}
