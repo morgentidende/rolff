@@ -323,7 +323,59 @@ function Faq({ lang }: { lang: Lang }) {
     ["What does Rolff cost?", "Two plans: “Standard” 49 DKK/month with up to 160 characters per message (one SMS length) and “Premium” 79 DKK/month with up to 480 (three SMS lengths). The plan applies to you as sender, so two parents may have different plans. Upgrades apply immediately, downgrades from the next period. In the test version switching is a test feature without payment."],
     ["Is this the real app?", "No, this is a test environment. Write made-up messages only. The AI check runs at OpenAI (see above)."],
   ];
-  return <div className="faq">{qa.map(([q, a]) => <details key={q}><summary>{q}</summary><p>{a}</p></details>)}</div>;
+  const [open, setOpen] = useState<string | null>(null);
+  const uid = useId();
+  const hold = useRef<{ btn: HTMLElement; top: number } | null>(null);
+
+  useLayoutEffect(() => {
+    const h = hold.current;
+    if (!h) return;
+    const pin = () => {
+      const sheet = h.btn.closest(".sheet") as HTMLElement | null;
+      if (!sheet) return;
+      const head = sheet.querySelector(".sheethead") as HTMLElement | null;
+      const minTop = head ? head.getBoundingClientRect().bottom + 4 : Number.NEGATIVE_INFINITY;
+      const want = Math.max(h.top, minTop);
+      const now = h.btn.getBoundingClientRect().top;
+      if (now !== want) sheet.scrollTop += now - want;
+    };
+    pin();
+    const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced || typeof requestAnimationFrame !== "function") {
+      hold.current = null;
+      return;
+    }
+    const t0 = performance.now();
+    let raf = 0;
+    const step = () => {
+      pin();
+      if (performance.now() - t0 < 320) raf = requestAnimationFrame(step);
+      else hold.current = null;
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [open]);
+
+  return (
+    <div className="faq">
+      {qa.map(([q, a], i) => {
+        const isOpen = open === q;
+        const btnId = `${uid}-q${i}`;
+        const panelId = `${uid}-p${i}`;
+        return (
+          <div className={isOpen ? "faq-item is-open" : "faq-item"} key={q}>
+            <button type="button" id={btnId} className="faq-q" aria-expanded={isOpen} aria-controls={panelId} onClick={(e) => {
+              hold.current = { btn: e.currentTarget, top: e.currentTarget.getBoundingClientRect().top };
+              setOpen((cur) => (cur === q ? null : q));
+            }}>{q}</button>
+            <div className="faq-a" id={panelId} role="region" aria-labelledby={btnId} inert={!isOpen} aria-hidden={!isOpen}>
+              <div className="faq-a-inner"><p>{a}</p></div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 export const evidenceNote = (lang: Lang) => lang === "da"
