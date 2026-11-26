@@ -141,8 +141,8 @@ test('inside a chat: Modtagetider and Lydløs hang directly under the chat heade
     await tap(w, d);
     assert.ok(!d.querySelector('.sheet'), 'backdrop tap closes it'); assert.ok(chatOpen(d));
     await delay(400);
-    await click(label(d, 'Menu')); await click(button(d, 'Lydløs'));
-    const mute = d.querySelector('.confirm-overlay.top-overlay'); assert.ok(mute, 'Lydløs is a top card too');
+    await click(label(d, 'Menu')); await click(button(d, 'Slå notifikationer fra'));
+    const mute = d.querySelector('.confirm-overlay.top-overlay'); assert.ok(mute, 'mute dialog is a top card too');
     assert.equal(mute.style.paddingTop, '112px');
     await tap(w, d); assert.ok(!d.querySelector('.confirm-overlay')); assert.ok(chatOpen(d));
     w.Element.prototype.getBoundingClientRect = orig;

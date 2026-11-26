@@ -18,7 +18,8 @@ import { Toast, showToast } from "./toast";
 import { ConfirmHost, confirmDialog } from "./confirmDialog";
 import { PolicyView } from "./PolicyView";
 import { MuteDialog } from "./MuteDialog";
-import { activeMute, muteMenuLabel, muteUntilText, unmuteLabel, type MuteDuration, type MuteRow } from "./muteModel";
+import { MutedBellIcon } from "./icons";
+import { activeMute, muteMenuLabel, muteUntilText, type MuteDuration, type MuteRow } from "./muteModel";
 import { onDeepLink } from "./native/deepLinks";
 import { isNative } from "./native/platform";
 import { afterSettle } from "./viewportSettle";
@@ -689,6 +690,13 @@ function Home({ lang, open, invite, rename, refreshKey }: { lang: Lang; open: (c
   }, []);
   useEffect(() => { load(); }, [load, refreshKey]);
   useEffect(() => { const f = () => { if (document.visibilityState === "visible") load(); }; document.addEventListener("visibilitychange", f); return () => document.removeEventListener("visibilitychange", f); }, [load]);
+  const [muteNow, setMuteNow] = useState(() => Date.now());
+  useEffect(() => {
+    const next = mutes.map((m) => { const t = m.always || m.mute_until == null ? NaN : Date.parse(m.mute_until); return Number.isFinite(t) && t > Date.now() ? t : null; }).filter((t): t is number => t != null).sort((a, b) => a - b)[0];
+    if (next == null) return;
+    const i = setTimeout(() => setMuteNow(Date.now()), Math.min(Math.max(next - Date.now() + 25, 25), 60_000));
+    return () => clearTimeout(i);
+  }, [mutes, muteNow]);
   /** "Annullér invitation": confirm, then revoke the open invitation and drop the empty row (nothing is sent to the invitee). */
   const cancelInvite = async (c: ConvRow) => {
     const who = convDisplay(c, da).title;
@@ -714,8 +722,8 @@ function Home({ lang, open, invite, rename, refreshKey }: { lang: Lang; open: (c
           <li key={c.id} className="convrow">
             <ColorDot lang={lang} conv={c} label={d.title} initial={d.initial} changed={(col) => setConvs((convs ?? []).map((x) => x.id === c.id ? { ...x, color: col } : x))} />
             <ContactButton open={() => (isPendingOnly(c) ? setPendingMenu(c) : open(c))} rename={() => { dropHint(); if (isPendingOnly(c)) setPendingMenu(c); else rename(renameTargets(c)); }}>
-              <span className="convtop"><span className="convname">{d.title}</span>{activeMute(mutes, c.id) && <span className="convmuted" role="img" aria-label={da ? "Lydløs" : "Muted"}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M8.7 3A6 6 0 0 1 18 8c0 2.4.5 4.1 1.1 5.2M6.3 6.3C6.1 6.8 6 7.4 6 8c0 7-3 9-3 9h14M10.3 21a1.9 1.9 0 0 0 3.4 0M2 2l20 20" /></svg></span>}{time && <span className="convtime">{time}</span>}</span>
-              <span className={prev ? "convprev" : "convprev empty"}>{prev ?? d.status ?? (c.last_at === undefined ? "" : (da ? "Ingen beskeder endnu" : "No messages yet"))}</span>
+              <span className="convtop"><span className="convname">{d.title}</span>{time && <span className="convtime">{time}</span>}</span>
+              <span className="convmeta"><span className={prev ? "convprev" : "convprev empty"}>{prev ?? d.status ?? (c.last_at === undefined ? "" : (da ? "Ingen beskeder endnu" : "No messages yet"))}</span>{activeMute(mutes, c.id, muteNow) && <span className="convmuted" role="img" aria-label={da ? "Lydløs" : "Muted"}><MutedBellIcon /></span>}</span>
             </ContactButton>
           </li>); })}
       </ul>}
@@ -844,7 +852,7 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
     const { error } = await supabase.rpc("clear_my_conversation_mute", { conv: conv.id });
     if (error) { showToast(da ? "Kunne ikke slå lyden til. Prøv igen." : "Could not unmute. Try again.", { at: "top", ms: 3000 }); return; }
     setMuteRows((rows) => rows.filter((x) => x.conversation_id !== conv.id));
-    showToast(da ? "Lyden er slået til" : "Unmuted", { tone: "success", ms: 3000, at: "top" });
+    showToast(da ? "Notifikationer er slået til" : "Notifications are on", { tone: "success", ms: 3000, at: "top" });
   };
   const [editId, setEditId] = useState<string | null>(null);
   const editBusy = useRef(false);
@@ -1151,8 +1159,7 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
         {conv.role === "parent" && <button ref={addPersonRef} className="icon" aria-label={da ? "Tilføj person" : "Add person"} aria-haspopup="dialog" aria-expanded={sheet === "addMember"} onClick={() => setSheet("addMember")}><Icon d={<><circle cx="9" cy="8" r="4" /><path d="M2 21c0-4 3-6 7-6s7 2 7 6" /><path d="M19 8v6M16 11h6" /></>} /></button>}
         {/* Conversation-only actions; app-wide settings live on the front-page menu. */}
         <Menu lang={lang} buttonRef={menuButtonRef} items={[{ label: da ? "Forsinkede beskeder" : "Delayed messages", checked: delayedOn, run: () => { void (async () => { const next = !delayedOn; const { error } = await supabase.rpc("set_delayed_send", { conv: conv.id, p_enabled: next }); if (error) { showToast(da ? "Kunne ikke gemme indstillingen. Prøv igen." : "Could not save the setting. Try again.", { at: "top", ms: 3000 }); return; } setDelayedOn(next); showToast(next ? (da ? "Forsinkede beskeder er slået til" : "Delayed messages are on") : (da ? "Forsinkede beskeder er slået fra" : "Delayed messages are off"), { tone: "success", at: "top", ms: 2500 }); })(); } },
-          { label: muteMenuLabel(mute, da), run: () => setMuteOpen(true) },
-          ...(mute ? [{ label: unmuteLabel(da), run: () => { void unmute(); } }] : []),
+          { label: muteMenuLabel(mute, da), run: mute ? () => { void unmute(); } : () => setMuteOpen(true) },
           { label: t.windows, run: () => setSheet("times") },
           { label: da ? "Beskedfrekvens" : "Message frequency", run: () => setSheet("members") },
           ...(renameTargets({ ...conv, others }).length ? [{ label: da ? "Kontaktens kaldenavn" : "Contact nickname", run: () => rename(renameTargets({ ...conv, others })) }] : []),
@@ -1199,7 +1206,7 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
       {sheet === "members" && <SheetView title={da ? "Beskedfrekvens" : "Message frequency"} close={() => setSheet(null)} lang={lang}><Members lang={lang} conv={conv.id} isParent={conv.role === "parent"} left={back} openWords={() => setSheet("words")} /></SheetView>}
       {sheet === "export" && <SheetView title={da ? "Udskrift af samtale" : "Conversation transcript"} close={() => setSheet(null)} lang={lang}><ConversationExport lang={lang} conv={conv.id} plan={plan} onPlan={setPlan} ownEmail={session.user.email ?? ""} openPlans={() => { setSheet(null); openPlans(); }} /></SheetView>}
       {sheet === "addMember" && <SheetView title={da ? "Tilføj person" : "Add person"} close={() => setSheet(null)} lang={lang} anchor={addPersonRef}><AddMember lang={lang} conv={conv.id} done={(toast, tone = "success") => { load(); setSheet(null); showToast(toast, { tone, ms: tone === "success" ? 4000 : 9000, at: "top" }); }} openPlans={openPlans} /></SheetView>}
-      {muteOpen && <MuteDialog lang={lang} current={mute} done={(d) => { setMuteOpen(false); if (d) void applyMute(d); }} onUnmute={() => { setMuteOpen(false); void unmute(); }} />}
+      {muteOpen && <MuteDialog lang={lang} done={(d) => { setMuteOpen(false); if (d) void applyMute(d); }} />}
       {sheet === "times" && <SheetView title={t.windows} close={() => setSheet(null)} lang={lang}><ReceiveSettings key={`${session.user.id}:${conv.id}`} lang={lang} conv={conv.id} onCancel={() => setSheet(null)} /></SheetView>}
     </>
   );

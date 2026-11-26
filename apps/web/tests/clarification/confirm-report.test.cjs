@@ -9,7 +9,7 @@ test('conversation ⋮ menu holds only conversation actions, Rapportér + Bloké
   const f = await env(); const { d } = f; try {
     await openChat(d);
     const items = await menu(d);
-    assert.deepEqual(items.map(b => b.textContent), ['Lydløs', 'Modtagetider', 'Beskedfrekvens', 'Kontaktens kaldenavn', 'Eksportér samtale', 'Blokeringer', 'Rapportér', 'Blokér samtale']);
+    assert.deepEqual(items.map(b => b.textContent), ['Slå notifikationer fra', 'Modtagetider', 'Beskedfrekvens', 'Kontaktens kaldenavn', 'Eksportér samtale', 'Blokeringer', 'Rapportér', 'Blokér samtale']);
     const sep = d.querySelector('.menu [role=separator]'); assert.ok(sep && sep.nextElementSibling.textContent === 'Rapportér');
     assert.ok(items.at(-1).classList.contains('danger'));
   } finally { await f.close(); }

@@ -2,9 +2,9 @@
 // The mute is stored server-side per user and conversation; only the owner can read it.
 export type MuteDuration = "8h" | "24h" | "1w" | "always";
 export type MuteRow = { conversation_id: string; mute_until: string | null; always?: boolean };
-export const MUTE_DURATIONS: { id: MuteDuration; da: string; en: string }[] = [
+/** Durations offered in the mute dialog. "24h" remains accepted by the server for existing rows. */
+export const MUTE_DURATIONS: { id: Exclude<MuteDuration, "24h">; da: string; en: string }[] = [
   { id: "8h", da: "8 timer", en: "8 hours" },
-  { id: "24h", da: "24 timer", en: "24 hours" },
   { id: "1w", da: "1 uge", en: "1 week" },
   { id: "always", da: "Altid", en: "Always" },
 ];
@@ -28,10 +28,8 @@ export function muteUntilText(iso: string, da: boolean, now = Date.now()): strin
   if (days < 7) return `${new Intl.DateTimeFormat(loc, { weekday: "short" }).format(t)} ${time}`;
   return `${new Intl.DateTimeFormat(loc, { day: "numeric", month: "short" }).format(t)} ${time}`;
 }
-/** Menu wording: "Lydløs" when off, otherwise the state ("Lydløs til 14.30" / "Lydløs altid"). */
-export function muteMenuLabel(m: MuteRow | null, da: boolean, now = Date.now()): string {
-  if (!m) return da ? "Lydløs" : "Mute";
-  if (m.always || m.mute_until == null) return da ? "Lydløs altid" : "Muted always";
-  return `${da ? "Lydløs til" : "Muted until"} ${muteUntilText(m.mute_until, da, now)}`;
+/** Menu wording: mute opens the duration dialog; unmute takes effect immediately. */
+export function muteMenuLabel(m: MuteRow | null, da: boolean): string {
+  return m ? unmuteLabel(da) : (da ? "Slå notifikationer fra" : "Mute notifications");
 }
-export const unmuteLabel = (da: boolean) => (da ? "Slå lyd til" : "Unmute");
+export const unmuteLabel = (da: boolean) => (da ? "Slå notifikationer til" : "Unmute notifications");
