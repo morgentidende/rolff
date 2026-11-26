@@ -23,7 +23,7 @@ test('front-page ⋮ keeps every app-wide item', async () => {
   } finally { await f.close(); }
 });
 
-test('Blokér samtale: in-app dialog (no window.confirm), Annuller keeps, Blokér blocks + toast, Esc cancels unblock', async () => {
+test('Blokér samtale: in-app dialog (no window.confirm), ✕ keeps, Blokér blocks + toast, Esc cancels unblock', async () => {
   const f = await env(); const { w, d } = f; try {
     let nativeUsed = 0; w.confirm = () => { nativeUsed++; return true; }; w.alert = () => { nativeUsed++; }; w.prompt = () => { nativeUsed++; return null; };
     await openChat(d);
@@ -32,12 +32,14 @@ test('Blokér samtale: in-app dialog (no window.confirm), Annuller keeps, Bloké
     let dlg = d.querySelector('[role=alertdialog]'); assert.ok(dlg); assert.equal(dlg.getAttribute('aria-modal'), 'true');
     assert.equal(dlg.querySelector('h2').textContent, 'Blokér samtalen?');
     assert.match(dlg.textContent, /De andre kan ikke sende dig beskeder her, før du afblokerer\. De får ikke besked om det\./);
-    assert.deepEqual([...dlg.querySelectorAll('button')].map(b => b.textContent), ['Annuller', 'Blokér']);
-    assert.ok(d.activeElement === button(d, 'Annuller'), 'safe default focus');
+    const close = dlg.querySelector('button[aria-label="Luk"]'); assert.ok(close, '✕ close');
+    assert.deepEqual([...dlg.querySelectorAll('button')].map(b => b.textContent), ['✕', 'Blokér']);
+    assert.ok(![...dlg.querySelectorAll('button')].some(b => /^(Annuller|Cancel)$/.test(b.textContent.trim())));
+    assert.ok(d.activeElement === close, 'safe default focus');
     // focus trap
     dlg.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true })); assert.ok(d.activeElement === button(d, 'Blokér'));
-    dlg.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Tab', bubbles: true })); assert.ok(d.activeElement === button(d, 'Annuller'));
-    await click(button(d, 'Annuller')); await delay(20);
+    dlg.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Tab', bubbles: true })); assert.ok(d.activeElement === close);
+    await click(close); await delay(20);
     assert.equal(d.querySelector('[role=alertdialog]'), null);
     assert.equal(w.QA.calls.filter(c => c.name === 'block_conversation').length, 0);
     await click((await menu(d)).find(b => b.textContent === 'Blokér samtale')); await delay(30);

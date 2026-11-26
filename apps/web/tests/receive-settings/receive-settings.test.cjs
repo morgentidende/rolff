@@ -38,7 +38,8 @@ test('enabling modtagetider prefills Mon-Sun 18-19 as seven fixed day rows', { t
     const times = [...d.querySelectorAll('.dayrow')].map(row => [...row.querySelectorAll('select')].map(s => s.value));
     assert.ok(times.every(t => t[0] === String(18 * 60) && t[1] === String(19 * 60)), 'each day is 18:00–19:00');
     assert.equal(button(d, 'Gem').disabled, false, 'Gem enabled with default windows');
-    assert.ok(button(d, 'Annuller'), 'Cancel is visible');
+    assert.ok(![...d.querySelectorAll('.times-actions button')].some(b => /^(Annuller|Cancel)$/.test(b.textContent.trim())), 'no Annuller; the sheet ✕ closes');
+    assert.ok(d.querySelector('.sheethead button[aria-label="Luk"]'), 'sheet ✕ is present');
   } finally {
     await fixture.close();
   }

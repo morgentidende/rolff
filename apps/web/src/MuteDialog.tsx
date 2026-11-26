@@ -1,10 +1,12 @@
+import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { useBackLayer } from "./backNavigation";
+import { CardHeader } from "./CardHeader";
 import { useBackdropDismiss, useModalLayer, useUnderChatHeader } from "./modalLayer";
 import { MUTE_DURATIONS, muteMenuLabel, unmuteLabel, type MuteDuration, type MuteRow } from "./muteModel";
 import type { Lang } from "./i18n";
 
-/** WhatsApp-style "Lydløs" dialog: 8 timer / 24 timer / 1 uge / Altid, Annuller and OK. */
+/** WhatsApp-style "Lydløs" dialog: 8 timer / 24 timer / 1 uge / Altid, and OK. ✕ / backdrop / Esc cancel. */
 export function MuteDialog({ lang, current, done, onUnmute }: { lang: Lang; current: MuteRow | null; done: (d: MuteDuration | null) => void; onUnmute: () => void }) {
   const da = lang === "da";
   const [pick, setPick] = useState<MuteDuration>("8h");
@@ -32,7 +34,7 @@ export function MuteDialog({ lang, current, done, onUnmute }: { lang: Lang; curr
   return (
     <div className={underHeader !== null ? "overlay confirm-overlay top-overlay" : "overlay confirm-overlay"} ref={layer} style={underHeader !== null ? { paddingTop: underHeader + 8 } : undefined} {...backdrop}>
       <div className="confirm-card mute-card" role="dialog" aria-modal="true" aria-labelledby="mute-title" aria-describedby="mute-body" ref={box} onKeyDown={trap}>
-        <h2 id="mute-title">{da ? "Lydløs" : "Mute"}</h2>
+        <CardHeader title={da ? "Lydløs" : "Mute"} titleId="mute-title" lang={lang} onClose={() => done(null)} />
         <p id="mute-body">{da
           ? "Du får ingen notifikationer fra denne samtale. Beskeder når frem som normalt, og den anden part kan ikke se, at den er lydløs."
           : "You get no notifications from this conversation. Messages still arrive as normal, and the other party cannot see that it is muted."}</p>
@@ -45,7 +47,6 @@ export function MuteDialog({ lang, current, done, onUnmute }: { lang: Lang; curr
         </div>
         {current && <button type="button" className="text-link mute-unmute" onClick={onUnmute}>{unmuteLabel(da)}</button>}
         <div className="confirm-actions">
-          <button type="button" className="ghost" onClick={() => done(null)}>{da ? "Annuller" : "Cancel"}</button>
           <button type="button" onClick={() => done(pick)}>OK</button>
         </div>
       </div>

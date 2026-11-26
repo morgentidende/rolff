@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useBackLayer } from "../backNavigation";
+import { CardHeader } from "../CardHeader";
+import { useBackdropDismiss, useModalLayer } from "../modalLayer";
 import { deniedHelp, openAppSettings, permissionCopy, unsupportedText, type PermissionKind } from "./permissions";
 import { deviceOf, isNative, runtime } from "./platform";
 type Lang = "da" | "en";
@@ -13,13 +15,15 @@ export function PermissionDialog({ kind, mode, lang, onAllow, onClose, alternati
 }) {
   const ref = useRef<HTMLDialogElement>(null); const open = mode !== null;
   useBackLayer(open, onClose);
+  useModalLayer(open, ref, { native: true });
+  const backdrop = useBackdropDismiss(onClose, undefined, { outsideBox: true });
   useEffect(() => { const d = ref.current; if (!d) return; if (open && !d.open) { try { d.showModal(); } catch { d.setAttribute("open", ""); } } else if (!open && d.open) d.close(); }, [open]);
   const da = lang === "da"; const copy = permissionCopy(kind, lang); const r = runtime();
   const help = mode === "denied" ? deniedHelp(kind, deviceOf(navigator.userAgent, r), r, lang) : null;
   const title = mode === "explain" ? copy.title : mode === "denied" ? help!.title : (da ? "Ikke muligt her" : "Not available here");
-  return <dialog ref={ref} className="composer-upgrade permission-dialog" aria-labelledby={`perm-${kind}`} onCancel={e => { e.preventDefault(); onClose(); }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+  return <dialog ref={ref} className="composer-upgrade permission-dialog" aria-labelledby={`perm-${kind}`} onCancel={e => { e.preventDefault(); onClose(); }} {...backdrop}>
     {open && <>
-      <h3 id={`perm-${kind}`}>{title}</h3>
+      <CardHeader title={title} titleId={`perm-${kind}`} lang={lang} onClose={onClose} />
       {mode === "explain" && <p>{copy.body}</p>}
       {mode === "denied" && <><p>{da ? "Du har tidligere sagt nej. Sådan slår du det til igen:" : "You said no earlier. To turn it back on:"}</p><ol className="permission-steps">{help!.steps.map((s, i) => <li key={i}>{s}</li>)}</ol></>}
       {mode === "unsupported" && <p>{unsupportedText(kind, lang)}</p>}

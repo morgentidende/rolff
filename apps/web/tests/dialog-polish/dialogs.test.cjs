@@ -8,7 +8,7 @@ const { env, delay, button, label, click } = require('../back-navigation/support
 const src = f => fs.readFileSync(path.join(__dirname, '../../src', f), 'utf8');
 const css = src('styles.css');
 
-test('Kaldenavn: no autofill of own emails, neutral placeholder, two-button row, reset only when an alias exists', { timeout: 8000 }, async () => {
+test('Kaldenavn: no autofill of own emails, neutral placeholder, Gem plus ✕ close, reset only when an alias exists', { timeout: 8000 }, async () => {
   const fx = await env(false); const { w, d } = fx;
   try {
     d.querySelector('.convbtn').dispatchEvent(new w.MouseEvent('contextmenu', { bubbles: true, cancelable: true })); await delay(30);
@@ -22,7 +22,9 @@ test('Kaldenavn: no autofill of own emails, neutral placeholder, two-button row,
     assert.ok(!/@/.test(input.getAttribute('placeholder')), 'placeholder never shows an email');
     assert.match(d.getElementById('contact-alias-original').textContent, /kontakt@example\.invalid/, 'original name shown as help text instead');
     const actions = dlg.querySelector('.dialog-actions'); assert.ok(actions);
-    assert.deepEqual([...actions.querySelectorAll('button')].map(b => b.textContent), ['Annuller', 'Gem']);
+    assert.deepEqual([...actions.querySelectorAll('button')].map(b => b.textContent), ['Gem']);
+    assert.ok(dlg.querySelector('.sheethead button[aria-label="Luk"]'), '✕ close in the header');
+    assert.ok(![...dlg.querySelectorAll('button')].some(b => /^(Annuller|Cancel)$/.test(b.textContent.trim())), 'no Annuller next to ✕');
     assert.ok(![...dlg.querySelectorAll('button')].some(b => b.textContent === 'Nulstil kaldenavn'), 'no reset without an alias');
   } finally { await fx.close(); }
 });
@@ -210,3 +212,27 @@ test('Own bubbles show the time only, never a sent tick', { timeout: 8000 }, asy
   } finally { await fx.close(); }
 });
 
+
+test('every card uses the shared ✕ close; Annuller/Cancel is not a second close', () => {
+  const header = src('CardHeader.tsx');
+  assert.match(header, /aria-label=\{closeLabel\(lang\)\}/);
+  assert.match(header, /Close.*Luk|code === "en" \? "Close" : "Luk"/);
+  for (const [f, re] of [
+    ['App.tsx', /<div className="sheethead"><h2>\{title\}<\/h2><button type="button" className="icon" aria-label=\{lang === "da" \? "Luk" : "Close"\}/],
+    ['confirmDialog.tsx', /<CardHeader title=\{req\.title\} titleId="confirm-title"/],
+    ['MuteDialog.tsx', /<CardHeader title=\{da \? "Lydløs" : "Mute"\}/],
+    ['ContactAlias.tsx', /<CardHeader title=\{da \? "Kontaktens kaldenavn"/],
+    ['PendingInviteMenu.tsx', /<CardHeader title=\{title\}/],
+    ['BlockingLists.tsx', /<CardHeader title=\{title\} titleId="blocking-dialog-title"/],
+    ['ComposerInput.tsx', /<CardHeader title=\{da \? "Vil du dele billeder og filer\?"/],
+    ['native/PermissionDialog.tsx', /<CardHeader title=\{title\} titleId=\{`perm-\$\{kind\}`\}/],
+  ]) assert.match(src(f), re, f + ' has the shared close');
+  // Action-row Annuller/Cancel that only closes must be gone. "Annullér invitation" (a real action) and
+  // composer "Annullér svar/rettelse" stay. confirmDialog callers may still pass cancel= for compatibility.
+  for (const f of ['ContactAlias.tsx', 'ReceiveSettings.tsx', 'MuteDialog.tsx', 'BlockingLists.tsx', 'ComposerInput.tsx', 'ConversationExport.tsx']) {
+    const s = src(f);
+    assert.doesNotMatch(s, /da \? "Annuller" : "Cancel"/, f);
+    assert.doesNotMatch(s, /da \? "Måske senere" : "Maybe later"/, f);
+  }
+  assert.doesNotMatch(src('confirmDialog.tsx'), /req\.cancel/);
+});

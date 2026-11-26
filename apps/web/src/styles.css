@@ -202,6 +202,8 @@ button.danger{background:#c0392b;color:#fff;border-color:#c0392b}button.danger:d
 [data-theme=dark] .composer-count.over-limit{color:#ffb4ab}
 .composer-upgrade{background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:18px;max-width:min(440px,calc(100vw - 28px));padding:20px}
 .composer-upgrade::backdrop{background:#0008}.composer-upgrade h3{margin-top:0}.composer-upgrade .row{flex-wrap:wrap}
+.composer-upgrade .sheethead,.blocking-dialog .sheethead{top:auto;margin:0 0 10px;padding:0 0 6px;background:transparent}
+.composer-upgrade .sheethead h2,.blocking-dialog .sheethead h2{font-size:19px;margin:0}
 @media(forced-colors:active){.composer-entry{border:1px solid CanvasText}.composer-input-row .message-input:focus,.composer-entry .message-input:focus{outline:2px solid Highlight;outline-offset:-2px}}
 
 /* Contact names remain private; native dialog supplies focus trapping/restoration. */
@@ -279,10 +281,12 @@ textarea.feedback-text{resize:none;height:9.5em;min-height:9.5em;overflow-y:auto
 
 /* In-app confirm dialog (replaces window.confirm). */
 .confirm-overlay{z-index:1050;align-items:center;padding:16px;animation:confirm-fade .12s ease-out}
-.confirm-card{background:var(--card);color:var(--text);width:min(360px,100%);border:1px solid var(--border);border-radius:16px;padding:18px 18px 16px;box-shadow:0 12px 36px rgba(0,0,0,.3)}
+.confirm-card{background:var(--card);color:var(--text);width:min(360px,100%);border:1px solid var(--border);border-radius:16px;padding:10px 18px 16px;box-shadow:0 12px 36px rgba(0,0,0,.3)}
+.confirm-card .sheethead{top:auto;margin:0 -6px 8px 0;padding:0 0 6px;background:transparent}
+.confirm-card .sheethead h2{margin:0;font-size:18px}
 .confirm-card h2{margin:0 0 8px;font-size:18px}
 .confirm-card p{margin:0 0 16px;font-size:15px;line-height:1.45;color:var(--muted)}
-.confirm-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.confirm-actions{display:grid;grid-template-columns:1fr;gap:10px}
 .confirm-actions button{min-height:44px;width:100%;border-radius:10px;font-weight:600}
 .confirm-actions button.ghost{border-color:var(--border);color:var(--text)}
 @keyframes confirm-fade{from{opacity:0}to{opacity:1}}
@@ -369,8 +373,8 @@ button.danger-outline{background:transparent;color:#c0392b;border:1.5px solid co
 [data-theme=dark] button.danger-outline{color:#ff8a80;border-color:color-mix(in srgb,#ff8a80 60%,transparent)}
 button.danger-outline:hover{background:color-mix(in srgb,#c0392b 8%,transparent)}
 .sheet-danger-zone{margin-top:22px;padding-top:14px;border-top:1px solid var(--border);display:flex;justify-content:center}
-/* Two-button action rows that never wrap at 360px (da + en). */
-.dialog-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
+/* Primary action row (Gem, and similar). Close is the ✕, so a single full-width button. */
+.dialog-actions{display:grid;grid-template-columns:1fr;gap:10px;margin-top:16px}
 .dialog-actions button{width:100%;min-height:48px;white-space:nowrap;font-weight:600;padding:8px 10px}
 .contact-alias-dialog .dialog-actions button.ghost{border-color:var(--border);color:var(--text)}
 .alias-reset{margin:4px 0 0 -6px}
@@ -426,7 +430,7 @@ button.compact-btn{flex:none;min-height:40px;padding:6px 14px;font-size:15px;whi
 .wnote{margin:0 0 8px}
 .field-hint-block{margin:4px 0 10px;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
 .field-hint-block .field-hint{margin:0}
-.times-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:6px}
+.times-actions{display:grid;grid-template-columns:1fr;gap:10px;margin-top:6px}
 
 .times-actions.sheet-actions,.sheet:not(.anchored-card) .times-actions.sheet-actions{
   position:sticky;bottom:0;margin:8px -18px 0;padding:8px 18px 12px;border-top:1px solid var(--border);

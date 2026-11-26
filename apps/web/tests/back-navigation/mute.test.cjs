@@ -21,7 +21,7 @@ async function setup(opts = {}) {
     return e;
 }
 
-test('chat menu has "Lydløs"; the dialog offers 8 timer, 24 timer, 1 uge and Altid with Annuller/OK', async () => {
+test('chat menu has "Lydløs"; the dialog offers 8 timer, 24 timer, 1 uge and Altid with ✕/OK', async () => {
     const e = await setup(); const { d, w } = e;
     await openChat(w, d); await openMenu(d);
     assert.ok(menuItems(d).includes('Lydløs'));
@@ -33,17 +33,18 @@ test('chat menu has "Lydløs"; the dialog offers 8 timer, 24 timer, 1 uge and Al
     assert.equal(radios(d).length, 4);
     assert.equal(radios(d).filter((r) => r.checked).length, 1);
     assert.equal(radios(d)[0].checked, true, '8 timer is preselected');
-    assert.ok(button(d, 'Annuller')); assert.ok(button(d, 'OK'));
+    assert.ok(dlg.querySelector('button[aria-label="Luk"]')); assert.ok(button(d, 'OK'));
+    assert.ok(![...dlg.querySelectorAll('button')].some(b => /^(Annuller|Cancel)$/.test(b.textContent.trim())));
     assert.ok(!dlg.textContent.includes('Slå lyd til'), 'no unmute while not muted');
     assert.match(dlg.textContent, /den anden part kan ikke se/i);
     await e.close();
 });
 
-test('Annuller closes without saving; nothing is sent to the server', async () => {
+test('✕ closes without saving; nothing is sent to the server', async () => {
     const e = await setup(); const { d, w } = e;
     await openChat(w, d); await openMenu(d); await click(menuItem(d, 'Lydløs'));
     await click(radios(d)[1]);
-    await click(button(d, 'Annuller'));
+    await click(d.querySelector('.mute-card button[aria-label="Luk"]'));
     assert.equal(d.querySelector('.mute-card'), null);
     assert.equal(muteCalls(w).length, 0);
     await openMenu(d);
@@ -135,7 +136,7 @@ test('mute is only per-user client state: the app never sends mute data in messa
     await e.close();
 });
 
-test('English: Mute, 8 hours, 24 hours, 1 week, Always, Cancel/OK, "Muted always", "Unmute"', async () => {
+test('English: Mute, 8 hours, 24 hours, 1 week, Always, Close/OK, "Muted always", "Unmute"', async () => {
     const e = await setup(); const { d, w } = e;
     await click(label(d, 'Menu')); await click(button(d, 'Sprog'));
     await click([...d.querySelectorAll('.sheet .choice')].find((c) => c.textContent.includes('English')));
@@ -144,7 +145,8 @@ test('English: Mute, 8 hours, 24 hours, 1 week, Always, Cancel/OK, "Muted always
     assert.ok(menuItems(d).includes('Mute'));
     await click(menuItem(d, 'Mute'));
     assert.deepEqual(optionTexts(d), ['8 hours', '24 hours', '1 week', 'Always']);
-    assert.ok(button(d, 'Cancel')); assert.ok(button(d, 'OK'));
+    assert.ok(d.querySelector('.mute-card button[aria-label="Close"]')); assert.ok(button(d, 'OK'));
+    assert.ok(![...d.querySelectorAll('.mute-card button')].some(b => /^(Annuller|Cancel)$/.test(b.textContent.trim())));
     assert.match(d.querySelector('.mute-card').textContent, /cannot see that it is muted/);
     await click(radios(d)[3]); await click(button(d, 'OK'));
     await openMenu(d);

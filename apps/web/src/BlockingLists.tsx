@@ -2,14 +2,18 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { focusField } from "./formHint";
 import type { Session } from "@supabase/supabase-js";
 import { useBackLayer } from "./backNavigation";
+import { CardHeader } from "./CardHeader";
 import { blockingApi, sortBlockEntries, type BlockEntry, type BlockSort } from "./blockingListModel";
 import type { Lang } from "./i18n";
+import { useBackdropDismiss, useModalLayer } from "./modalLayer";
 
-function Modal({ title, close, children }: { title: string; close: ()=>void; children: ReactNode }) {
+function Modal({ title, lang, close, children }: { title: string; lang: Lang; close: ()=>void; children: ReactNode }) {
  const ref=useRef<HTMLDialogElement>(null);
  useBackLayer(true,close);
+ useModalLayer(true, ref, { native: true });
+ const backdrop = useBackdropDismiss(close, undefined, { outsideBox: true });
  useEffect(()=>{ const before=document.activeElement as HTMLElement|null; const d=ref.current;d?.showModal();return ()=>{d?.close();if(before?.isConnected)before.focus();};},[]);
- return <dialog className="blocking-dialog" ref={ref} aria-labelledby="blocking-dialog-title" onCancel={e=>{e.preventDefault();close();}}><h2 id="blocking-dialog-title">{title}</h2>{children}</dialog>;
+ return <dialog className="blocking-dialog" ref={ref} aria-labelledby="blocking-dialog-title" onCancel={e=>{e.preventDefault();close();}} {...backdrop}><CardHeader title={title} titleId="blocking-dialog-title" lang={lang} onClose={close} />{children}</dialog>;
 }
 export function InfoButton({ label, open }: { label: string; open: ()=>void }) {
  const timer=useRef<ReturnType<typeof setTimeout>|null>(null), start=useRef<{x:number;y:number}|null>(null), suppress=useRef(false);
@@ -101,8 +105,8 @@ export function BlockingLists({ lang, conv, session }: { lang: Lang; conv: strin
  </div>}
  </section>
  {err&&<p role="alert" className="err">{err}</p>}
- {modal&&<Modal title={modal==="reset"?(da?"Nulstil blokeringsliste?":"Reset blocked words?"):(modal==="words"?(da?"Blokerede ord":"Blocked words"):modal==="topics"?(da?"Blokerede emner":"Blocked topics"):(da?"Vedhæftninger":"Attachments"))} close={()=>setModal(null)}>
- {modal==="reset"?<><p>{da?"Alle dine blokerede ord i denne samtale fjernes. Dine blokerede emner og vedhæftningsindstillinger bevares.":"All your blocked words in this conversation will be removed. Your blocked topics and attachment settings are kept."}</p><div className="row end"><button type="button" className="ghost" onClick={()=>setModal(null)}>{da?"Annuller":"Cancel"}</button><button type="button" className="danger" disabled={busy} onClick={()=>{setModal(null);void change("rpc/reset_blocked_words","POST",{conv},()=>setWords([]));}}>{da?"Nulstil":"Reset"}</button></div></>:<><p>{modal==="words"?infoWords:modal==="topics"?infoTopics:infoAttachments}</p><button type="button" onClick={()=>setModal(null)}>{da?"Luk":"Close"}</button></>}
+ {modal&&<Modal lang={lang} title={modal==="reset"?(da?"Nulstil blokeringsliste?":"Reset blocked words?"):(modal==="words"?(da?"Blokerede ord":"Blocked words"):modal==="topics"?(da?"Blokerede emner":"Blocked topics"):(da?"Vedhæftninger":"Attachments"))} close={()=>setModal(null)}>
+ {modal==="reset"?<><p>{da?"Alle dine blokerede ord i denne samtale fjernes. Dine blokerede emner og vedhæftningsindstillinger bevares.":"All your blocked words in this conversation will be removed. Your blocked topics and attachment settings are kept."}</p><div className="row end"><button type="button" className="danger" disabled={busy} onClick={()=>{setModal(null);void change("rpc/reset_blocked_words","POST",{conv},()=>setWords([]));}}>{da?"Nulstil":"Reset"}</button></div></>:<p>{modal==="words"?infoWords:modal==="topics"?infoTopics:infoAttachments}</p>}
  </Modal>}
  </div>;
 }
