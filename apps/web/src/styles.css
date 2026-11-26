@@ -620,11 +620,10 @@ html[data-keyboard] .blockbox{max-height:calc(var(--vv-h,100dvh) * .34)}
 .pendrow-link input{width:100%;font-size:13px}
 /* Notifikationer: simple on top, details under "Mere" */
 .push-settings .setting-row + .push-lead{margin:12px 2px 0}
-details.more .push-renewal{margin:2px 0 4px;color:var(--text);font-weight:600}
-details.more .push-renew{margin:0 0 6px -6px}
-details.more .push-devices .sheet-subhead{margin-top:10px}
-details.more .push-devices .meta{margin:8px 0 12px}
-details.more .sheet-danger-zone{margin-top:12px;margin-bottom:6px}
+details.push-devices{margin:14px 2px 0}
+details.push-devices>summary{cursor:pointer;font-size:14px;color:var(--muted);min-height:44px;display:inline-flex;align-items:center;list-style:none}
+details.push-devices>summary::-webkit-details-marker{display:none}
+details.push-devices .sheet-danger-zone{margin-top:12px;margin-bottom:0}
 /* Lydløs (per-conversation mute): WhatsApp-style dialog and the own-only icon on the front-page row */
 .mute-card p{margin-bottom:12px}
 .mute-card .mute-state{margin:-4px 0 10px;font-weight:600;color:var(--accent);font-size:14.5px}

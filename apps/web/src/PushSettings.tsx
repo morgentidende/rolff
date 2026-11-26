@@ -2,12 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 import { pushBuildEnabled, pushController, supportedPush } from "./push";
 import type { PushState } from "./pushController";
 import type { Lang } from "./i18n";
-import { deniedHelp } from "./native/permissions";
-import { deviceOf, runtime } from "./native/platform";
 import { confirmDialog } from "./confirmDialog";
 const errors:Record<string,[string,string]>={
- unsupported:["Browseren understøtter ikke web-notifikationer her. På iPhone/iPad kræves iOS/iPadOS 16.4+ og Rolff føjet til hjemmeskærmen.","Web notifications are not supported here. On iPhone/iPad use iOS/iPadOS 16.4+ and add Rolff to the Home Screen."],
- denied:["Notifikationer er blokeret i browserens eller telefonens indstillinger. Vi spørger ikke igen automatisk.","Notifications are blocked in browser or phone settings. We will not ask again automatically."],
+ unsupported:["Notifikationer virker ikke her. På iPhone skal Rolff føjes til hjemmeskærmen.","Notifications do not work here. On iPhone, add Rolff to the Home Screen."],
+ denied:["Åbn Indstillinger, og tillad notifikationer til Rolff.","Open Settings and allow notifications for Rolff."],
  offline:["Du er offline. Notifikationer er ikke slået til på serveren.","You are offline. Notifications have not been enabled on the server."],
  unavailable:["Notifikationer er ikke tilgængelige endnu.","Notifications are not available yet."],
 };
@@ -19,7 +17,7 @@ export function PushSettings({uid,lang,onboarding=false}:{uid:string;lang:Lang;o
    navigator.serviceWorker?.addEventListener("message",update);window.addEventListener("focus",update);
    return()=>{live=false;navigator.serviceWorker?.removeEventListener("message",update);window.removeEventListener("focus",update);};
  },[load]);
- const perform=async(fn:()=>Promise<void>)=>{setBusy(true);setError("");try{await fn();await load();}catch(e){const code=e instanceof Error?e.message:"";setError(errors[code]?.[da?0:1]??(da?"Ændringen kunne ikke bekræftes på serveren. Notifikationer er ikke bekræftet aktive. Prøv igen senere.":"The change could not be confirmed on the server. Notifications are not confirmed active. Try again later."));setActive(false);}finally{setBusy(false);}};
+ const perform=async(fn:()=>Promise<void>)=>{setBusy(true);setError("");try{await fn();await load();}catch(e){const code=e instanceof Error?e.message:"";setError(errors[code]?.[da?0:1]??(da?"Ændringen kunne ikke bekræftes på serveren. Prøv igen senere.":"The change could not be confirmed on the server. Try again later."));setActive(false);}finally{setBusy(false);}};
  if(onboarding && (!pushBuildEnabled || !state?.available || state.offered || dismissed))return null;
  if(!pushBuildEnabled || (state && !state.available))return <p role="status">{errors.unavailable[da?0:1]}</p>;
  if(!state)return <p role="status">{error||(da?"Henter status…":"Loading status…")}</p>;
@@ -35,35 +33,24 @@ export function PushSettings({uid,lang,onboarding=false}:{uid:string;lang:Lang;o
    </div>
  </section>;
  const denied=typeof Notification!=="undefined" && Notification.permission==="denied", supported=supportedPush();
- const status=active?(da?"Aktiv":"On"):denied?(da?"Blokeret i telefonens indstillinger":"Blocked in your phone settings"):!supported?(da?"Ikke understøttet her":"Not supported here"):(da?"Fra":"Off");
  const canToggle=!busy&&(active||(supported&&!denied));
  const toggle=()=>void perform(()=>active?pushController.disable():pushController.enable(state));
- const help=denied?deniedHelp("notifications",deviceOf(navigator.userAgent,runtime()),runtime(),da?"da":"en"):null;
  const offAll=async()=>{if(await confirmDialog({title:da?"Slå fra på alle enheder?":"Turn off on all devices?",body:da?"Ingen af dine enheder får notifikationer, før du slår dem til igen.":"None of your devices will get notifications until you turn them on again.",confirm:da?"Slå fra":"Turn off",cancel:da?"Annuller":"Cancel",danger:true}))void perform(()=>pushController.disable(null,true));};
+ const line=denied?errors.denied[da?0:1]:!supported?errors.unsupported[da?0:1]:(da?"Du får besked, når der kommer nye beskeder.":"You get notified when new messages arrive.");
  return <section className="push-settings" aria-label={da?"Notifikationer":"Notifications"}>
-   {/* The sheet title already says "Notifikationer"; no second heading here. Simple on top, the rest under "Mere". */}
+   {/* The sheet title already says "Notifikationer"; the row repeats that name as the single control, WhatsApp-style. */}
    <div className="setting-row">
-     <div className="setting-text"><span className="setting-title" id="push-toggle-label">{da?"Notifikationer på denne telefon":"Notifications on this phone"}</span>
-       <span className={`setting-status${active?" is-on":""}${denied?" is-blocked":""}`} id="push-toggle-status" role="status">{status}</span></div>
-     <button type="button" role="switch" className="toggle-switch" aria-checked={active} aria-labelledby="push-toggle-label" aria-describedby="push-toggle-status" disabled={!canToggle} aria-busy={busy||undefined} onClick={toggle}><span className="switch-knob" aria-hidden="true"/></button>
+     <div className="setting-text"><span className="setting-title" id="push-toggle-label">{da?"Notifikationer":"Notifications"}</span></div>
+     <button type="button" role="switch" className="toggle-switch" aria-checked={active} aria-labelledby="push-toggle-label" disabled={!canToggle} aria-busy={busy||undefined} onClick={toggle}><span className="switch-knob" aria-hidden="true"/></button>
    </div>
-   <p className="push-lead">{da?"Notifikationer viser afsenderens navn, men aldrig beskedteksten. Du kan gøre en enkelt samtale lydløs i samtalens menu.":"Notifications show the sender's name, but never the message text. You can mute a single conversation in its menu."}</p>
-   {!supported && <p className="meta" role="status">{errors.unsupported[da?0:1]}</p>}
+   <p className="push-lead" role="status">{line}</p>
    {error && <p className="err" role="alert">{error}</p>}
-   {help && <div className="notice push-help" role="status"><strong>{help.title}</strong><ol className="permission-steps">{help.steps.map((x,i)=><li key={i}>{x}</li>)}</ol></div>}
-   <details className="more">
-     <summary>{da?"Mere":"More"}</summary>
-     {state.devices.length>0 && <div className="push-devices">
-       <h3 className="sheet-subhead">{da?"Tilmeldte enheder":"Registered devices"}</h3>
-       <ul className="device-list">{state.devices.map((d,i)=>{const label=`${da?"Enhed":"Device"} ${i+1}`;return <li key={d.id}>
-         <span className="device-text"><span className="device-name">{label}{d.id===binding&&<span className="tag">{da?"Denne enhed":"This device"}</span>}</span></span>
-         <button type="button" className="text-link" disabled={busy} aria-label={`${da?"Fjern":"Remove"} ${label}`} onClick={()=>void perform(()=>pushController.disable(d.id))}>{da?"Fjern":"Remove"}</button></li>;})}</ul>
-       <p className="meta">{da?"Tilmeldingen fornyes automatisk, mens du bruger appen. Enheder, der ikke har været brugt i 90 dage, fjernes. Enheder vises uden navn.":"Registration is renewed automatically while you use the app. Devices unused for 90 days are removed. Devices are shown without names."}</p>
-     </div>}
-     <p>{da?"Notifikationen lyder fx “Ny besked fra Far” og “Åbn Rolff for at læse den.” Navnet er det, du selv har givet personen i Rolff. Har du ikke givet personen et navn, står personens e-mailadresse der i stedet. Navnet kan ses på låseskærmen, men beskedteksten vises aldrig. Når nogen accepterer din invitation, får du fx “Far har accepteret din invitation”.":"The notice reads e.g. “New message from Dad” and “Open Rolff to read it.” The name is the one you gave that person in Rolff. If you have not named them, their e-mail address is shown instead. The name can be seen on the lock screen, but the message text never is. When someone accepts your invitation you get e.g. “Dad accepted your invitation”."}</p>
-     <p>{da?"Har du modtagetider slået til, sendes en notifikation først, når beskederne frigives. En notifikation, der allerede er på vej, kan stadig nå frem, selv om du ændrer tider eller slår fra.":"If receive times are on, a notification is only sent once messages are released. A notification already on its way may still arrive after you change times or turn it off."}</p>
-     <p>{da?"Browser, netværk og telefon kan forsinke eller undlade at vise notifikationen. Det præcise tidspunkt kan ikke garanteres.":"Browser, network and phone may delay or not show the notification. The exact time cannot be guaranteed."}</p>
-     {state.devices.length>0 && <div className="sheet-danger-zone"><button type="button" className="text-danger" disabled={busy} onClick={()=>void offAll()}>{da?"Slå fra på alle enheder":"Turn off on all devices"}</button></div>}
-   </details>
+   {state.devices.length>0 && <details className="push-devices">
+     <summary>{da?"Enheder":"Devices"}</summary>
+     <ul className="device-list">{state.devices.map((d,i)=>{const label=`${da?"Enhed":"Device"} ${i+1}`;return <li key={d.id}>
+       <span className="device-text"><span className="device-name">{label}{d.id===binding&&<span className="tag">{da?"Denne enhed":"This device"}</span>}</span></span>
+       <button type="button" className="text-link" disabled={busy} aria-label={`${da?"Fjern":"Remove"} ${label}`} onClick={()=>void perform(()=>pushController.disable(d.id))}>{da?"Fjern":"Remove"}</button></li>;})}</ul>
+     <div className="sheet-danger-zone"><button type="button" className="text-danger" disabled={busy} onClick={()=>void offAll()}>{da?"Slå fra på alle enheder":"Turn off on all devices"}</button></div>
+   </details>}
  </section>;
 }
