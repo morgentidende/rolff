@@ -16,12 +16,12 @@ const list=d=>[...d.querySelector('section').querySelectorAll('li span')].map(x=
 function pointer(w,el,type,props={}){const e=new w.Event(type,{bubbles:true});Object.assign(e,{isPrimary:true,button:0,clientX:0,clientY:0,...props});el.dispatchEvent(e);}
 test('Danish order, true creation timestamps, stable ties, display sort does not save',async()=>{const e=await env();try{assert.deepEqual(list(e.d),['æble','åben aftale','ønske']);const select=e.d.querySelector('select');for(const [value,expected]of [['alphabetical',['æble','ønske','åben aftale']],['newest',['ønske','åben aftale','æble']],['oldest',['æble','åben aftale','ønske']]]){select.value=value;select.dispatchEvent(new e.w.Event('change',{bubbles:true}));await delay(5);assert.deepEqual(list(e.d),expected);}assert.ok(e.w.QA.requests.every(x=>x.method==='GET'||String(x.url).includes('get_my_attachment_blocks')));}finally{await e.close()}});
 test('Accessible trash removes just one word; topic list unchanged',async()=>{const e=await env();try{const trash=e.d.querySelector('[aria-label="Fjern æble"]');assert.ok(trash.querySelector('svg'));await click(trash);assert.deepEqual(list(e.d),['åben aftale','ønske']);assert.match(e.d.querySelectorAll('section')[1].textContent,/omtaler mine forældre/);}finally{await e.close()}});
-test('Reset confirmation cancel/Escape preserve words and both typed drafts',async()=>{const e=await env();try{input(e.w,'blocked-word','udkast');input(e.w,'blocked-topic','omtaler min cykel');await click(btn(e.d,'Nulstil blokeringsliste'));assert.ok(e.d.querySelector('dialog[open]'));assert.equal(e.w.QA.requests.filter(x=>x.method!=='GET'&&!String(x.url).includes('get_my_attachment_blocks')).length,0);await click(btn(e.d,'Annuller'));await click(btn(e.d,'Nulstil blokeringsliste'));e.d.dispatchEvent(new e.w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await delay(10);assert.ok(!e.d.querySelector('dialog'));assert.equal(e.d.getElementById('blocked-word').value,'udkast');assert.equal(e.d.getElementById('blocked-topic').value,'omtaler min cykel');assert.equal(list(e.d).length,3);}finally{await e.close()}});
+test('Reset confirmation cancel/Escape preserve words and both typed drafts',async()=>{const e=await env();try{input(e.w,'blocked-word','udkast');input(e.w,'blocked-topic','omtaler min cykel');await click(btn(e.d,'Nulstil blokeringsliste'));assert.ok(e.d.querySelector('dialog[open]'));assert.equal(e.w.QA.requests.filter(x=>x.method!=='GET'&&!String(x.url).includes('get_my_attachment_blocks')).length,0);await click(e.d.querySelector('dialog[open] button[aria-label="Luk"]'));await click(btn(e.d,'Nulstil blokeringsliste'));e.d.dispatchEvent(new e.w.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await delay(10);assert.ok(!e.d.querySelector('dialog'));assert.equal(e.d.getElementById('blocked-word').value,'udkast');assert.equal(e.d.getElementById('blocked-topic').value,'omtaler min cykel');assert.equal(list(e.d).length,3);}finally{await e.close()}});
 test('Confirmed reset clears only words and only owner/conversation RPC',async()=>{const e=await env();try{await click(btn(e.d,'Nulstil blokeringsliste'));await click(btn(e.d,'Nulstil'));assert.deepEqual(list(e.d),[]);assert.match(e.d.querySelectorAll('section')[1].textContent,/omtaler mine forældre/);const request=e.w.QA.requests.find(x=>x.url.includes('reset_blocked_words'));assert.deepEqual(JSON.parse(JSON.stringify(request.body)),{conv:'synthetic-conversation'});assert.equal(request.token,'Bearer fabricated-synthetic-owner-a');}finally{await e.close()}});
 test('Failed single delete and reset retain existing list and report unconfirmed',async()=>{const e=await env();try{e.w.QA.fail=true;await click(e.d.querySelector('[aria-label="Fjern æble"]'));assert.equal(list(e.d).length,3);assert.match(e.d.querySelector('[role=alert]').textContent,/kunne ikke bekræftes/);await click(btn(e.d,'Nulstil blokeringsliste'));await click(btn(e.d,'Nulstil'));assert.equal(list(e.d).length,3);}finally{await e.close()}});
 test('Failed topic add retains draft, successful add loads actual timestamp separately',async()=>{const e=await env();try{input(e.w,'blocked-topic','omtaler min cykel');await click(topicAck(e.d));await delay(5);e.w.QA.fail=true;await click(btn(e.d,'Tilføj emne'));assert.equal(e.d.getElementById('blocked-topic').value,'omtaler min cykel');e.w.QA.fail=false;await click(btn(e.d,'Tilføj emne'));assert.equal(e.d.getElementById('blocked-topic').value,'');assert.match(e.d.querySelectorAll('section')[1].textContent,/omtaler min cykel/);assert.equal(list(e.d).length,3);}finally{await e.close()}});
 test('Info tap/keyboard opens, Back closes only modal and draft/history remain private',async()=>{const e=await env();try{input(e.w,'blocked-topic','privat kladde');await click(e.d.querySelector('[aria-label="Om blokerede emner"]'));assert.match(e.d.querySelector('dialog').textContent,/AI kan tage fejl/);assert.ok(!JSON.stringify(e.w.history.state).includes('privat'));e.w.history.back();await delay(35);assert.ok(!e.d.querySelector('dialog'));assert.equal(e.d.getElementById('blocked-topic').value,'privat kladde');const info=e.d.querySelector('[aria-label="Om blokerede ord"]');info.dispatchEvent(new e.w.KeyboardEvent('keydown',{key:'Enter',bubbles:true}));await click(info);assert.match(e.d.querySelector('dialog').textContent,/Ord, udtryk/);}finally{await e.close()}});
-test('Longpress opens once and suppresses subsequent synthetic click',async()=>{const e=await env();try{const b=e.d.querySelector('[aria-label="Om blokerede ord"]');pointer(e.w,b,'pointerdown');await delay(520);assert.equal(e.d.querySelectorAll('dialog').length,1);pointer(e.w,b,'pointerup');await click(btn(e.d,'Luk'));await click(b);assert.equal(e.d.querySelectorAll('dialog').length,0);}finally{await e.close()}});
+test('Longpress opens once and suppresses subsequent synthetic click',async()=>{const e=await env();try{const b=e.d.querySelector('[aria-label="Om blokerede ord"]');pointer(e.w,b,'pointerdown');await delay(520);assert.equal(e.d.querySelectorAll('dialog').length,1);pointer(e.w,b,'pointerup');await click(e.d.querySelector('dialog[open] button[aria-label="Luk"]'));await click(b);assert.equal(e.d.querySelectorAll('dialog').length,0);}finally{await e.close()}});
 for(const kind of ['move','scroll','pointercancel'])test(`Longpress ${kind} cancels and suppresses accidental click`,async()=>{const e=await env();try{const b=e.d.querySelector('[aria-label="Om blokerede ord"]');pointer(e.w,b,'pointerdown');if(kind==='move')pointer(e.w,b,'pointermove',{clientX:20});else if(kind==='scroll')e.d.dispatchEvent(new e.w.Event('scroll'));else pointer(e.w,b,'pointercancel');await delay(520);await click(b);assert.equal(e.d.querySelectorAll('dialog').length,0);}finally{await e.close()}});
 test('Save in flight remains pinned to account A after switch B, stale DOM/draft not applied',async()=>{const e=await env();try{e.w.QA.pause=true;await click(e.d.querySelector('[aria-label="Fjern æble"]'));assert.equal(e.w.QA.pending.length,1);e.w.QA.changeAccount('synthetic-owner-b');await delay(10);const old=e.w.QA.requests.find(x=>x.url.includes('remove_blocked_word'));assert.equal(old.token,'Bearer fabricated-synthetic-owner-a');assert.ok(e.w.QA.requests.filter(x=>x.url.includes('owner-b')).every(x=>x.token==='Bearer fabricated-synthetic-owner-b'));e.w.QA.pending.splice(0).forEach(f=>f());await delay(20);assert.equal(e.d.getElementById('blocked-topic').value,'');assert.ok(!e.d.querySelector('[role=alert]'));}finally{await e.close()}});
 
@@ -110,7 +110,7 @@ test('Attachment info opens in Danish and English close label path stays on the 
   assert.match(dialog.textContent,/kun du ser den/i);
   assert.match(dialog.textContent,/ikke om beskeder er læst eller modtaget/);
   assert.ok(!/Luna|han |hun |he |she /i.test(dialog.textContent));
-  await click(btn(e.d,'Luk'));
+  await click(e.d.querySelector('dialog[open] button[aria-label="Luk"]'));
   const file=e.d.querySelector('#block-files-label').closest('.setting-row').querySelector('button[role=switch]');
   await click(file);
   assert.equal(file.getAttribute('aria-checked'),'true');
@@ -151,3 +151,66 @@ test('English consent texts exist in the source',()=>{const src=require('node:fs
  const app=require('node:fs').readFileSync(path.join(__dirname,'../../src/App.tsx'),'utf8');
  assert.ok(app.includes('Modtageren har blokeret et emne, som beskeden handler om.'));assert.ok(app.includes('the recipient has blocked a topic this message is about'));
  assert.ok(!app.includes('privat modtagerindstilling')&&!app.includes('private recipient setting'));});
+
+test('Topic input has no example placeholder in Danish or in the source',async()=>{const e=await env();try{
+ const ph=e.d.getElementById('blocked-topic').getAttribute('placeholder')||'';
+ assert.ok(!/omtaler mine forældre|mention my parents/i.test(ph));
+ const src=require('node:fs').readFileSync(path.join(__dirname,'../../src/BlockingLists.tsx'),'utf8');
+ assert.ok(!src.includes('placeholder={da?"omtaler mine forældre":"mention my parents"}'));
+ assert.ok(!src.includes('placeholder={da?"mention my parents"'));
+}finally{await e.close()}});
+test('Toggling one attachment switch does not disable or change the other switch or the consent ticks, including in flight and on rollback',async()=>{const e=await env();try{
+ const photo=e.d.querySelector('#block-photos-label').closest('.setting-row').querySelector('button[role=switch]');
+ const files=e.d.querySelector('#block-files-label').closest('.setting-row').querySelector('button[role=switch]');
+ const wordAck=e.d.querySelector('.blocking-ack input'), topicBox=topicAck(e.d);
+ await click(wordAck);await click(topicBox);
+ const idle=()=>{assert.equal(files.disabled,false);assert.equal(wordAck.disabled,false);assert.equal(topicBox.disabled,false);assert.equal(wordAck.checked,true);assert.equal(topicBox.checked,true);assert.equal(files.getAttribute('aria-checked'),'false');assert.equal(e.d.querySelector('.blocking-lists').getAttribute('aria-busy'),'false');};
+ idle();
+ const flush=async()=>{const q=e.w.QA.pending.splice(0);q.forEach(fn=>fn());await delay(20);};
+ e.w.QA.pause=true;photo.click();await delay(20);
+ assert.equal(photo.getAttribute('aria-checked'),'true','optimistic on');
+ idle();
+ e.w.QA.pause=false;await flush();
+ assert.equal(photo.getAttribute('aria-checked'),'true');idle();
+ e.w.QA.pause=true;e.w.QA.fail=true;photo.click();await delay(20);
+ assert.equal(photo.getAttribute('aria-checked'),'false','optimistic off while failing');
+ idle();
+ e.w.QA.pause=false;await flush();
+ assert.equal(photo.getAttribute('aria-checked'),'true','rolled back to last confirmed');idle();
+ assert.match(e.d.querySelector('[role=alert]').textContent,/kunne ikke bekræftes/);
+ e.w.QA.fail=false;e.w.QA.pause=true;files.click();await delay(20);
+ assert.equal(files.getAttribute('aria-checked'),'true','files optimistic on');
+ assert.equal(photo.getAttribute('aria-checked'),'true');
+ assert.equal(photo.disabled,false);assert.equal(wordAck.disabled,false);assert.equal(topicBox.disabled,false);assert.equal(wordAck.checked,true);assert.equal(topicBox.checked,true);
+ e.w.QA.pause=false;await flush();
+ assert.equal(files.getAttribute('aria-checked'),'true');assert.equal(photo.getAttribute('aria-checked'),'true');
+}finally{await e.close()}});
+
+function tapDialogBackdrop(w, dialog) {
+  const r = dialog.getBoundingClientRect();
+  const x = (r.width ? r.right + 20 : 200), y = (r.height ? r.bottom + 20 : 800);
+  for (const type of ['pointerdown', 'pointerup', 'click']) {
+    const e = new w.Event(type, { bubbles: true, cancelable: true });
+    Object.assign(e, { isPrimary: true, button: 0, clientX: x, clientY: y, pointerId: 1, pointerType: 'touch' });
+    dialog.dispatchEvent(e);
+  }
+}
+
+test('info and reset dialogs close on a backdrop tap; reset is cancelled', async () => {
+  const e = await env();
+  try {
+    await click(e.d.querySelector('[aria-label="Om blokerede ord"]'));
+    const info = e.d.querySelector('dialog[open]');
+    assert.ok(info);
+    tapDialogBackdrop(e.w, info); await delay(20);
+    assert.ok(!e.d.querySelector('dialog[open]'), 'info dialog closed');
+    await click(btn(e.d, 'Nulstil blokeringsliste'));
+    const reset = e.d.querySelector('dialog[open]');
+    assert.ok(reset);
+    assert.ok(btn(e.d, 'Nulstil'));
+    tapDialogBackdrop(e.w, reset); await delay(20);
+    assert.ok(!e.d.querySelector('dialog[open]'), 'reset dialog closed');
+    assert.equal(list(e.d).length, 3, 'words kept (backdrop = cancel)');
+    assert.equal(e.w.QA.requests.filter(x => x.method !== 'GET' && !String(x.url).includes('get_my_attachment_blocks')).length, 0);
+  } finally { await e.close(); }
+});

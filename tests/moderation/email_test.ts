@@ -36,6 +36,8 @@ Deno.test("feedbackmail: escaping, kategori-whitelist, afsender", async () => {
   if (m.html.includes("<script>") || !m.html.includes("&lt;script&gt;")) throw new Error("not escaped");
   if (!m.html.includes("Mor &lt;b&gt;") || !m.text.includes("00000000-0000-0000-0000-000000000001")) throw new Error("sender missing");
   if (feedbackMail({ category: "filter", body: "x", senderName: "a", senderId: "b" }).subject !== "Rolff feedback: Filter-feedback") throw new Error("cat");
+  if (feedbackMail({ category: "feedback", body: "x", senderName: "a", senderId: "b" }).subject !== "Rolff feedback: Feedback") throw new Error("cat-feedback");
+  if (feedbackMail({ category: "app_problem", body: "x", senderName: "a", senderId: "b" }).subject !== "Rolff feedback: Problemer med Rolff-appen") throw new Error("cat-app");
 });
 
 Deno.test("reportMail escapes and includes only chosen messages", async () => {

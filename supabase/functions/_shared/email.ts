@@ -139,7 +139,7 @@ ${inviteBlock(p.link, p.inviteeEmail, p.expires, lang)}`, lang);
 
 /** Feedback/report senders are identified by user id; a name is only shown if one is passed. */
 const senderPrefix = (n: string) => n && n !== "–" ? `${esc(n)} · ` : "";
-const CATS: Record<string, string> = { suggestion: "Forslag", complaint: "Klage", filter: "Filter-feedback", idea: "Forslag", problem: "Klage", other: "Andet" };
+const CATS: Record<string, string> = { feedback: "Feedback", app_problem: "Problemer med Rolff-appen", suggestion: "Feedback", complaint: "Problemer med Rolff-appen", filter: "Filter-feedback", idea: "Forslag", problem: "Klage", other: "Andet" };
 /** Feedback to the team. Category is whitelisted; text and sender are escaped. Never conversation content. */
 export function feedbackMail(p: { category: string; body: string; senderName: string; senderId: string }) {
   const cat = CATS[p.category] ?? "Andet";
