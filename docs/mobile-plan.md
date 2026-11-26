@@ -18,7 +18,7 @@ Dato: 2026-11-02. Status: UDKAST til beslutning (Nicolai).
 | Offline / modtagetider | Online-only. Modtagetider håndhæves på serveren (virker uden app) | Kræver lokal DB (SQLite) for offline læsning | Samme |
 | Eksport / "Download mine data" | Signeret udskrift af samtale laves på serveren og sendes pr. e-mail (79-plan, se docs/court-export.md); "Download mine data" (ZIP) findes | Fil-download skal via share-sheet (native) | Samme; Safari-download virker, men share-sheet er bedre |
 | Login / invitationslinks | E-mail + adgangskode; invitationslink `/#invite=…` | Kræver **App Links** (`/.well-known/assetlinks.json` på domænet) | Kræver **Universal Links** (`/.well-known/apple-app-site-association`) |
-| Kontosletning i appen | Bygget (⋮ → Privatliv og sletning) | Krav i Google Play (i app + web-link) – opfyldt i princippet | Krav i Apple 5.1.1(v) – opfyldt i princippet |
+| Kontosletning i appen | Bygget (⋮ → Konto) + offentlig side `slet-konto.html` (i app + e-mail uden reinstallation) | Krav i Google Play (i app + web-link i Data safety) – web-URL skal indsættes i Play Console ved indsendelse | Krav i Apple 5.1.1(v) – i appen under Konto; Apple-fakturering skal opsiges hos Apple, når IAP kommer |
 
 ## 3. App store-krav (verificeret 2026-11-02)
 - **Apple App Review Guidelines 1.2 (UGC)** kræver: filtrering af stødende indhold (✔ AI + regler), **mekanisme til at rapportere stødende indhold med hurtig respons** (✘ – Nicolai har besluttet "ingen rapportér-knap"), mulighed for at **blokere misbrugende brugere** (✔ samtaleblokering), og **publiceret kontaktinfo** (✘ mangler i appen). Kilde: https://developer.apple.com/app-store/review/guidelines/#user-generated-content

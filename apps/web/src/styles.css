@@ -257,12 +257,15 @@ button.danger{background:#c0392b;color:#fff;border-color:#c0392b}button.danger:d
 .plan h3{overflow-wrap:anywhere;hyphens:auto}
 .plan.current{border:1px solid var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}
-/* Privatliv og sletning: equal section headings, themed checkboxes, delete in its own danger card. */
+/* Privacy and account: equal section headings, themed checkboxes, delete in its own danger card. */
 .privacy .psec{margin:0 0 18px}
 .privacy .psec-h{font-size:17px;font-weight:650;line-height:1.3;margin:6px 0 8px}
 .privacy form{margin:0}
 .danger-card{border:1.5px solid #c0392b;border-radius:14px;padding:12px 14px 14px;background:color-mix(in srgb,#c0392b 5%,var(--card))}
 [data-theme=dark] .danger-card{border-color:#ff8a80;background:color-mix(in srgb,#ff8a80 6%,var(--card))}
+.account-delete{margin-top:24px}
+.account-delete-export{margin:8px 0 12px}
+.danger-card button.danger{width:100%;white-space:normal;text-align:center;line-height:1.3;height:auto}
 .check-row{display:flex;align-items:center;gap:12px;min-height:44px;padding:4px 0;cursor:pointer;font-size:inherit}
 .check-row span{flex:1}
 input.check{appearance:none;-webkit-appearance:none;flex:none;width:24px;height:24px;min-height:24px;margin:0;padding:0;border:2px solid var(--accent);border-radius:7px;background:var(--card);display:inline-grid;place-content:center;cursor:pointer;transition:background .12s}
