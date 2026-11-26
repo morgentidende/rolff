@@ -87,8 +87,8 @@ test('Feedback and Slet konto: tapping an incomplete form explains why and moves
     assert.equal(d.getElementById('fb-hint').textContent, 'Skriv din feedback for at sende.'); assert.equal(d.activeElement, d.getElementById('fb'));
     assert.ok(!w.QA.calls.some(c => c.name === 'feedback'));
     await click(d.querySelector('.sheethead button.icon')); await delay(20);
-    await click(label(d, 'Menu')); await click(button(d, 'Privatliv og sletning')); await delay(40);
-    const del = button(d, 'Slet min konto permanent'); assert.equal(del.getAttribute('aria-disabled'), 'true');
+    await click(label(d, 'Menu')); await click(button(d, 'Konto (e-mail og adgangskode)')); await delay(40);
+    const del = button(d, 'Slet konto, slet alle data og opsig abonnement'); assert.equal(del.getAttribute('aria-disabled'), 'true');
     del.closest('form').requestSubmit(); await delay(20);
     assert.match(d.getElementById('delpw-hint').textContent, /Skriv din adgangskode/); assert.equal(d.activeElement, d.getElementById('delpw'));
     const pw = d.getElementById('delpw'); Object.getOwnPropertyDescriptor(w.HTMLInputElement.prototype, 'value').set.call(pw, 'x'); pw.dispatchEvent(new w.Event('input', { bubbles: true })); await delay(10);

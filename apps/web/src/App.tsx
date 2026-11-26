@@ -209,7 +209,7 @@ export function App() {
       {session && renameContacts && <ContactAliasDialog key={`alias:${session.user.id}`} lang={lang} contacts={renameContacts}
         close={() => setRenameContacts(null)} save={async (id, alias, pending) => { const uid=session.user.id; const { error } = await (pending ? supabase.rpc("set_invitation_alias", { p_invitation: id, p_alias: alias }) : supabase.rpc("set_contact_alias", { p_contact: id, p_alias: alias })).setHeader("Authorization", `Bearer ${session.access_token}`); if (error) throw error; if((await supabase.auth.getSession()).data.session?.user.id!==uid)return; const name=alias.trim()||null; setConv(c => c ? (pending ? (c.pending_invitation_id === id ? { ...c, pending_alias: name } : c) : { ...c, others: c.others.map(o => o.user_id === id ? { ...o, alias:name } : o) }) : c); setHomeKey(k => k + 1); }}
         saved={() => setRenameContacts(null)} />}
-      {sheet === "account" && <SheetView title={da ? "Konto" : "Account"} close={close} lang={lang} anchor={menuButtonRef}><AccountPanel lang={lang} /></SheetView>}
+      {sheet === "account" && <SheetView title={da ? "Konto" : "Account"} close={close} lang={lang} anchor={menuButtonRef}><AccountPanel lang={lang} openPrivacy={() => setSheet("privacy")} /></SheetView>}
       {sheet === "newpw" && session && <SheetView title={da ? "Vælg ny adgangskode" : "Choose a new password"} close={close} lang={lang} anchor={menuButtonRef}><NewPassword lang={lang} done={close} /></SheetView>}
       {sheet === "privacy" && <SheetView title={da ? "Privatliv og sletning" : "Privacy and deletion"} close={close} lang={lang} anchor={menuButtonRef}><PrivacyPanel lang={lang} /></SheetView>}
       {sheet === "feedback" && <SheetView title="Feedback" close={close} lang={lang} anchor={menuButtonRef}><FeedbackForm lang={lang} /></SheetView>}
@@ -296,9 +296,9 @@ function Faq({ lang }: { lang: Lang }) {
     ["Hvad er “Blokerede ord”?", "Et valgfrit filter (slået fra som standard): Under ⋮ → “Blokerede ord” kan du tilføje enkeltord, udtryk på flere ord eller hele sætninger (op til 120 tegn), som ikke må nå frem til dig. Store/små bogstaver og accenter er ligegyldige (fx matcher “dårlig far” også “DÅRLIG FAR” og “darlig far”), og ordene skal stå i samme rækkefølge. Afslutter du med * (fx “pis*”), rammes også ord, der begynder sådan. Listen gælder den samtale, du står i, og er privat. Rammer en besked noget på listen, bliver den ikke leveret – afsenderen får at vide præcis hvilket ord eller udtryk, og at modtageren har blokeret det, og kan omformulere. Derfor skal du bekræfte det for hvert ord. Du kan fjerne ord igen når som helst."],
     ["Kan jeg begrænse hvor tit en person skriver?", "Ja. Åbn “Deltagere og roller” og tryk “Indstillinger” ud for personen. Vælg højst 1 besked pr. minut, pr. 5 minutter, pr. time eller et brugerdefineret antal minutter (1 til 1.440 = 24 timer). Standard er ingen grænse. Det regnes fra personens seneste leverede besked til dig i alle jeres samtaler; afviste beskeder tæller ikke, vedhæftninger tæller som en besked. For tidlige beskeder gemmes ikke, og afsenderen får at vide, hvornår der kan sendes igen. Er I flere, gælder den strengeste grænse."],
     ["Hvem kan tilføje en ekstra person til en samtale?", "At invitere den anden forælder, når du opretter en samtale, kan alle. At tilføje en ekstra person (fx advokat eller bedsteforælder) kræver, at DU som inviterer har planen “Tekst + vedhæftninger” (79 kr./md.). De andre deltagere og den inviterede må gerne have 49-planen. Nedgraderer du senere, bliver de nuværende deltagere."],
-    ["Hvad kan de andre se om mig?", "Du logger ind med din e-mail. Din e-mail er også det navn, de andre i samtalen ser – du kan ikke selv vælge et andet navn. Hver person kan give dig et privat kaldenavn, som kun de selv ser (hold fingeren på samtalen). Glemt adgangskode: brug linket på login-siden. Skift e-mail eller adgangskode: ⋮ → Konto. Sletning af konto: ⋮ → Privatliv og sletning."],
+    ["Hvad kan de andre se om mig?", "Du logger ind med din e-mail. Din e-mail er også det navn, de andre i samtalen ser – du kan ikke selv vælge et andet navn. Hver person kan give dig et privat kaldenavn, som kun de selv ser (hold fingeren på samtalen). Glemt adgangskode: brug linket på login-siden. Skift e-mail eller adgangskode: ⋮ → Konto. Sletning af konto: ⋮ → Konto."],
     ["Hvordan rapporterer jeg noget?", "Tryk ⋮ i samtalen → “Rapportér”. Du vælger kategori, skriver selv hvad der er sket og kan markere de beskeder, du vil vedhæfte. Du ser en forhåndsvisning, og intet sendes før du bekræfter. Rapporten mailes til Rolffs udvikler (kontakt: nicolaipetersen108@gmail.com) med dit bruger-id. Rolff gemmer kun kategori, tidspunkt og antal vedhæftede beskeder (til at begrænse misbrug) – ikke teksten. Der er ingen døgnvagt og ingen garanti for svar eller handling. Ved akut fare: ring 112."],
-    ["Hvor ligger mine data, og hvor længe?", "På Supabase-servere i Frankfurt (EU). Du vælger selv opbevaring (1 år, 5 år eller ubegrænset) og sky-synk under ⋮ → Privatliv og sletning. Der kan du også downloade alle dine data (ZIP med JSON og CSV) og slette din konto. AI-tonetjekket bruger i testen OpenAI (USA/global behandling, ikke EU; ingen Zero Data Retention endnu; store:false). Læs mere i privatlivspolitikken (⋮ → Privatlivspolitik)."],
+    ["Hvor ligger mine data, og hvor længe?", "På Supabase-servere i Frankfurt (EU). Du vælger selv opbevaring (1 år, 5 år eller ubegrænset) og sky-synk under ⋮ → Privatliv og sletning. Der kan du også downloade alle dine data (ZIP med JSON og CSV). Du sletter din konto under ⋮ → Konto (det sletter alle data i appen og opsiger abonnementet; lav en udskrift først, hvis du vil beholde noget). AI-tonetjekket bruger i testen OpenAI (USA/global behandling, ikke EU; ingen Zero Data Retention endnu; store:false). Læs mere i privatlivspolitikken (⋮ → Privatlivspolitik)."],
     ["Kan jeg sende billeder og PDF'er?", "Ja, med planen “Tekst + vedhæftninger” (79 kr./md.). Brug papirclipsen til filvalg eller kameraikonet til et nyt billede. Telefonen styrer eventuelle kameratilladelser, når funktionen bruges; filvælgeren giver kun adgang til den valgte fil. En valgt fil sendes først, når du trykker på papirflyet. Du kan sende PNG, JPG, WebP, GIF (ikke animeret) og PDF (højst 4 MB og 5 sider). Du kan sende op til 5 vedhæftninger i døgnet (regnet over de seneste 24 timer). Før filen sendes, tjekker Rolff både billedet og al tekst i det – samme regler som beskeder. Er bare én linje sårende, eller er billedet upassende, bliver filen ikke sendt, og du får at vide hvorfor. Modtagerens blokerede ord gælder også tekst i filen. Under Blokeringer kan du slå fra, at den anden må sende dig fotos eller filer; afsenderen får så at vide, at den type ikke tages imod i samtalen – ikke om en besked er læst eller modtaget. Alle i samtalen kan se vedhæftninger, de modtager, uanset plan. Læsere kan ikke sende filer."],
     ["Hvad koster Rolff?", "Der er to planer: “Tekst” 49 kr./md. med højst 160 tegn pr. besked (én SMS-længde) og “Tekst + vedhæftninger” 79 kr./md. med højst 480 tegn (tre SMS-længder). Planen gælder dig som afsender, så to forældre kan have hver sin plan. Opgradering gælder straks, nedgradering fra næste periode. I testversionen er skiftet en testfunktion uden betaling."],
     ["Er det her den rigtige app?", "Nej, det er et testmiljø. Skriv kun opdigtede beskeder. AI-tjekket kører hos OpenAI (se ovenfor)."],
@@ -316,9 +316,9 @@ function Faq({ lang }: { lang: Lang }) {
     ["What are “Blocked words”?", "An optional filter (off by default): under ⋮ → “Blocked words” you can add single words, multi-word expressions or whole sentences (up to 120 characters) that must not reach you. Case and accents are ignored, and words must appear in the same order. Ending with * (e.g. “pis*”) also matches words starting that way. The list applies to the current conversation and is private. If a message hits it, it is not delivered – the sender is told exactly which word or phrase and that the recipient blocked it, and can rephrase. That is why you confirm each word. You can remove words at any time."],
     ["Can I limit how often a person writes?", "Yes. Open “Participants and roles”, then tap “Settings” next to the person. Choose at most 1 message per minute, per 5 minutes, per hour, or a custom number of minutes (1 to 1,440 = 24 hours). Default: no limit. It counts from the person's latest delivered message to you in any of your conversations; rejected messages do not count; attachments count as a message. Early messages are not stored and the sender is told when they can send again. With several recipients the strictest applies."],
     ["Who can add an extra person to a conversation?", "Anyone can invite the other parent when creating a conversation. Adding an extra person (e.g. a lawyer) requires that YOU, the inviter, are on “Text + attachments” (79 DKK/month). Other members and the invitee may be on 49. If you downgrade later, existing members stay."],
-    ["What can others see about me?", "You log in with your e-mail. Your e-mail is also the name others in the conversation see – you cannot choose a different name yourself. Each person can give you a private nickname that only they see (press and hold the conversation). Forgot password: use the link on the login page. Change e-mail or password: ⋮ → Account. Account deletion: ⋮ → Privacy and deletion."],
+    ["What can others see about me?", "You log in with your e-mail. Your e-mail is also the name others in the conversation see – you cannot choose a different name yourself. Each person can give you a private nickname that only they see (press and hold the conversation). Forgot password: use the link on the login page. Change e-mail or password: ⋮ → Account. Account deletion: ⋮ → Account."],
     ["How do I report something?", "Tap ⋮ in the conversation → “Report”. You choose a category, write what happened and can tick the messages you want to attach. You see a preview and nothing is sent until you confirm. The report is e-mailed to Rolff's developer (contact: nicolaipetersen108@gmail.com) with your user id. Rolff stores only category, time and number of attached messages (to limit abuse) – not the text. There is no 24/7 staff and no guarantee of a reply or action. In an emergency: call 112."],
-    ["Where is my data, and for how long?", "On Supabase servers in Frankfurt (EU). You choose retention (1 year, 5 years or unlimited) and cloud sync under ⋮ → Privacy and deletion, where you can also download all your data (ZIP with JSON and CSV) and delete your account. The AI tone check uses OpenAI during testing (US/global processing, not EU; no Zero Data Retention yet; store:false). See the privacy policy (⋮ → Privacy policy)."],
+    ["Where is my data, and for how long?", "On Supabase servers in Frankfurt (EU). You choose retention (1 year, 5 years or unlimited) and cloud sync under ⋮ → Privacy and deletion, where you can also download all your data (ZIP with JSON and CSV). You delete your account under ⋮ → Account (this deletes all data in the app and ends your subscription; make a transcript first if you want to keep anything). The AI tone check uses OpenAI during testing (US/global processing, not EU; no Zero Data Retention yet; store:false). See the privacy policy (⋮ → Privacy policy)."],
     ["Can I send images and PDFs?", "Yes, with the “Text + attachments” plan (79 DKK/month). Use the paperclip to choose a file or the camera to take a photo. Your phone manages any camera permission when used; the file picker grants access only to your chosen file. Nothing is sent until you press the paper plane. PNG, JPG, WebP, GIF (not animated) and PDF (max 4 MB, 5 pages). You can send up to 5 attachments per day (counted over the last 24 hours). Before sending, Rolff checks the image and all text in it with the same rules as messages. If one line is hurtful or the image is inappropriate, it is not sent and you are told why. The recipient's blocked words also apply to text in the file. Under Blocking lists you can decline photos or files from the other person; the sender is then told that that type is not accepted in the conversation — not whether a message was read or delivered. Everyone can view attachments they receive, whatever their plan. Readers cannot send files."],
     ["What does Rolff cost?", "Two plans: “Text” 49 DKK/month with up to 160 characters per message (one SMS length) and “Text + attachments” 79 DKK/month with up to 480 (three SMS lengths). The plan applies to you as sender, so two parents may have different plans. Upgrades apply immediately, downgrades from the next period. In the test version switching is a test feature without payment."],
     ["Is this the real app?", "No, this is a test environment. Write made-up messages only. The AI check runs at OpenAI (see above)."],
@@ -363,21 +363,9 @@ function MyDataExport({ lang }: { lang: Lang }) {
 function PrivacyPanel({ lang }: { lang: Lang }) {
   const da = lang === "da";
   const [p, setP] = useState<{ inactivity_delete: boolean; inactivity_days: number; cloud_sync: boolean; retention: string } | null>(null);
-  const [pw, setPw] = useState(""); const [ok, setOk] = useState(false); const [state, setState] = useState<"" | "busy" | "wrong" | "err" | "nopw" | "noack">("");
   useEffect(() => { supabase.rpc("get_my_privacy").then(({ data }) => setP(((data as any[]) ?? [])[0] ?? null)); }, []);
   const saveData = async (n: NonNullable<typeof p>) => { setP(n); await supabase.rpc("set_my_data_prefs", { p_cloud_sync: n.cloud_sync, p_retention: n.retention }); };
   const save = async (n: NonNullable<typeof p>) => { setP(n); await supabase.rpc("set_my_privacy", { p_inactivity_delete: n.inactivity_delete, p_inactivity_days: n.inactivity_days }); };
-  const del = async (e: React.FormEvent) => {
-    e.preventDefault(); if (state === "busy") return;
-    if (!pw) { setState("nopw"); focusField(document.getElementById("delpw")); return; }
-    if (!ok) { setState("noack"); focusField(document.getElementById("delack")); return; }
-    setState("busy");
-    let r; try { r = await callFn("delete-account", { password: pw }); } catch { r = { status: 0, data: null as any }; }
-    if (r.status !== 200) { setState(r.status === 403 ? "wrong" : "err"); return; }
-    try { localStorage.clear(); sessionStorage.clear(); if ("caches" in window) for (const k of await caches.keys()) await caches.delete(k);
-      const dbs = (indexedDB as any).databases ? await (indexedDB as any).databases() : []; for (const d of dbs) if (d.name) indexedDB.deleteDatabase(d.name); } catch { /* best effort */ }
-    setPushOwner(null); await cacheClear(); await supabase.auth.signOut({ scope: "local" }); location.replace(location.pathname + "?deleted=1");
-  };
   return (
     <div className="privacy">
       <section className="psec" aria-labelledby="data">
@@ -399,9 +387,32 @@ function PrivacyPanel({ lang }: { lang: Lang }) {
           {[30, 60, 90].map((d) => <option key={d} value={d}>{d} {da ? "dage" : "days"}</option>)}</select>
         <p className="meta">{da ? "Du får en mail 14 dage før. Mailen indeholder ingen beskeder." : "You get an email 14 days before. It contains no messages."}</p></>}
       </section>
+    </div>
+  );
+}
+
+function DeleteAccountSection({ lang, openPrivacy }: { lang: Lang; openPrivacy: () => void }) {
+  const da = lang === "da";
+  const [pw, setPw] = useState(""); const [ok, setOk] = useState(false); const [state, setState] = useState<"" | "busy" | "wrong" | "err" | "nopw" | "noack">("");
+  const del = async (e: React.FormEvent) => {
+    e.preventDefault(); if (state === "busy") return;
+    if (!pw) { setState("nopw"); focusField(document.getElementById("delpw")); return; }
+    if (!ok) { setState("noack"); focusField(document.getElementById("delack")); return; }
+    setState("busy");
+    let r; try { r = await callFn("delete-account", { password: pw }); } catch { r = { status: 0, data: null as any }; }
+    if (r.status !== 200) { setState(r.status === 403 ? "wrong" : "err"); return; }
+    try { localStorage.clear(); sessionStorage.clear(); if ("caches" in window) for (const k of await caches.keys()) await caches.delete(k);
+      const dbs = (indexedDB as any).databases ? await (indexedDB as any).databases() : []; for (const d of dbs) if (d.name) indexedDB.deleteDatabase(d.name); } catch { /* best effort */ }
+    setPushOwner(null); await cacheClear(); await supabase.auth.signOut({ scope: "local" }); location.replace(location.pathname + "?deleted=1");
+  };
+  return (
+    <div className="privacy account-delete">
       <section className="psec danger-card" aria-labelledby="delete">
-      <h3 id="delete" className="psec-h">{da ? "Slet min konto" : "Delete my account"}</h3>
-      <p className="meta">{da ? "Sletter din konto, dine indstillinger, kaldenavne, farver og feedback på serveren samt alt, Rolff har gemt på denne enhed. Det kan ikke fortrydes." : "Deletes your account, settings, aliases, colours and feedback on the server, plus everything Rolff stored on this device. This cannot be undone."}</p>
+      <h3 id="delete" className="psec-h">{da ? "Slet konto" : "Delete account"}</h3>
+      <p className="meta">{da
+        ? "Sletningen fjerner din konto og alle data i appen – blandt andet indstillinger, kaldenavne, farver og feedback på serveren samt alt, Rolff har gemt på denne enhed – og opsiger dit abonnement. Det kan ikke fortrydes. Hvis du vil beholde noget, skal du først lave en udskrift (i samtalen: ⋮ → Eksportér samtale) eller hente en kopi af dine data."
+        : "Deletion removes your account and all data in the app – including settings, nicknames, colours and feedback on the server, plus everything Rolff stored on this device – and ends your subscription. This cannot be undone. If you want to keep anything, first make a transcript (in the conversation: ⋮ → Export conversation) or download a copy of your data."}</p>
+      <p className="account-delete-export"><button type="button" className="textbtn strong" onClick={openPrivacy}>{da ? "Hent mine data først" : "Download my data first"}</button></p>
       <p className="notice">{evidenceNote(lang)}</p>
       <form noValidate onSubmit={del}>
         <label htmlFor="delpw">{da ? "Bekræft med din adgangskode" : "Confirm with your password"}</label>
@@ -409,7 +420,7 @@ function PrivacyPanel({ lang }: { lang: Lang }) {
         {state === "nopw" && <p id="delpw-hint" className="field-hint" role="alert">{da ? "Skriv din adgangskode for at slette kontoen." : "Enter your password to delete your account."}</p>}
         <CheckRow id="delack" checked={ok} onChange={(v) => { setOk(v); if (v && state === "noack") setState(""); }} label={da ? "Jeg forstår, at sletningen er endelig." : "I understand that deletion is final."} attention={state === "noack"} describedBy={state === "noack" ? "delack-hint" : undefined} />
         {state === "noack" && <p id="delack-hint" className="field-hint" role="alert">{da ? "Sæt flueben i ”Jeg forstår …” for at slette." : "Tick “I understand …” to delete."}</p>}
-        <div className="row end"><button type="submit" className="danger" disabled={state === "busy"} aria-disabled={!ok || !pw || undefined}>{da ? "Slet min konto permanent" : "Delete my account permanently"}</button></div>
+        <div className="row end"><button type="submit" className="danger" disabled={state === "busy"} aria-disabled={!ok || !pw || undefined}>{da ? "Slet konto, slet alle data og opsig abonnement" : "Delete account, delete all data and cancel subscription"}</button></div>
         {state === "wrong" && <p className="err" role="alert">{da ? "Forkert adgangskode." : "Wrong password."}</p>}
         {state === "err" && <p className="err" role="alert">{da ? "Sletningen mislykkedes. Prøv igen." : "Deletion failed. Please try again."}</p>}
       </form>
@@ -1272,7 +1283,7 @@ function NewPassword({ lang, done }: { lang: Lang; done: () => void }) {
   </form>);
 }
 
-function AccountPanel({ lang }: { lang: Lang }) {
+function AccountPanel({ lang, openPrivacy }: { lang: Lang; openPrivacy: () => void }) {
   const da = lang === "da";
   const [email, setEmail] = useState("");
   useEffect(() => { supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? "")); }, []);
@@ -1321,6 +1332,7 @@ function AccountPanel({ lang }: { lang: Lang }) {
       {eMsg && <p className={eMsg[0] ? "notice" : "err"} role={eMsg[0] ? "status" : "alert"}>{eMsg[1]}</p>}
       <button type="submit" disabled={busy}>{da ? "Skift e-mail" : "Change email"}</button>
     </form>
+    <DeleteAccountSection lang={lang} openPrivacy={openPrivacy} />
   </>);
 }
 
