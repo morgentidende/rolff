@@ -29,6 +29,7 @@ Deno.serve(async (req) => {
     deleteAuth: async () => { const d = await a.admin.auth.admin.deleteUser(a.uid); return !d.error; },
   });
   // Status / error code only, never addresses or content.
-  console.log(r.status === 200 ? "delete-account: done" : `delete-account: ${r.body.error}`);
+  const outcome = r.status === 200 ? "done" : String(r.body.error);
+  console.log("delete-account: " + outcome);
   return json(r.body, r.status);
 });
