@@ -77,7 +77,7 @@ export function encodeHeader(s: string): string {
   if (cur) parts.push(cur);
   return parts.map((p) => `=?UTF-8?B?${b64(p)}?=`).join("\r\n ");
 }
-export type MimeAttachment = { filename: string; content_type: "application/pdf"; content_b64: string };
+export type MimeAttachment = { filename: string; content_type: "application/pdf" | "text/html"; content_b64: string };
 export type MimeInput = { from: string; fromName: string; to: string; subject: string; html: string; text: string; replyTo?: string; attachments?: MimeAttachment[]; date?: Date; messageId?: string };
 
 export function buildMime(m: MimeInput): string {
@@ -101,8 +101,11 @@ export function buildMime(m: MimeInput): string {
   const mx = `rolffm_${rand()}`;
   let body = `--${mx}\r\nContent-Type: multipart/alternative; boundary="${b}"\r\n\r\n${alt}`;
   for (const a of m.attachments) {
-    if (a.content_type !== "application/pdf" || !/^[A-Za-z0-9._-]{1,80}\.pdf$/.test(a.filename)) throw new Error("bad_attachment");
-    body += `--${mx}\r\nContent-Type: application/pdf; name="${a.filename}"\r\nContent-Disposition: attachment; filename="${a.filename}"\r\nContent-Transfer-Encoding: base64\r\n\r\n${wrap76(a.content_b64.replace(/\s+/g, ""))}\r\n`;
+    const html = a.content_type === "text/html" && /^[A-Za-z0-9._-]{1,80}\.html$/.test(a.filename);
+    const pdf = a.content_type === "application/pdf" && /^[A-Za-z0-9._-]{1,80}\.pdf$/.test(a.filename);
+    if (!html && !pdf) throw new Error("bad_attachment");
+    const ctype = pdf ? "application/pdf" : "text/html; charset=UTF-8";
+    body += `--${mx}\r\nContent-Type: ${ctype}; name="${a.filename}"\r\nContent-Disposition: attachment; filename="${a.filename}"\r\nContent-Transfer-Encoding: base64\r\n\r\n${wrap76(a.content_b64.replace(/\s+/g, ""))}\r\n`;
   }
   body += `--${mx}--\r\n`;
   return [...head, `Content-Type: multipart/mixed; boundary="${mx}"`].join("\r\n") + "\r\n\r\n" + body;

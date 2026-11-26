@@ -4,7 +4,7 @@ import { chromium } from "playwright";
 const SITE = process.env.SITE; let n = 0, fail = 0;
 const ok = (c, m) => { n++; if (!c) fail++; console.log(`${c ? "ok" : "FEJL"} - ${m}`); };
 const b = await chromium.launch();
-for (const [locale, show, hide, mism] of [["da-DK", "Vis kodeord", "Skjul kodeord", "Kodeordene er ikke ens"], ["en-US", "Show password", "Hide password", "do not match"]]) {
+for (const [locale, show, hide, mism] of [["da-DK", "Vis kodeord", "Skjul kodeord", "Koderne er ikke ens"], ["en-US", "Show password", "Hide password", "do not match"]]) {
   const p = await b.newPage({ viewport: { width: 390, height: 844 }, locale, hasTouch: true, isMobile: true });
   await p.goto(SITE); await p.evaluate(() => { localStorage.clear(); sessionStorage.clear(); }); await p.reload(); await p.waitForSelector("#p");
   const eye = p.getByRole("button", { name: show });

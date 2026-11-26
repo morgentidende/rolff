@@ -1,4 +1,4 @@
-// Polished "Ikke sendt" box: short house-rule reasons shown in full, a "Forslag" row with "Brug forslag", guidance only for
+// Polished "Ikke sendt" box: short house-rule reasons shown in full, a "Forslag" row with "Brug forslag" when there is a rewrite; otherwise no guidance.
 // conflict-type blocks, "Mere" only for genuinely long explanations. Synthetic text, mocked sends only (no model calls).
 const { test } = require('node:test'); const assert = require('node:assert/strict');
 const fs = require('node:fs'); const path = require('node:path');
@@ -64,10 +64,10 @@ test('house block without a suggestion: marked text only, no suggestion row, no 
   } finally { await f.close(); }
 });
 
-test('conflict-type block without a suggestion still shows Vejledning; with a suggestion it shows Forslag instead', async () => {
+test('conflict-type block without a suggestion omits the section; with a suggestion it shows Forslag', async () => {
   const f = await env(); try {
     const box = await send(f, 'Du er altid så sur', { status: 'blocked', reason_code: 'personal_attack', spans: ['altid så sur'], suggestion: '', explanation: 'Tonen kan virke hård.' });
-    assert.match(box.querySelector('.blockbox-guide').textContent, /^Vejledning: Skriv, hvad der skete/);
+    assert.equal(box.querySelector('.blockbox-guide'), null); assert.ok(!/Vejledning/.test(box.textContent));
     assert.equal(box.querySelector('.blockbox-sugg'), null);
   } finally { await f.close(); }
   const g = await env(); try {
@@ -79,7 +79,7 @@ test('conflict-type block without a suggestion still shows Vejledning; with a su
 test('an unknown "house" value is ignored (treated as a conflict-type block)', async () => {
   const f = await env(); try {
     const box = await send(f, 'Opdigtet besked', { status: 'blocked', reason_code: 'personal_attack', spans: [], suggestion: '', explanation: 'Tonen kan virke hård.', house: '<b>x</b>' });
-    assert.ok(!box.classList.contains('blockbox-house')); assert.ok(box.querySelector('.blockbox-guide'));
+    assert.ok(!box.classList.contains('blockbox-house')); assert.equal(box.querySelector('.blockbox-guide'), null); assert.ok(!/Vejledning/.test(box.textContent));
   } finally { await f.close(); }
 });
 

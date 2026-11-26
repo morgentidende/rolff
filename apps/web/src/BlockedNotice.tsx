@@ -11,7 +11,7 @@ export function cleanHouse(raw: unknown): HouseKind | undefined { return raw ===
 type Props = { lang: Lang; reason?: string; house?: HouseKind; explanation?: string; spans: string[]; blockedText: string; suggestion: string; onUse: () => void; onClose: () => void };
 
 /** "Ikke sendt" box: title + close, a short reason (shown in full; "Mere" only when a long explanation is clamped),
- *  the marked text, and a suggestion row with a "Brug forslag" button. House-rule blocks (swear words, "!") never show the generic guidance. */
+ *  the marked text, and a suggestion row with a "Brug forslag" button when Luna has a sendable rewrite. Otherwise the suggestion section is omitted. */
 export function BlockedNotice({ lang, reason, house, explanation: given, spans, blockedText, suggestion, onUse, onClose }: Props) {
   const t = strings[lang], da = lang === "da";
   // Borderline tone ("uncertain"): the detailed explanation (words + role of the earlier conversation) when there is one;
@@ -45,11 +45,11 @@ export function BlockedNotice({ lang, reason, house, explanation: given, spans, 
       {snip && <p className="blockbox-flag"><span className="blockbox-flag-k">{da ? "Markeret:" : "Flagged:"}</span> <span className="blockbox-flag-v">{snip.pre}<mark>{snip.hit}</mark>{snip.post}</span></p>}
       {suggestion ? (
         <div className="blockbox-sugg">
-          <span className="blockbox-sugg-k">{da ? "Forslag" : "Suggestion"}</span>
+          <span className="blockbox-sugg-k">{t.suggestionLabel}</span>
           <div className="blockbox-quote">{suggestion}</div>
           <button type="button" className="blockbox-use" onClick={onUse}>{t.useSuggestion}</button>
         </div>
-      ) : uncertain || house ? null : <p className="blockbox-guide"><strong>{t.guidanceLabel}:</strong> {t.blockGuidance}</p>}
+      ) : null}
     </div>
   );
 }
