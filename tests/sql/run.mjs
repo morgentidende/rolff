@@ -282,15 +282,15 @@ await t('Skriver kan skrive efter enstemmig godkendelse', async () => {
 await t('Læser kan ikke invitere', async () => rejects(as(L, `select * from create_member_invitation($1,'z@test.invalid','reader')`, [ec]), /forbidden/));
 // Feedback
 await t('Feedback: kan indsende egen, ingen kan læse', async () => {
-  await as(A, `select submit_feedback('suggestion','Mere kontrast')`);
+  await as(A, `select submit_feedback('feedback','Mere kontrast')`);
   await rejects(as(A, `select * from feedback`), /permission|denied/);
   await rejects(as(C, `select * from feedback`), /permission|denied/);
-  assert.equal((await svc(`select count(*)::int n from feedback where user_id=$1`, [A]))[0].n, 1);
+  assert.equal((await svc(`select count(*)::int n from feedback where user_id=$1 and category='feedback'`, [A]))[0].n, 1);
 });
 await t('Feedback: direkte indsættelse afvises', async () => rejects(as(A, `insert into feedback(user_id, body) values ($1,'x')`, [B]), /permission|denied|policy/));
 await t('Feedback: ugyldig kategori afvises', async () => rejects(as(A, `select submit_feedback('spam','x')`), /bad_input|check|violat/));
-await t('Feedback: for lang tekst afvises', async () => rejects(as(A, `select submit_feedback('suggestion',repeat('x',2001))`), /bad_input|check|violat/));
-await t('Feedback: max 5 pr. døgn', async () => { for (let k = 0; k < 4; k++) await as(A, `select submit_feedback('suggestion','ok')`); await rejects(as(A, `select submit_feedback('complaint','sjette')`), /rate_limited/); });
+await t('Feedback: for lang tekst afvises', async () => rejects(as(A, `select submit_feedback('feedback',repeat('x',2001))`), /bad_input|check|violat/));
+await t('Feedback: max 5 pr. døgn', async () => { for (let k = 0; k < 4; k++) await as(A, `select submit_feedback('feedback','ok')`); await rejects(as(A, `select submit_feedback('app_problem','sjette')`), /rate_limited/); });
 await t('Feedback: anonym kan ikke indsende', async () => rejects(db.transaction(async (tx) => { await tx.exec(`set local role anon`); return tx.query(`select submit_feedback('other','x')`); }), /permission|denied/));
 
 // GDPR: deletion (art. 17) and inactivity
@@ -307,7 +307,7 @@ await t('Sletning: opsætning (P og Q i samtale, P alene i en anden)', async () 
   await svc(`insert into receive_windows(user_id, weekday, start_min, end_min) select $1, (extract(isodow from now())::int % 7) + 1, 0, 1`, [Q]).catch(() => {});
   await as(P, `select set_conversation_color($1,'rose')`, [pc]);
   await as(P, `select set_contact_alias($1,'Q-alias')`, [Q]);
-  await as(P, `select submit_feedback('suggestion','slet mig')`);
+  await as(P, `select submit_feedback('feedback','slet mig')`);
   await as(P, `select touch_seen()`);
 });
 await t('Klient kan ikke kalde purge_user_content / inactivity_sweep', async () => {
@@ -368,7 +368,19 @@ await t('Blokering: A (blokerende) kan stadig skrive', async () => { await sendA
 await t('Blokering: B kan ikke se eller fjerne blokeringen', async () => { assert.equal((await as(B, `select * from conversation_blocks`)).length, 0); await as(B, `select unblock_conversation($1)`, [conv]); await rejects(sendAs(B, 'Hej igen', 'key-blk00003'), /cannot_deliver/); });
 await t('Blokering: ingen udløbskolonne', async () => assert.deepEqual((await db.query(`select column_name from information_schema.columns where table_name='conversation_blocks' order by 1`)).rows.map(r => r.column_name), ['conversation_id', 'created_at', 'user_id']));
 await t('Blokering: ophører kun når A afblokerer', async () => { await as(A, `select unblock_conversation($1)`, [conv]); await sendAs(B, 'Hej igen', 'key-blk00004'); });
-await t('Feedback: kun Forslag/Klage kan indsendes; gamle filter-rækker forbliver gyldige', async () => { await svc(`delete from feedback`); await as(B, `select submit_feedback('complaint','x')`); await as(B, `select submit_feedback('suggestion','z')`); await rejects(as(B, `select submit_feedback('filter','y')`), /bad_input/); await rejects(as(B, `select submit_feedback('other','y')`), /bad_input/); await db.query(`insert into feedback(user_id,category,body) values ($1,'filter','gammel')`, [B]); assert.equal((await db.query(`select count(*)::int n from feedback where category='filter'`)).rows[0].n, 1); });
+await t('Feedback: kun feedback/app_problem kan indsendes; gamle nøgler mappes; historiske rækker forbliver gyldige', async () => {
+  await svc(`delete from feedback`);
+  await as(B, `select submit_feedback('app_problem','x')`);
+  await as(B, `select submit_feedback('feedback','z')`);
+  await as(B, `select submit_feedback('suggestion','old')`);
+  await as(B, `select submit_feedback('complaint','old2')`);
+  const cats = (await db.query(`select category from feedback where user_id=$1 order by created_at, body`, [B])).rows.map(r => r.category);
+  assert.deepEqual(cats, ['app_problem', 'feedback', 'feedback', 'app_problem']);
+  await rejects(as(B, `select submit_feedback('filter','y')`), /bad_input/);
+  await rejects(as(B, `select submit_feedback('other','y')`), /bad_input/);
+  await db.query(`insert into feedback(user_id,category,body) values ($1,'filter','gammel'),($1,'suggestion','gammel2')`, [B]);
+  assert.equal((await db.query(`select count(*)::int n from feedback where category in ('filter','suggestion')`)).rows[0].n, 2);
+});
 
 await t('Visningsnavn: andre ser altid e-mail (eller eget private kaldenavn); selvvalgt navn er fjernet', async () => {
   await db.query(`update auth.users set email='a-login@test.invalid' where id=$1`, [A]);
