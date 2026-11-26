@@ -17,6 +17,10 @@ class BackNavigation {
   attach=()=>{
     if(this.attached)return;this.attached=true;
     window.addEventListener("popstate",this.pop);document.addEventListener("keydown",this.key,true);
+    // Rolff restores the list's scroll position itself (App.tsx). With the browser's automatic restoration, a Back
+    // traversal snapped the list to the scroll saved for the history entry (0, the chat had scrolled the window)
+    // right after the slide: the list jumped on the way back.
+    try{if("scrollRestoration" in history)history.scrollRestoration="manual";}catch{/* not supported */}
     // A restored guard might have no predecessor. Normalize ONLY the current
     // entry, without a traversal that could strand pruning or claim a stranger.
     const old=this.marker();if(old)this.retired.add(old.doc);

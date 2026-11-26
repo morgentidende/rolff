@@ -137,3 +137,29 @@ test('CSS: the slide layers paint once and only move (no animated shadow), and a
   assert.doesNotMatch(src, /boxShadow|backgroundColor/, 'no non-composited animated properties');
 });
 
+
+test('no jump before or after the slide: the copy is frozen as it was on screen, the page never widens, Back keeps the list scroll', { timeout: 10000 }, async () => {
+  const fx = await env(false, false, motion); const { w, d } = fx;
+  try {
+    // Forward: the list copy keeps the list's exact height (no re-layout in its fixed layer).
+    const liveH = d.querySelector('#root > .wrap').offsetHeight;
+    await click(d.querySelector('.convbtn'));
+    const g = d.querySelector('.page-ghost > .wrap');
+    assert.equal(g.style.height, `${liveH}px`); assert.match(g.style.minHeight, /^0(px)?$/);
+    await delay(PAGE_MS + 60);
+    // Back: the chat copy keeps --app-h (the chat removes it from :root when it unmounts) and its hidden parts stay hidden.
+    d.documentElement.style.setProperty('--app-h', '420px');
+    const live = d.querySelector('#root > .wrap');
+    const hiddenIdx = [...live.children].findIndex((c) => c.classList.contains('notice'));
+    if (hiddenIdx >= 0) live.children[hiddenIdx].style.display = 'none'; // what :root[data-kbd] does with the keyboard open
+    await back(w);
+    const gb = d.querySelector('.page-ghost > .wrap');
+    assert.equal(gb.style.getPropertyValue('--app-h'), '420px');
+    if (hiddenIdx >= 0) assert.equal(gb.children[hiddenIdx].style.display, 'none', 'hidden in the chat, hidden in its copy');
+    await delay(PAGE_MS + 60);
+  } finally { await fx.close(); }
+  const css = fs.readFileSync(path.join(__dirname, '../../src/styles.css'), 'utf8');
+  assert.match(css, /(^|\n)html,body\{overflow-x:clip\}/, 'the off-screen incoming page must not widen the layout viewport (mobile zoom-out / re-wrap)');
+  const nav = fs.readFileSync(path.join(__dirname, '../../src/backNavigation.ts'), 'utf8');
+  assert.match(nav, /history\.scrollRestoration="manual"/, 'the browser must not override the restored list scroll on Back');
+});

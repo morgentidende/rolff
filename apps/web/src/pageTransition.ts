@@ -53,6 +53,13 @@ export function preparePage(dir: PageDir, wrap: HTMLElement | null): PendingPage
   const scrolled: [number, number][] = [];
   [wrap, ...Array.from(wrap.querySelectorAll<HTMLElement>("*"))].forEach((n, i) => { if (n.scrollTop > 0) scrolled.push([i, n.scrollTop]); });
   const clone = wrap.cloneNode(true) as HTMLElement;
+  // Freeze the copy exactly as it is on screen. When the chat unmounts it removes --app-h and :root[data-kbd]
+  // (viewport/keyboard state), and copies lose #root-scoped rules; without this the copy re-laid-out at the first
+  // frame (e.g. the test banner reappearing above the chat header and pushing it 38 px down: the "jump" on Back).
+  clone.style.height = `${wrap.offsetHeight}px`; clone.style.minHeight = "0";
+  const appH = document.documentElement.style.getPropertyValue("--app-h");
+  if (appH) clone.style.setProperty("--app-h", appH);
+  Array.from(wrap.children).forEach((c, i) => { const n = clone.children[i] as HTMLElement | undefined; if (n && getComputedStyle(c).display === "none") n.style.display = "none"; });
   // Never carry open cards, menus or close-animation copies into the page copy.
   clone.querySelectorAll(".overlay,dialog,.menu,.menu-scrim,.toast,[data-ghost]").forEach((n) => n.remove());
   sanitize(clone);
