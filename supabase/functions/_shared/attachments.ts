@@ -59,7 +59,7 @@ const FILE_MODE = `
 FILE MODE: The NEW MESSAGE is an attached image (screenshot/photo) or PDF plus an optional caption and file name. Apply exactly the same rules to ALL text visible in the file (every page, every line, including screenshots of other apps such as school portals) and to the caption and file name. A file is blocked if ANY single line is a problem, even if the rest is friendly. Text in ALL CAPS or repeated many times to shout or pressure counts as aggression.
 Also BLOCK with reason_code "inappropriate_image" if the image itself (not its text) is inappropriate for a co-parenting/conflict chat: obscene or insulting gestures, nudity or sexual content, gore or violence, degrading or mocking pictures of a person, hateful symbols. Ordinary photos, documents, calendars, receipts and neutral screenshots are allowed. A photo with no visible text is NOT unclear merely because transcript is empty. Apply the base understandability rule to the intended caption/visible message: unfamiliar file names or identifiers alone are not unclear. Recognizable harmful image/text takes priority over clarification.
 Add a field "transcript": the visible text of the file copied verbatim (max 4000 characters, "" if none). "spans" must be exact substrings of the transcript or the caption.
-When you BLOCK, set "suggestion" as in the base rules: only a short constructive rewrite of a concrete legitimate practical wish from caption/visible text; otherwise "". For inappropriate_image with no usable text wish, set "suggestion" to "".
+When you BLOCK, set "suggestion" as in the base rules: a short, calm, sendable rewrite of the caption/visible text when you have a good one; otherwise "". For inappropriate_image with no usable text rewrite, set "suggestion" to "".
 Set "explanation" as in the base rules (about this file/caption's effect; for inappropriate_image describe the kind of image problem in general terms, never describe body parts or quote text).
 Respond ONLY with JSON: {"decision","reason_code" (one of ${FILE_REASON_CODES.join("|")}),"spans","transcript","suggestion","explanation"}.`;
 export function filePromptForLang(lang: AppLang = "da"): string {
@@ -74,7 +74,7 @@ export function buildFilePayload(caption: string, name: string, ctx: ContextMsg[
   });
 }
 
-export function validateFileResult(raw: unknown, caption: string): FileResult {
+export function validateFileResult(raw: unknown, caption: string, bannedWords: string[] = []): FileResult {
   let o: any = raw;
   if (typeof raw === "string") { try { o = JSON.parse(raw); } catch { throw new ModerationTechnicalError("invalid_json"); } }
   if (!o || typeof o !== "object" || Array.isArray(o)) throw new ModerationTechnicalError("invalid_shape");
@@ -93,8 +93,8 @@ export function validateFileResult(raw: unknown, caption: string): FileResult {
   const reason = o.reason_code as FileReason;
   const seed = caption.trim() || transcript.slice(0, 200) || "fil";
   const suggestion = reason === "inappropriate_image"
-    ? sanitizeSuggestion(o.suggestion, seed, "other_harmful")
-    : sanitizeSuggestion(o.suggestion, seed, reason as any);
+    ? sanitizeSuggestion(o.suggestion, seed, "other_harmful", { bannedWords })
+    : sanitizeSuggestion(o.suggestion, seed, reason as any, { bannedWords });
   const explanation = sanitizeExplanation(o.explanation, spans, [caption, transcript].join("\n"), { detail: true });
   return { decision: "block", reason_code: reason, spans, transcript, suggestion, explanation };
 }

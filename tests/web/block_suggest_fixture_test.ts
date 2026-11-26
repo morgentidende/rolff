@@ -16,10 +16,10 @@ Deno.test("fixture wires Brug forslaget click (not a dead button)", () => {
 Deno.test("fixture shows both rewritable and non-rewritable states", () => {
   assertStringIncludes(html, "Kan omformuleres");
   assertStringIncludes(html, "Kan ikke omformuleres");
-  assertStringIncludes(html, "Vejledning");
-  assertStringIncludes(html, "Skriv, hvad der skete, og hvad du gerne vil have anderledes – uden at kritisere den anden.");
+  assertEquals(html.includes("Vejledning"), false);
+  assertStringIncludes(html, "Forslag");
   assertStringIncludes(html, "Du er altid så sur");
-  // Guidance section must not have a use-suggestion button targeting the pure-criticism textarea
+  // No-suggestion state must not have a use-suggestion button targeting the pure-criticism textarea
   assertStringIncludes(html, 'id="t-cannot"');
   assertEquals(/id="use"[^>]*>[\s\S]*id="t-cannot"/.test(html) && html.includes('aria-controls="t-cannot"'), false);
 });
