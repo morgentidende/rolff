@@ -16,7 +16,7 @@ test('current plan has a quiet label (not a button); other plan keeps its action
     assert.ok(cur.firstElementChild === badge, 'badge is at the top of the card');
     assert.equal(cur.getAttribute('aria-current'), 'true');
     const spacer = other.querySelector('.plan-badge-spacer'); assert.equal(spacer.getAttribute('aria-hidden'), 'true');
-    const btn = other.querySelector('.plan-foot > button'); assert.ok(btn); assert.equal(btn.textContent, 'Nedgradér (test)');
+    const btn = other.querySelector('.plan-foot > button'); assert.ok(btn); assert.equal(btn.textContent, 'Nedgradér til Standard');
     assert.ok(!/Din nuværende plan/.test(d.body.textContent));
     const titles = [...plans.querySelectorAll('h3')].map(h => h.textContent);
     assert.deepEqual(titles, ['Standard', 'Premium']);
@@ -46,6 +46,7 @@ test('plan change confirms with the app-wide success toast, not an orange notice
     assert.ok(![...d.querySelectorAll('.notice')].some(n => /Planen er skiftet/.test(n.textContent)), 'no orange box');
     assert.equal(d.querySelectorAll('.toast-region').length, 1, 'single app-wide toast region');
     assert.equal(d.querySelector('.plan.current .plan-badge:not(.plan-badge-spacer)').closest('.plan').querySelector('h3').textContent, 'Standard');
+    assert.equal(d.querySelector('.plan:not(.current) .plan-foot > button').textContent, 'Opgradér til Premium');
   } finally { await f.close(); }
 });
 test('period end is shown only while a downgrade is pending (da)', async () => {
@@ -66,6 +67,10 @@ test('Opsig abonnement on the Abonnement sheet keeps the account and shows the e
     const card = d.querySelector('.confirm-card'); assert.ok(card);
     assert.match(card.textContent, /Konto og data bliver/);
     assert.match(card.textContent, /9\. december 2026/);
+    const alt = [...card.querySelectorAll('button')].find(b => b.textContent.trim() === 'Skift til Standard i stedet');
+    assert.ok(alt, 'Premium cancel offers Switch to Standard');
+    assert.ok(![...card.querySelectorAll('button')].some(b => /Annuller/.test(b.textContent)));
+    assert.ok(card.querySelector('[aria-label="Luk"]'), 'X-only close');
     const ok = [...card.querySelectorAll('button')].find(b => b.textContent.trim() === 'Opsig abonnement');
     await click(ok); await delay(80);
     assert.ok(w.QA.calls.some(c => c.name === 'cancel_my_subscription'));
@@ -76,5 +81,31 @@ test('Opsig abonnement on the Abonnement sheet keeps the account and shows the e
     assert.ok(w.QA.calls.some(c => c.name === 'resume_my_subscription'));
     assert.match(d.body.textContent, /Abonnementet er genoptaget/);
     assert.ok([...d.querySelectorAll('button')].some(b => b.textContent.trim() === 'Opsig abonnement'));
+  } finally { await f.close(); }
+});
+
+test('Abonnement sheet has only the sheet heading, not a second Abonnement title', async () => {
+  const f = await env(); const { d } = f; try {
+    await openPlans(f);
+    const sheet = d.querySelector('.sheet');
+    const titles = [...sheet.querySelectorAll('h1,h2')].map(h => h.textContent.trim()).filter(t => t === 'Abonnement');
+    assert.equal(titles.length, 1, 'single Abonnement heading');
+    assert.equal(sheet.querySelector('.sub-manage h2'), null);
+  } finally { await f.close(); }
+});
+
+test('Skift til Standard i stedet schedules Standard and does not cancel', async () => {
+  const f = await env(); const { d, w } = f; try {
+    await openPlans(f);
+    const sheet = d.querySelector('.sheet');
+    const cancel = [...sheet.querySelectorAll('button')].find(b => b.textContent.trim() === 'Opsig abonnement');
+    await click(cancel); await delay(60);
+    const card = d.querySelector('.confirm-card');
+    const alt = [...card.querySelectorAll('button')].find(b => b.textContent.trim() === 'Skift til Standard i stedet');
+    await click(alt); await delay(80);
+    assert.ok(w.QA.calls.some(c => c.name === 'set_my_plan_test' && c.args && c.args.p_plan === 'text'));
+    assert.ok(!w.QA.calls.some(c => c.name === 'cancel_my_subscription'));
+    assert.equal(d.querySelector('.confirm-card'), null);
+    assert.equal(d.querySelector('.plan.current h3').textContent, 'Standard');
   } finally { await f.close(); }
 });
