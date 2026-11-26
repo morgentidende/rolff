@@ -43,9 +43,9 @@ function shell(title: string, inner: string, lang: MailLang = "da") {
 <body style="margin:0;padding:0;background:#f3f1ec;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#2b2f2e">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f1ec;padding:32px 12px"><tr><td align="center">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.06)">
-<tr><td bgcolor="#016C72" style="background:#016C72;padding:20px 28px;color:#ffffff">
+<tr><td bgcolor="#00788A" style="background:#00788A;padding:20px 28px;color:#ffffff">
 <table role="presentation" cellpadding="0" cellspacing="0"><tr>
-<td width="48" style="width:48px;padding-right:14px;vertical-align:middle"><img src="${logoUrl()}" width="48" height="48" alt="Rolff logo" style="display:block;width:48px;height:48px;border:0;border-radius:11px;background:#016C72;color:#ffffff;font-size:12px"></td>
+<td width="48" style="width:48px;padding-right:14px;vertical-align:middle"><img src="${logoUrl()}" width="48" height="48" alt="Rolff logo" style="display:block;width:48px;height:48px;border:0;border-radius:11px;background:#00788A;color:#ffffff;font-size:12px"></td>
 <td style="vertical-align:middle;color:#ffffff;font-size:22px;font-weight:700;letter-spacing:.3px">Rolff<div style="font-size:13px;font-weight:400;opacity:.85;margin-top:2px">${L.tagline}</div></td>
 </tr></table></td></tr>
 <tr><td style="padding:14px 28px;background:#fff4d6;border-bottom:1px solid #f0dfa8;font-size:14px;line-height:1.45;color:#5a4300" role="note">${L.banner}</td></tr>
@@ -82,14 +82,14 @@ export function copyMail(p: { inviteeEmail: string; expires: string; lang?: Mail
 /** Button + plain text link + who it is for. Used by every invitation mail. */
 const inviteBlock = (link: string, invitee: string | undefined, expires: string, lang: MailLang = "da") => lang === "en"
   ? `${button(link, "Open the invitation")}
-<p style="margin:18px 0 0;font-size:13px;color:#4d5351">Button not working? Copy this link into your browser:<br><a href="${esc(link)}" style="color:#016C72;word-break:break-all">${esc(link)}</a></p>
+<p style="margin:18px 0 0;font-size:13px;color:#4d5351">Button not working? Copy this link into your browser:<br><a href="${esc(link)}" style="color:#00788A;word-break:break-all">${esc(link)}</a></p>
 <p style="margin:14px 0 0;font-size:13px;color:#4d5351">The invitation was sent to <strong>${esc(invitee ?? "")}</strong>. The link works <strong>once</strong> and expires <strong>${esc(fmt(expires, lang))}</strong> (3 days). If you do not know the sender, you can simply delete this e-mail.</p>`
   : `${button(link, "Åbn invitationen")}
-<p style="margin:18px 0 0;font-size:13px;color:#4d5351">Virker knappen ikke? Kopiér dette link ind i din browser:<br><a href="${esc(link)}" style="color:#016C72;word-break:break-all">${esc(link)}</a></p>
+<p style="margin:18px 0 0;font-size:13px;color:#4d5351">Virker knappen ikke? Kopiér dette link ind i din browser:<br><a href="${esc(link)}" style="color:#00788A;word-break:break-all">${esc(link)}</a></p>
 <p style="margin:14px 0 0;font-size:13px;color:#4d5351">Invitationen er sendt til <strong>${esc(invitee ?? "")}</strong>. Linket virker <strong>én gang</strong> og udløber <strong>${esc(fmt(expires))}</strong> (3 dage). Kender du ikke afsenderen, kan du bare slette mailen.</p>`;
 const roleDa = (r: string) => r === "reader" ? "kun læse" : "læse og skrive";
 const roleEn = (r: string) => r === "reader" ? "read only" : "read and write";
-const button = (link: string, label: string) => `<table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="#016C72" style="border-radius:10px;background:#016C72"><a href="${esc(link)}" style="display:inline-block;padding:14px 26px;color:#ffffff;text-decoration:none;font-weight:600;font-size:16px">${esc(label)}</a></td></tr></table>`;
+const button = (link: string, label: string) => `<table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="#00788A" style="border-radius:10px;background:#00788A"><a href="${esc(link)}" style="display:inline-block;padding:14px 26px;color:#ffffff;text-decoration:none;font-weight:600;font-size:16px">${esc(label)}</a></td></tr></table>`;
 
 /** To existing members: someone asks to add a participant. No names, no message content. */
 export function approvalMail(p: { role: string; appUrl: string; lang?: MailLang }) {
@@ -223,7 +223,7 @@ export function reportRecipient(): string | null {
   return null;
 }
 
-const btn = (link: string, label: string) => `<table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="#016C72" style="border-radius:10px;background:#016C72"><a href="${esc(link)}" style="display:inline-block;padding:14px 26px;color:#ffffff;text-decoration:none;font-weight:600;font-size:16px">${esc(label)}</a></td></tr></table>`;
+const btn = (link: string, label: string) => `<table role="presentation" cellpadding="0" cellspacing="0"><tr><td bgcolor="#00788A" style="border-radius:10px;background:#00788A"><a href="${esc(link)}" style="display:inline-block;padding:14px 26px;color:#ffffff;text-decoration:none;font-weight:600;font-size:16px">${esc(label)}</a></td></tr></table>`;
 export function inactivityMail(p: { link: string; lang?: MailLang }) {
   const lang = mailLang(p.lang);
   if (lang === "en") {
@@ -343,7 +343,7 @@ export function exportMail(p: { exporterEmail: string; toSelf: boolean; verifyUr
 <p style="margin:0 0 14px;font-size:14px">${esc(p.scope)} · ${p.count} messages · ${p.pages} pages<br>Export ID: <code>${esc(p.exportId)}</code></p>
 <p style="margin:0 0 8px"><strong>How to check that the transcript is genuine and unchanged</strong></p>
 <ol style="margin:0 0 16px;padding-left:20px;font-size:14px"><li>The PDF is digitally signed by Rolff. In a PDF reader you can see the signature (test certificate – see below).</li>
-<li>Open the page <a href="${esc(p.verifyUrl)}" style="color:#016C72">Check transcript</a> and choose the PDF file. The file is not sent – only its fingerprint (SHA-256) is calculated on your device and compared with Rolff's register.</li>
+<li>Open the page <a href="${esc(p.verifyUrl)}" style="color:#00788A">Check transcript</a> and choose the PDF file. The file is not sent – only its fingerprint (SHA-256) is calculated on your device and compared with Rolff's register.</li>
 <li>You can also enter the code <strong>${esc(p.code)}</strong>, which is printed at the bottom of each page.</li></ol>
 ${button(p.verifyUrl, "Check transcript")}
 <p style="margin:18px 0 0;font-size:13px;color:#7a807e">If a single character in the file is changed, the check will not match. The transcript contains only messages the sender of the transcript themselves has access to. In the test version the signature is made with a self-issued test certificate, which PDF readers show as an "unknown issuer". Rolff cannot assess how a court or authority will use the transcript.</p>`, lang);
@@ -357,7 +357,7 @@ ${button(p.verifyUrl, "Check transcript")}
 <p style="margin:0 0 14px;font-size:14px">${esc(p.scope)} · ${p.count} beskeder · ${p.pages} sider<br>Eksport-ID: <code>${esc(p.exportId)}</code></p>
 <p style="margin:0 0 8px"><strong>Sådan kontrollerer du, at udskriften er ægte og uændret</strong></p>
 <ol style="margin:0 0 16px;padding-left:20px;font-size:14px"><li>PDF'en er digitalt signeret af Rolff. I en PDF-læser kan du se signaturen (testcertifikat – se nedenfor).</li>
-<li>Åbn siden <a href="${esc(p.verifyUrl)}" style="color:#016C72">Tjek udskrift</a> og vælg PDF-filen. Filen sendes ikke – kun dens fingeraftryk (SHA-256) beregnes på din enhed og sammenlignes med Rolffs register.</li>
+<li>Åbn siden <a href="${esc(p.verifyUrl)}" style="color:#00788A">Tjek udskrift</a> og vælg PDF-filen. Filen sendes ikke – kun dens fingeraftryk (SHA-256) beregnes på din enhed og sammenlignes med Rolffs register.</li>
 <li>Du kan også indtaste koden <strong>${esc(p.code)}</strong>, som står nederst på hver side.</li></ol>
 ${button(p.verifyUrl, "Tjek udskrift")}
 <p style="margin:18px 0 0;font-size:13px;color:#7a807e">Ændres blot ét tegn i filen, stemmer kontrollen ikke. Udskriften indeholder kun beskeder, som afsenderen af udskriften selv har adgang til. I testversionen er signaturen lavet med et selvudstedt testcertifikat, som PDF-læsere viser som "ukendt udsteder". Rolff kan ikke vurdere, hvordan en domstol eller myndighed vil bruge udskriften.</p>`, lang);

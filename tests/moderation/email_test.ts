@@ -7,7 +7,7 @@ for (const [name, m] of [["invitation", inviteMail({ inviterEmail: "a@x.test", l
   Deno.test(`${name}: logo via absolut https-URL med alt-tekst og baggrundsfarve`, () => {
     assert(m.html.includes('src="https://example.test/icons/rolff-192.png"'));
     assert(m.html.includes('alt="Rolff logo"'));
-    assert(m.html.includes('bgcolor="#016C72"'));
+    assert(m.html.includes('bgcolor="#00788A"'));
     assert(m.text.length > 20);
   });
 }

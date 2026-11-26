@@ -28,7 +28,7 @@ for (const lang of ["da", "en"] as const) {
     assert(m.html.includes("max-width:600px") && m.html.includes('role="presentation"'));
     assert(m.html.includes('name="viewport"') && m.html.includes("@media only screen and (max-width:480px)"));
     assert(m.html.includes('name="color-scheme" content="light dark"') && m.html.includes("@media (prefers-color-scheme:dark)"));
-    assert(m.html.includes('bgcolor="#016C72"'), "brand teal with bgcolor fallback");
+    assert(m.html.includes('bgcolor="#00788A"'), "brand teal with bgcolor fallback");
     assert(!/<script|<link |<iframe/i.test(m.html) && !/src="http:/.test(m.html));
   });
   Deno.test(`invitation (${lang}): no model/provider name in the body; footer wording kept; slim notice, no yellow block`, () => {

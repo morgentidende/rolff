@@ -17,7 +17,7 @@ BUBBLE = "M289 140H350A155 155 0 0 1 350 450H278C262 450 250 456 236 463C206 479
 R_STEM = '<rect x="245" y="212" width="74" height="182" rx="34" fill="#000"/>'
 R_ARM = '<path fill="#000" d="M300 240C322 220 344 211 368 211H373C396 211 410 226 410 248C410 266 400 280 380 280H352C332 280 319 295 319 318V330H290V250Z"/>'
 MASK = f'<mask id="m" maskUnits="userSpaceOnUse" x="0" y="0" width="640" height="640"><rect width="640" height="640" fill="#000"/><path fill="#fff" d="{BUBBLE}"/>{R_STEM}{R_ARM}</mask>'
-GRAD = '<linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0B8189"/><stop offset=".55" stop-color="#016C72"/><stop offset="1" stop-color="#015459"/></linearGradient>'
+GRAD = '<linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3AE8F5"/><stop offset=".55" stop-color="#00C2D0"/><stop offset="1" stop-color="#008A96"/></linearGradient>'
 BBOX = (134.0, 140.0, 505.0, 500.0)   # measured bubble bounds in glyph space (tail included)
 
 # Bubble width as a share of the whole icon.  Before: ~54 % (png) / 66 % (svg).
@@ -37,7 +37,7 @@ def glyph_tf(frac, size=1024, center=CENTER_ANY):
 
 def svg(kind, frac, size=1024, center=CENTER_ANY):
     k, tx, ty = glyph_tf(frac, size, center)
-    shadow = f'<g transform="translate({tx:.2f} {ty + 6.15 * k / 1.82167:.2f}) scale({k:.5f})" opacity=".18"><rect width="640" height="640" fill="#00262a" mask="url(#m)"/></g>'
+    shadow = f'<g transform="translate({tx:.2f} {ty + 6.15 * k / 1.82167:.2f}) scale({k:.5f})" opacity=".18"><rect width="640" height="640" fill="#002A32" mask="url(#m)"/></g>'
     white = f'<g transform="translate({tx:.2f} {ty:.2f}) scale({k:.5f})"><rect width="640" height="640" fill="#fff" mask="url(#m)"/></g>'
     if kind == 'mono':
         bg, shadow = '', ''
