@@ -38,21 +38,28 @@ export class PushController {
    return {state,binding:b?.owner===s.owner.id?b.binding??null:null,active:!!(state.available && state.enabled && this.ports.permission()==="granted" && b?.owner===s.owner.id && b?.binding && state.devices.some(d=>d.id===b.binding && Date.parse(d.expires_at)>this.now()))};
  }
  async decline(){const s=this.snapshot();await this.ports.rpc(s.owner,"decline_my_push");this.check(s);}
- /** Called only by the explicit Ja / Enable click. Permission request occurs before any await. */
+ /** Called only by the explicit Ja / Enable click. Permission request occurs before any other await. */
  async enable(state:PushState):Promise<void> {
-   if(this.renewing)await this.renewing;
    if(this.busy)throw Error("busy");
    const s=this.snapshot();
    if(!state.available || !state.public_key)throw Error("unavailable");
    if(!this.ports.supported())throw Error("unsupported");
    if(!this.ports.online())throw Error("offline");
    if(this.ports.permission()==="denied")throw Error("denied");
+   // Request permission before waiting on renew so a first-enable tap keeps the user gesture.
+   let permission:NotificationPermission=this.ports.permission();
+   if(permission!=="granted"){
+     permission=await this.ports.requestPermission();this.check(s);
+     if(permission!=="granted"){await this.decline();throw Error(permission==="denied"?"denied":"not_granted");}
+   }
+   if(this.renewing)await this.renewing;
+   if(this.busy)throw Error("busy");
    this.busy=true;let persisted:string|null=null;let b:Binding|null=null;
    try {
-     const permission=await (this.ports.permission()==="granted"?Promise.resolve("granted"):this.ports.requestPermission());this.check(s);
-     if(permission!=="granted"){await this.decline();throw Error(permission==="denied"?"denied":"not_granted");}
      await this.identityTask;b=await this.ports.current();this.check(s);if(!b || b.owner!==s.owner.id)throw Error("auth_changed");
-     const sub=await this.ports.subscription(state.public_key,!b.binding,b);this.check(s);
+     // Reuse an existing PushSubscription when present. disable() clears the local binding but
+     // does not unsubscribe, so replace=true would force a slow unsubscribe+resubscribe on Android.
+     const sub=await this.ports.subscription(state.public_key,false,b);this.check(s);
      persisted=await this.ports.rpc(s.owner,"save_my_push",{p_endpoint:sub.endpoint,p_p256dh:sub.keys.p256dh,p_auth:sub.keys.auth,p_previous:b.binding});this.check(s);
      if(typeof persisted!=="string" || !await this.ports.bind(b.fence,persisted))throw Error("auth_changed");this.check(s);
      this.identityTask=Promise.resolve({...b,binding:persisted});

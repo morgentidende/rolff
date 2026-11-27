@@ -244,7 +244,7 @@ test('every card, sheet, dialog and menu closes on a backdrop tap; the page behi
     await assertBackdropCloses(w, d, 'Beskedfrekvens', '.sheet', () => openMenuItem(d, 'Beskedfrekvens'), back, seen);
     await assertBackdropCloses(w, d, 'Rapportér', '.sheet', () => openMenuItem(d, 'Rapportér'), back, seen);
     await assertBackdropCloses(w, d, 'Eksportér samtale', '.sheet', () => openMenuItem(d, 'Eksportér samtale'), back, seen);
-    await assertBackdropCloses(w, d, 'Tilføj person', '.sheet', async () => { await click(label(d, 'Tilføj person')); await delay(40); }, back, seen);
+    await assertBackdropCloses(w, d, 'Invitér person til denne samtale', '.sheet', async () => { await click(label(d, 'Invitér person til denne samtale')); await delay(40); }, back, seen);
     // Blokeringer inner dialogs are covered in blocking-lists/app.test.cjs (this fixture has no VITE_SUPABASE_*).
     await assertBackdropCloses(w, d, 'message menu', '.message-overlay', async () => {
       d.querySelector('.msg')?.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await delay(40);

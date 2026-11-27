@@ -73,7 +73,7 @@ for (const strict of [false, true])
             assert.ok(d.querySelector('.topbar.chat'));
             assertPrivateHistory(w);
             result.push('Upgrade→Plans→Back does not resurrect offer');
-            await click(label(d, 'Tilføj person'));
+            await click(label(d, 'Invitér person til denne samtale'));
             { const me = d.getElementById('me'); Object.getOwnPropertyDescriptor(w.HTMLInputElement.prototype, 'value').set.call(me, 'ny@example.invalid'); me.dispatchEvent(new w.Event('input', { bubbles: true })); await delay(20); }
             d.querySelector('.sheet form').dispatchEvent(new w.Event('submit', { bubbles: true, cancelable: true }));
             await delay(30);
@@ -81,7 +81,7 @@ for (const strict of [false, true])
             assert.equal(d.querySelectorAll('.sheet').length, 2);
             await back(w);
             assert.equal(d.querySelectorAll('.sheet').length, 1);
-            assert.equal(d.querySelector('.sheet h2').textContent, 'Tilføj person');
+            assert.equal(d.querySelector('.sheet h2').textContent, 'Invitér person til denne samtale');
             await back(w);
             assert.ok(!d.querySelector('.sheet'));
             assert.equal(d.querySelector('textarea').value, 'En syntetisk kladde');

@@ -60,7 +60,7 @@ function geometry(w) {
     const orig = w.Element.prototype.getBoundingClientRect;
     w.Element.prototype.getBoundingClientRect = function () {
         if (this.classList.contains('msg') && !this.closest('.message-lifted')) return rect(g.msg);
-        if (this.getAttribute('aria-label') === 'Tilføj person') return rect(g.icon);
+        if (this.getAttribute('aria-label') === 'Invitér person til denne samtale') return rect(g.icon);
         return orig.call(this);
     };
     const size = (el, panel, card) => el.classList?.contains('message-panel') ? panel : el.classList?.contains('anchored-card') ? card : 0;
@@ -190,7 +190,7 @@ for (const strict of [false, true])
         try {
             const geo = geometry(w);
             await openChatWithDraft(w, d);
-            const icon = label(d, 'Tilføj person');
+            const icon = label(d, 'Invitér person til denne samtale');
             assert.equal(icon.getAttribute('aria-expanded'), 'false');
             await click(icon);
             // Inside a conversation the card hangs directly under the chat header (anchored top), not at the bottom.
@@ -200,7 +200,7 @@ for (const strict of [false, true])
             assert.equal(d.querySelector('.overlay.top-overlay').style.paddingTop, '64px', "starts at the shared in-chat card top (header bottom + 8px)");
             assert.equal(icon.getAttribute('aria-expanded'), 'true');
             assert.equal(card.getAttribute('role'), 'dialog');
-            assert.equal(card.querySelector('h2').textContent, 'Tilføj person');
+            assert.equal(card.querySelector('h2').textContent, 'Invitér person til denne samtale');
             assert.ok(card.querySelector('input[type=email]'));
             assert.ok(button(d, 'Send til godkendelse'));
             assert.ok(card.textContent.includes('Kun læse') && card.textContent.includes('Læse og skrive'));
@@ -216,15 +216,15 @@ for (const strict of [false, true])
             assert.equal(d.querySelector('textarea').value, 'En syntetisk kladde');
             assertPrivateHistory(w);
             // Escape and the X button close it too.
-            await click(label(d, 'Tilføj person'));
+            await click(label(d, 'Invitér person til denne samtale'));
             d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
             await delay(30);
             assert.ok(!d.querySelector('.sheet'));
-            await click(label(d, 'Tilføj person'));
+            await click(label(d, 'Invitér person til denne samtale'));
             await click(label(d, 'Luk'));
             await delay(30);
             assert.ok(!d.querySelector('.sheet'));
-            await click(label(d, 'Tilføj person'));
+            await click(label(d, 'Invitér person til denne samtale'));
             { const o = d.querySelector('.overlay.top-overlay'); o.dispatchEvent(new w.Event('pointerdown', { bubbles: true })); o.dispatchEvent(new w.Event('pointerup', { bubbles: true })); o.click(); } // a full tap: closing happens at click time
             await delay(30);
             assert.ok(!d.querySelector('.sheet'), 'outside tap closes');

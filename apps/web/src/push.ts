@@ -41,9 +41,14 @@ const controller=new PushController({
   remember:memoryStore(typeof localStorage==="undefined"?null:localStorage),
 });
 export const pushController=controller;
+/** Register the service worker and warm getSubscription so a later toggle is not waiting on that. */
+export function prewarmPush(){
+ if(!pushBuildEnabled || typeof window==="undefined" || !supportedPush())return;
+ void ready().then(async r=>{try{await r.pushManager.getSubscription();}catch{/* prewarm only */}});
+}
 export function setPushOwner(owner:PushOwner|null){
  // Always clear an existing local worker binding on logout, even after a disabled build.
- if(pushBuildEnabled){controller.setOwner(owner);if(owner)void controller.maybeRenew();}
+ if(pushBuildEnabled){controller.setOwner(owner);if(owner){prewarmPush();void controller.maybeRenew();}}
  else if(!owner && "serviceWorker" in navigator)void navigator.serviceWorker.getRegistration(new URL("./",document.baseURI).href).then(r=>r?.active?.postMessage({type:"IDENTITY",owner:null})).catch(()=>{});
 }
 
@@ -52,6 +57,7 @@ let renewalStarted=false;
 export function startPushRenewal(){
  if(renewalStarted || !pushBuildEnabled || typeof window==="undefined")return;
  renewalStarted=true;
+ prewarmPush();
  const kick=()=>{if(document.visibilityState==="visible")void controller.maybeRenew();};
  document.addEventListener("visibilitychange",kick);
  window.addEventListener("focus",kick);
