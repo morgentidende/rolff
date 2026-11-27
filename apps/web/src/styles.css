@@ -4,7 +4,8 @@
 [data-theme=dark]{--bg:#141a1a;--card:#1d2525;--text:#e6eeec;--muted:#9fb0ad;--accent:#4AD8E4;--accent-text:#0e1414;--mine:#155545;--theirs:#232c2c;--warn:#3a3020;--warn-b:#e0b060;--err:#3d2424;--border:#33403e;--composer-surface:#2b3534;--composer-focus:#303c3a;--field-bg:#1f2c30;--field-border:#7f979c;--field-focus:var(--accent)}
 /* Never let the page grow sideways: during the list→chat slide the incoming page sits translated off to the right, and
    mobile Chrome then widened the layout viewport (the list copy re-wrapped and shifted up, the page zoomed out). */
-html,body{overflow-x:clip;-webkit-tap-highlight-color:transparent}
+html,body{overflow-x:clip}
+html{-webkit-tap-highlight-color:transparent}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:17px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
 .wrap{max-width:720px;margin:0 auto;padding:16px;min-height:100vh;display:flex;flex-direction:column;gap:12px}
 .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px}
