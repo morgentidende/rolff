@@ -20,8 +20,9 @@ function clean(node: Node, doc: Document): Node | null {
   return out;
 }
 
-/** Returns sanitised HTML for "da" (everything before <hr>) or "en" (from <h1 id="en">), plus the
- *  bilingual sections at the end. Drops the "English below" link, the draft repeat and "← Rolff". */
+/** Returns sanitised HTML for "da" (everything before <hr>) or "en" (from after <hr> to the back link).
+ *  Drops the "English below" link and "← Rolff". Language-specific sections such as blocked topics
+ *  live inside each language part. */
 export function policyHtml(source: string, lang: "da" | "en"): string {
   const doc = new DOMParser().parseFromString(source, "text/html");
   const kids = Array.from(doc.body.children);

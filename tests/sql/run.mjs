@@ -725,6 +725,8 @@ const {testPendingInvitationCancel}=await import('./pending-invitation-cancel.mj
 await testPendingInvitationCancel({db,as,svc,hash,t,assert,rejects});
 const {testCancelSubscription}=await import('./cancel-subscription.mjs');
 await testCancelSubscription({db,as,svc,hash,t,assert,rejects});
+const {testSignupConsent}=await import('./signup-consent.mjs');
+await testSignupConsent({db,as,svc,hash,t,assert,rejects});
 const {testPremiumSyncNoInactivity}=await import('./premium-sync.mjs');
 await testPremiumSyncNoInactivity({db,as,svc,hash,t,assert,rejects});
 console.log(`\n${pass} bestået, ${fail} fejlet`);

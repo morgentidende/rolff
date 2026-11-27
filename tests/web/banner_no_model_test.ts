@@ -23,4 +23,7 @@ Deno.test("signup AI consent (da/en) has no provider or model name", () => {
   }
   assert(/en AI-tjeneste/.test(strings.da.ai));
   assert(/an AI service/.test(strings.en.ai));
+  assert(/30 dage til misbrugskontrol/.test(strings.da.ai));
+  assert(/30 days for abuse monitoring/.test(strings.en.ai));
+  assert(!/gemning slået fra|storage turned off/.test(strings.da.ai + strings.en.ai));
 });
