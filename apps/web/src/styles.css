@@ -439,11 +439,6 @@ button.toggle-switch:disabled{opacity:.45}
 @media (prefers-reduced-motion:reduce){button.toggle-switch,button.toggle-switch .switch-knob{transition:none}}
 .push-renew{margin:4px 0 0 -6px;font-size:14px}
 .push-help{margin-top:12px}
-.device-list{list-style:none;margin:0;padding:0}
-.device-list li{display:flex;align-items:center;gap:10px;min-height:52px;border-bottom:1px solid color-mix(in srgb,var(--border) 80%,transparent)}
-.device-text{flex:1;min-width:0;display:flex;flex-direction:column}
-.device-name{display:flex;align-items:center;gap:8px;font-size:15px;flex-wrap:wrap}
-.tag{font-size:12px;font-weight:600;padding:1px 8px;border-radius:999px;background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent)}
 details.more{margin-top:16px;border:1px solid var(--border);border-radius:12px;padding:0 12px}
 details.more summary{min-height:44px;display:flex;align-items:center;cursor:pointer;font-size:14.5px;font-weight:600;color:var(--accent);list-style:none}
 details.more summary::-webkit-details-marker{display:none}
@@ -651,10 +646,6 @@ html[data-keyboard] .blockbox{max-height:calc(var(--vv-h,100dvh) * .34)}
 .pendrow-link input{width:100%;font-size:13px}
 /* Notifikationer: simple on top, details under "Mere" */
 .push-settings .setting-row + .push-lead{margin:12px 2px 0}
-details.push-devices{margin:14px 2px 0}
-details.push-devices>summary{cursor:pointer;font-size:14px;color:var(--muted);min-height:44px;display:inline-flex;align-items:center;list-style:none}
-details.push-devices>summary::-webkit-details-marker{display:none}
-details.push-devices .sheet-danger-zone{margin-top:12px;margin-bottom:0}
 /* Lydløs (per-conversation mute): WhatsApp-style dialog and the own-only icon on the front-page row */
 .mute-card{padding-top:10px}
 .mute-card .mute-head{margin:0 0 4px;padding:0;border:0;align-items:flex-start;gap:8px}
