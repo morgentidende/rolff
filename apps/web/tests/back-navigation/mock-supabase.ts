@@ -125,9 +125,12 @@ function rpc(name: string, args: any) {
         failed.setHeader = (key: string, value: string) => { call.headers[key] = value; return failed; };
         return failed;
     }
+    const delayMs = Number((globalThis as any).__QA_MESSAGE_DELAY_MS) || 0;
     const result: any = name === 'set_contact_alias' && aliasPaused
         ? new Promise(resolve => { pendingAlias = () => resolve({ data, error: null }); })
-        : Promise.resolve({ data, error: null });
+        : (delayMs && (name === 'get_messages_v2' || name === 'get_messages_v3'))
+            ? new Promise(resolve => { setTimeout(() => resolve({ data, error: null }), delayMs); })
+            : Promise.resolve({ data, error: null });
     if (name === 'set_invitation_alias')
         result.then(() => { pendingAliases.set(String(args.p_invitation), String(args.p_alias ?? '').trim() || null); });
     if (name === 'set_contact_alias')

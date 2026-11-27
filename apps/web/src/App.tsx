@@ -35,7 +35,7 @@ import type { Session } from "@supabase/supabase-js";
 import { callFn, supabase } from "./supabase";
 import { detectLang, strings, type Lang } from "./i18n";
 import { passwordPairState, passwordsMatch, pwText, toggleLabel } from "./pw";
-import { cacheClear, cacheGet, cacheSet } from "./localStore";
+import { cacheClear, cacheGet, cacheSet, cacheSetPrefs, clearCachedMessages, loadCachedMessages, peekCachedMessages, pruneCached } from "./localStore";
 import { LunaIndicator } from "./LunaRobot";
 import { applySuggestion } from "./suggestion";
 import { BlockedNotice, cleanHouse, type HouseKind } from "./BlockedNotice";
@@ -114,7 +114,7 @@ export function App() {
   }, []);
   useEffect(() => {
     let uid:string|null=null, active=true, observed=0;
-    const apply=(s:Session|null)=>{if(!active)return;const next=s?.user.id??null;setReceiveTimezoneUser(next);setPushOwner(s?{id:s.user.id,token:s.access_token}:null);if(uid!==next){homeCache.clear(); chatCache.clear();setCardCacheOwner(next);resetBackNavigation();setConv(null);resetSheet();setRenameContacts(null);uid=next;}setSession(s);};
+    const apply=(s:Session|null)=>{if(!active)return;const next=s?.user.id??null;setReceiveTimezoneUser(next);setPushOwner(s?{id:s.user.id,token:s.access_token}:null);if(uid!==next){homeCache.clear(); chatCache.clear();clearCachedMessages();if(uid&&next)void cacheClear();setCardCacheOwner(next);resetBackNavigation();setConv(null);resetSheet();setRenameContacts(null);uid=next;}setSession(s);};
     const { data } = supabase.auth.onAuthStateChange((event, s) => {if(event==="INITIAL_SESSION"&&observed)return;observed++;apply(s);});
     const start=observed;
     supabase.auth.getSession().then(({ data }) => {if(observed===start)apply(data.session);});
@@ -202,7 +202,14 @@ export function App() {
   // WhatsApp-like page slide between the list and a chat (pageTransition.ts). Only taps on a list row, the chat's ← and
   // Android Back/gesture animate; deep links, notifications, logout and account switches change page instantly.
   const wrapRef = useRef<HTMLDivElement>(null), pendingPage = useRef<PendingPage | null>(null), homeScroll = useRef<number | null>(null);
-  const openFromList = (c: Conv) => { if (!isPendingOnly(c)) { homeScroll.current = window.scrollY; pendingPage.current = preparePage("forward", wrapRef.current); } setConv(c); };
+  const openFromList = (c: Conv) => {
+    // Do not delay the slide on a cache miss. Pointer-down and the list warmup decrypt into memory
+    // beforehand, so Chat's first paint can already include the latest bubbles.
+    if (!isPendingOnly(c)) { homeScroll.current = window.scrollY; pendingPage.current = preparePage("forward", wrapRef.current); }
+    const uid = session?.user.id;
+    if (uid && !isPendingOnly(c)) void loadCachedMessages(uid, c.id);
+    setConv(c);
+  };
   const backToList = () => { pendingPage.current = preparePage("back", wrapRef.current); setConv(null); };
   const page = session && conv ? `chat:${conv.id}` : session ? "home" : "auth";
   useLayoutEffect(() => {
@@ -324,7 +331,7 @@ function Faq({ lang }: { lang: Lang }) {
     ["Hvad kan de andre se om mig?", "Du logger ind med din e-mail. Din e-mail er også det navn, de andre i samtalen ser – du kan ikke selv vælge et andet navn. Hver person kan give dig et privat kaldenavn, som kun de selv ser (hold fingeren på samtalen). Glemt adgangskode: brug linket på login-siden eller under ⋮ → Konto. Skift e-mail eller adgangskode: ⋮ → Konto. Sletning af konto: ⋮ → Konto."],
     ["Hvordan kontakter jeg Rolff?", "Tryk ⋮ → “Kontakt”. Du vælger kategorien Feedback eller Problemer med Rolff-appen og skriver din besked. Det er også sådan, du skriver til kundeservice. Skriv ikke samtaleindhold eller personoplysninger, du ikke vil dele. Beskeden sendes til Rolff med dit bruger-id – ikke dine samtaler."],
     ["Hvordan rapporterer jeg noget?", "Tryk ⋮ i samtalen → “Rapportér”. Du vælger kategori, skriver selv hvad der er sket og kan markere de beskeder, du vil vedhæfte. Du ser en forhåndsvisning, og intet sendes før du bekræfter. Rapporten mailes til Rolffs udvikler (kontakt: nicolaipetersen108@gmail.com) med dit bruger-id. Rolff gemmer kun kategori, tidspunkt og antal vedhæftede beskeder (til at begrænse misbrug) – ikke teksten. Der er ingen døgnvagt og ingen garanti for svar eller handling. Ved akut fare: ring 112."],
-    ["Hvor ligger mine data, og hvor længe?", "På Supabase-servere i Frankfurt (EU). Du vælger selv opbevaring (1 år, 5 år eller ubegrænset) og sky-synk (kun Premium) under ⋮ → Privatliv og sletning. Der kan du også downloade alle dine data (ZIP med JSON og CSV). Du sletter din konto under ⋮ → Konto (det sletter alle data med det samme og stopper abonnementet; den resterende periode går tabt, og en eventuel refusion sker via App Store eller Google Play. Lav en udskrift først, hvis du vil beholde noget). Vil du bare stoppe betalingen og beholde kontoen, vælg “Opsig abonnement” under ⋮ → Konto eller Abonnement; så løber planen til periodens slut. AI-tonetjekket sender i testen beskeden til en AI-tjeneste (behandling uden for EU; gemning slået fra). Læs mere i privatlivspolitikken (⋮ → Privatlivspolitik)."],
+    ["Hvor ligger mine data, og hvor længe?", "På Supabase-servere i Frankfurt (EU). På denne enhed gemmes de seneste beskeder krypteret, så en samtale kan vises med det samme; de slettes, når du logger ud, skifter konto eller sletter kontoen. Du vælger selv opbevaring (1 år, 5 år eller ubegrænset) og sky-synk (kun Premium) under ⋮ → Privatliv og sletning. Der kan du også downloade alle dine data (ZIP med JSON og CSV). Du sletter din konto under ⋮ → Konto (det sletter alle data med det samme og stopper abonnementet; den resterende periode går tabt, og en eventuel refusion sker via App Store eller Google Play. Lav en udskrift først, hvis du vil beholde noget). Vil du bare stoppe betalingen og beholde kontoen, vælg “Opsig abonnement” under ⋮ → Konto eller Abonnement; så løber planen til periodens slut. AI-tonetjekket sender i testen beskeden til en AI-tjeneste (behandling uden for EU; gemning slået fra). Læs mere i privatlivspolitikken (⋮ → Privatlivspolitik)."],
     ["Kan jeg sende billeder og PDF'er?", "Ja, med planen “Premium” (79 kr./md.). Brug papirclipsen til filvalg eller kameraikonet til et nyt billede. Telefonen styrer eventuelle kameratilladelser, når funktionen bruges; filvælgeren giver kun adgang til den valgte fil. En valgt fil sendes først, når du trykker på papirflyet. Du kan sende PNG, JPG, WebP, GIF (ikke animeret) og PDF (højst 4 MB og 5 sider). Du kan sende op til 5 vedhæftninger i døgnet (regnet over de seneste 24 timer). Før filen sendes, tjekker Rolff både billedet og al tekst i det – samme regler som beskeder. Er bare én linje sårende, eller er billedet upassende, bliver filen ikke sendt, og du får at vide hvorfor. Modtagerens blokerede ord gælder også tekst i filen. Under Blokeringer kan du slå fra, at den anden må sende dig fotos eller filer; afsenderen får så at vide, at den type ikke tages imod i samtalen – ikke om en besked er læst eller modtaget. Alle i samtalen kan se vedhæftninger, de modtager, uanset plan. Læsere kan ikke sende filer."],
     ["Hvad koster Rolff?", "Der er to betalte planer: “Standard” 49 kr./md. med højst 160 tegn pr. besked (én SMS-længde) og “Premium” 79 kr./md. med højst 480 tegn (tre SMS-længder) og sky-synk, så du kan bruge Rolff på flere enheder. Planen gælder dig som afsender, så to forældre kan have hver sin plan. Opgradering gælder straks, nedgradering fra næste periode. “Opsig abonnement” (under ⋮ → Konto eller Abonnement) beholder konto og data; planen løber til periodens slut, derefter uden betalt plan (samme muligheder som Standard). “Slet konto” sletter med det samme, og den resterende periode går tabt. I testversionen er skift og opsigelse en testfunktion uden betaling."],
     ["Er det her den rigtige app?", "Nej, det er et testmiljø. Skriv kun opdigtede beskeder."],
@@ -346,7 +353,7 @@ function Faq({ lang }: { lang: Lang }) {
     ["What can others see about me?", "You log in with your e-mail. Your e-mail is also the name others in the conversation see – you cannot choose a different name yourself. Each person can give you a private nickname that only they see (press and hold the conversation). Forgot password: use the link on the login page or under ⋮ → Account. Change e-mail or password: ⋮ → Account. Account deletion: ⋮ → Account."],
     ["How do I contact Rolff?", "Tap ⋮ → “Contact”. Choose the category Feedback or Problems with the Rolff app and write your message. This is also how you reach customer service. Do not write conversation content or personal data you do not want to share. The message is sent to Rolff with your user id – not your conversations."],
     ["How do I report something?", "Tap ⋮ in the conversation → “Report”. You choose a category, write what happened and can tick the messages you want to attach. You see a preview and nothing is sent until you confirm. The report is e-mailed to Rolff's developer (contact: nicolaipetersen108@gmail.com) with your user id. Rolff stores only category, time and number of attached messages (to limit abuse) – not the text. There is no 24/7 staff and no guarantee of a reply or action. In an emergency: call 112."],
-    ["Where is my data, and for how long?", "On Supabase servers in Frankfurt (EU). You choose retention (1 year, 5 years or unlimited) and cloud sync (Premium only) under ⋮ → Privacy and deletion, where you can also download all your data (ZIP with JSON and CSV). You delete your account under ⋮ → Account (this deletes all data immediately and ends the subscription; any remaining paid period is lost, and refunds are handled by the App Store or Google Play. Make a transcript first if you want to keep anything). To stop payment and keep the account, choose “Cancel subscription” under ⋮ → Account or Plan; the plan then runs until the period ends. During testing, the AI tone check sends the message to an AI service (processed outside the EU; storage turned off). See the privacy policy (⋮ → Privacy policy)."],
+    ["Where is my data, and for how long?", "On Supabase servers in Frankfurt (EU). Recent messages are also stored encrypted on this device so a conversation can appear at once; they are deleted when you log out, switch accounts or delete the account. You choose retention (1 year, 5 years or unlimited) and cloud sync (Premium only) under ⋮ → Privacy and deletion, where you can also download all your data (ZIP with JSON and CSV). You delete your account under ⋮ → Account (this deletes all data immediately and ends the subscription; any remaining paid period is lost, and refunds are handled by the App Store or Google Play. Make a transcript first if you want to keep anything). To stop payment and keep the account, choose “Cancel subscription” under ⋮ → Account or Plan; the plan then runs until the period ends. During testing, the AI tone check sends the message to an AI service (processed outside the EU; storage turned off). See the privacy policy (⋮ → Privacy policy)."],
     ["Can I send images and PDFs?", "Yes, with the “Premium” plan (79 DKK/month). Use the paperclip to choose a file or the camera to take a photo. Your phone manages any camera permission when used; the file picker grants access only to your chosen file. Nothing is sent until you press the paper plane. PNG, JPG, WebP, GIF (not animated) and PDF (max 4 MB, 5 pages). You can send up to 5 attachments per day (counted over the last 24 hours). Before sending, Rolff checks the image and all text in it with the same rules as messages. If one line is hurtful or the image is inappropriate, it is not sent and you are told why. The recipient's blocked words also apply to text in the file. Under Blocking lists you can decline photos or files from the other person; the sender is then told that that type is not accepted in the conversation — not whether a message was read or delivered. Everyone can view attachments they receive, whatever their plan. Readers cannot send files."],
     ["What does Rolff cost?", "Two paid plans: “Standard” 49 DKK/month with up to 160 characters per message (one SMS length) and “Premium” 79 DKK/month with up to 480 (three SMS lengths) and cloud sync, so you can use Rolff on several devices. The plan applies to you as sender, so two parents may have different plans. Upgrades apply immediately, downgrades from the next period. “Cancel subscription” (under ⋮ → Account or Plan) keeps the account and data; the plan runs until the period ends, then you have no paid plan (same capabilities as Standard). “Delete account” deletes immediately, and any remaining period is lost. In the test version switching and cancellation are a test feature without payment."],
     ["Is this the real app?", "No, this is a test environment. Write made-up messages only."],
@@ -457,6 +464,11 @@ function PrivacyPanel({ lang, openPlans }: { lang: Lang; openPlans: () => void }
     if (n.cloud_sync && !premium) return;
     setP(n);
     await supabase.rpc("set_my_data_prefs", { p_cloud_sync: n.cloud_sync, p_retention: n.retention });
+    const uid = (await supabase.auth.getSession()).data.session?.user.id;
+    if (uid && (n.retention === "1y" || n.retention === "5y" || n.retention === "unlimited")) {
+      await cacheSetPrefs(uid, n.retention);
+      await pruneCached(uid, n.retention);
+    }
   };
   return (
     <div className="privacy">
@@ -766,6 +778,8 @@ function Home({ uid, lang, open, invite, rename, refreshKey }: { uid: string; la
   // Own mutes only: shows a small muted icon on the row (nobody else can see it).
   const [mutes, setMutes] = useState<MuteRow[]>(() => homeCache.get(uid)?.mutes ?? []);
   useEffect(() => { if (convs) homeCache.set(uid, { convs, mutes }); }, [uid, convs, mutes]);
+  // Decrypt recently opened threads in the background so a tap can start the slide with bubbles already ready.
+  useEffect(() => { if (convs) for (const c of convs) void loadCachedMessages(uid, c.id); }, [uid, convs]);
   // The press-and-hold tip is shown until it is dismissed or the gesture has been used once.
   const [pendingMenu, setPendingMenu] = useState<ConvRow | null>(null);
   const [hintGone, setHintGone] = useState(() => { try { return localStorage.getItem(CONV_HINT_KEY) === "1"; } catch { return false; } });
@@ -814,7 +828,7 @@ function Home({ uid, lang, open, invite, rename, refreshKey }: { uid: string; la
         {convs.map((c) => { const d = convDisplay(c, da); const prev = previewText(c, da); const time = listTime(c.last_at, lang, now); return (
           <li key={c.id} className="convrow">
             <ColorDot lang={lang} conv={c} label={d.title} initial={d.initial} changed={(col) => setConvs((convs ?? []).map((x) => x.id === c.id ? { ...x, color: col } : x))} />
-            <ContactButton open={() => (isPendingOnly(c) ? setPendingMenu(c) : open(c))} rename={() => { dropHint(); if (isPendingOnly(c)) setPendingMenu(c); else rename(renameTargets(c)); }}>
+            <ContactButton open={() => (isPendingOnly(c) ? setPendingMenu(c) : open(c))} onPrime={isPendingOnly(c) ? undefined : () => { void loadCachedMessages(uid, c.id); }} rename={() => { dropHint(); if (isPendingOnly(c)) setPendingMenu(c); else rename(renameTargets(c)); }}>
               <span className="convtop"><span className="convname">{d.title}</span>{time && <span className="convtime">{time}</span>}</span>
               <span className="convmeta"><span className={prev ? "convprev" : "convprev empty"}>{prev ?? d.status ?? (c.last_at === undefined ? "" : (da ? "Ingen beskeder endnu" : "No messages yet"))}</span>{activeMute(mutes, c.id, muteNow) && <span className="convmuted" role="img" aria-label={da ? "Lydløs" : "Muted"}><MutedBellIcon /></span>}</span>
             </ContactButton>
@@ -910,7 +924,7 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
   const draftKey = `draft:${conv.id}`; const replyKey = `draft-reply:${conv.id}`;
   // From the cache only the newest messages are rendered while the chat slides in (the list opens at the bottom);
   // the full list follows right after the slide, so the slide starts without a long first render.
-  const [msgs, setMsgs] = useState<Msg[]>(() => (chatCache.get(conv.id) ?? []).slice(-SLIDE_TAIL)); const [pending, setPending] = useState(0);
+  const [msgs, setMsgs] = useState<Msg[]>(() => (chatCache.get(conv.id) ?? (peekCachedMessages(conv.id) as Msg[] | undefined) ?? []).slice(-SLIDE_TAIL)); const [pending, setPending] = useState(0);
   const events = useConversationEvents(conv.id, msgs.length);
   const fullMsgs = useRef(false);
   useEffect(() => { if (fullMsgs.current) chatCache.set(conv.id, msgs); }, [conv.id, msgs]);
@@ -1012,6 +1026,12 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
   const endRef = useRef<HTMLDivElement>(null); const listRef = useRef<HTMLDivElement>(null);
   const load = useCallback(async () => {
     const uid = (await supabase.auth.getSession()).data.session?.user.id;
+    // Cold start: if the slide began before decrypt finished, still paint the encrypted cache
+    // immediately. Network results wait for the slide so they cannot jump the layout mid-animation.
+    if (uid && !fullMsgs.current && !(peekCachedMessages(conv.id)?.length) && !chatCache.get(conv.id)?.length) {
+      const cached = await loadCachedMessages(uid, conv.id) as Msg[] | null;
+      if (cached?.length) setMsgs((cur) => cur.length ? cur : cached.slice(-SLIDE_TAIL));
+    }
     if (uid) await syncReceiveTimezone(uid);
     const { data, error } = await supabase.rpc("get_messages_v3", { conv: conv.id });
     // Opening the chat slides it in; render the fetched messages after the slide, not in the middle of it.
