@@ -180,7 +180,7 @@ export function App() {
   const menu: MenuItem[] = [
     // Front page only: app-wide settings. The conversation ⋮ menu has conversation actions only.
     // Groups: invite | everyday settings | help | log out. divider draws a thin separator above that item.
-    { label: da ? "Inviter person" : "Invite person", run: () => setSheet("invite") },
+    { label: da ? "Invitér til Rolff" : "Invite to Rolff", run: () => setSheet("invite") },
     { label: da ? "Notifikationer" : "Notifications", run: () => setSheet("notifications"), divider: true },
     { label: da ? "Konto (e-mail og adgangskode)" : "Account (email and password)", run: () => setSheet("account") },
     { label: da ? "Abonnement" : "Plan", run: () => setSheet("plans") },
@@ -246,7 +246,7 @@ export function App() {
       {sheet === "newpw" && session && <SheetView title={da ? "Vælg ny adgangskode" : "Choose a new password"} close={close} lang={lang} anchor={menuButtonRef}><NewPassword lang={lang} done={close} /></SheetView>}
       {sheet === "privacy" && <SheetView title={da ? "Privatliv og sletning" : "Privacy and deletion"} close={close} lang={lang} anchor={menuButtonRef}><PrivacyPanel lang={lang} openPlans={() => setSheet("plans")} /></SheetView>}
       {sheet === "feedback" && <SheetView title={da ? "Kontakt" : "Contact"} close={close} lang={lang} anchor={menuButtonRef}><FeedbackForm lang={lang} /></SheetView>}
-      {sheet === "invite" && <SheetView title={da ? "Inviter person" : "Invite person"} close={close} lang={lang} anchor={menuButtonRef}><InviteByEmail lang={lang} done={(toast, tone = "success") => { setHomeKey(homeKey + 1); close(); showToast(toast, { tone, ms: tone === "success" ? 4000 : 9000, at: "top" }); }} /></SheetView>}
+      {sheet === "invite" && <SheetView title={da ? "Invitér til Rolff" : "Invite to Rolff"} close={close} lang={lang} anchor={menuButtonRef}><InviteByEmail lang={lang} done={(toast, tone = "success") => { setHomeKey(homeKey + 1); close(); showToast(toast, { tone, ms: tone === "success" ? 4000 : 9000, at: "top" }); }} /></SheetView>}
       {policyOpen && <PolicyView lang={lang} close={() => setPolicyOpen(false)} />}
       {/* One app-wide toast ("Kopieret", "Planen er skiftet") that floats above chat and sheets. */}
       <Toast />
@@ -771,7 +771,7 @@ function ColorDot({ lang, conv, label, initial, changed }: { lang: Lang; conv: C
 
 type ConvRow = Conv & ConvPreview;
 
-/** Person with a plus: used on the front-page "Inviter person" button. Decorative (the text is the label). */
+/** Person with a plus: used on the front-page "Invitér til Rolff" button. Decorative (the text is the label). */
 const InviteIcon = () => <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c.6-3.6 3.3-5.5 6.5-5.5s5.9 1.9 6.5 5.5" /><path d="M19 8v6M16 11h6" /></svg>;
 /** Last list per user, so Back from a chat shows the list at once (and at the same scroll position) while it refreshes. */
 const homeCache = new Map<string, { convs: ConvRow[]; mutes: MuteRow[] }>();
@@ -827,10 +827,10 @@ function Home({ uid, lang, open, invite, rename, refreshKey }: { uid: string; la
       {/* The list keeps an accessible name; the visible row holds the two pills instead of a "Samtaler" heading. */}
       <h2 id="convlist-title" className="sr-only">{t.conversations}</h2>
       <div className="convlist-head"><DownloadWebApp lang={lang} />
-        {!!convs?.length && <button type="button" className="invite-btn" aria-haspopup="dialog" onClick={invite}><InviteIcon />{da ? "Inviter person" : "Invite person"}</button>}</div>
+        {!!convs?.length && <button type="button" className="invite-btn" aria-haspopup="dialog" onClick={invite}><InviteIcon />{da ? "Invitér til Rolff" : "Invite to Rolff"}</button>}</div>
       {convs?.length === 0 && <div className="convempty"><span className="convempty-icon" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" /></svg></span><p><strong>{da ? "Ingen samtaler endnu." : "No conversations yet."}</strong></p>
         <p className="meta">{da ? "Inviter den person, du vil skrive med – fx den anden forælder. I får en fælles samtale, så snart invitationen er taget imod." : "Invite the person you want to write with – e.g. the other parent. You get a shared conversation as soon as the invitation is accepted."}</p>
-        <button type="button" className="invite-btn invite-btn-lg" aria-haspopup="dialog" onClick={invite}><InviteIcon />{da ? "Inviter person" : "Invite person"}</button></div>}
+        <button type="button" className="invite-btn invite-btn-lg" aria-haspopup="dialog" onClick={invite}><InviteIcon />{da ? "Invitér til Rolff" : "Invite to Rolff"}</button></div>}
       {!!convs?.length && <ul className="convitems">
         {convs.map((c) => { const d = convDisplay(c, da); const prev = previewText(c, da); const time = listTime(c.last_at, lang, now); return (
           <li key={c.id} className="convrow">

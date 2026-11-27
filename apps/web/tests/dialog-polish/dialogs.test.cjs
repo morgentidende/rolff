@@ -106,7 +106,7 @@ test('Front page: pills row, dismissible press-and-hold tip remembered in localS
   try {
     assert.ok(!d.querySelector('.convlist-head h2'));
     const pills = [...d.querySelectorAll('.convlist-head button')].map(b => b.textContent.trim());
-    assert.equal(pills[pills.length - 1], 'Inviter person');
+    assert.equal(pills[pills.length - 1], 'Invitér til Rolff');
     const hint = d.querySelector('.convhint'); assert.ok(hint); assert.match(hint.textContent, /Hold fingeren på en samtale/);
     await click(hint.querySelector('button[aria-label="Skjul tip"]'));
     assert.equal(d.querySelector('.convhint'), null); assert.equal(w.localStorage.getItem('convHintDismissed'), '1');

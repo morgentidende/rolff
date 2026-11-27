@@ -11,7 +11,7 @@ async function closeSheet(d) { const x = d.querySelector('.sheet [aria-label="Lu
 
 test('all front-page menu sheets open as a top card anchored to ⋮ (like "Tilføj person")', async () => {
   const f = await env(); const { d } = f; try {
-    for (const name of ['App-sprog', 'FAQ', 'Abonnement', 'Konto (e-mail og adgangskode)', 'Privatliv og sletning', 'Kontakt', 'Inviter person']) {
+    for (const name of ['App-sprog', 'FAQ', 'Abonnement', 'Konto (e-mail og adgangskode)', 'Privatliv og sletning', 'Kontakt', 'Invitér til Rolff']) {
       await click(label(d, 'Menu')); const it = items(d).find(b => b.textContent.trim() === name);
       if (!it) { assert.fail(`missing ${name}: ${items(d).map(i => i.textContent).join(', ')}`); }
       await click(it); await delay(60);
@@ -49,15 +49,15 @@ test('language: switching applies at once (menu, html lang, storage) and invitat
       const c = w.QA.calls.filter(x => x.function === 'invite-email').pop(); assert.ok(c, 'invite-email called');
       await closeSheet(d); return c.args.lang;
     };
-    assert.equal(await inviteLang('Inviter person', /Send|Inviter/), 'da');
+    assert.equal(await inviteLang('Invitér til Rolff', /Send|Inviter/), 'da');
     const s = await openItem(d, 'App-sprog');
     const en = [...s.querySelectorAll('.choice')].find(c => c.textContent.includes('English')); await click(en.querySelector('input')); await delay(40);
     assert.equal(d.documentElement.lang, 'en'); assert.equal(w.localStorage.getItem('lang'), 'en');
     assert.equal(d.querySelector('.sheet h2').textContent, 'App language', 'open sheet re-renders in English without reload');
     await closeSheet(d);
     await click(label(d, 'Menu')); const labels = items(d).map(i => i.textContent.trim()); await click(label(d, 'Menu'));
-    assert.deepEqual(labels, ['Invite person', 'Notifications', 'Account (email and password)', 'Plan', 'Privacy and deletion', 'App language', 'FAQ', 'Contact', 'Privacy policy', 'Log out'], labels.join(', '));
-    assert.equal(await inviteLang('Invite person', /Send|Invite/), 'en');
+    assert.deepEqual(labels, ['Invite to Rolff', 'Notifications', 'Account (email and password)', 'Plan', 'Privacy and deletion', 'App language', 'FAQ', 'Contact', 'Privacy policy', 'Log out'], labels.join(', '));
+    assert.equal(await inviteLang('Invite to Rolff', /Send|Invite/), 'en');
   } finally { await f.close(); }
 });
 
@@ -117,23 +117,23 @@ test('Konto: delete lives in a danger card with export warning and the long acti
   } finally { await f.close(); }
 });
 
-test('front page: visible "Inviter person" button above the list opens the same top invite sheet', async () => {
+test('front page: visible "Invitér til Rolff" button above the list opens the same top invite sheet', async () => {
   const f = await env(); const { d } = f; try {
     const head = d.querySelector('.convlist-head'); assert.ok(head, 'list header');
     assert.ok(!head.querySelector('h2'), 'no visible Samtaler heading in the row'); assert.ok(d.querySelector('#convlist-title.sr-only'), 'list keeps an accessible name');
     const web = head.querySelector('button.webapp-btn'); assert.ok(web, 'Download webapp pill'); assert.equal(web.textContent.trim(), 'Download webapp'); assert.ok(web.getAttribute('aria-label'));
-    assert.ok(web.compareDocumentPosition(head.querySelector('button.invite-btn:not(.webapp-btn)')) & 4, 'webapp pill left of Inviter person');
-    const btn = head.querySelector('button.invite-btn:not(.webapp-btn)'); assert.ok(btn); assert.equal(btn.textContent.trim(), 'Inviter person');
+    assert.ok(web.compareDocumentPosition(head.querySelector('button.invite-btn:not(.webapp-btn)')) & 4, 'webapp pill left of Invitér til Rolff');
+    const btn = head.querySelector('button.invite-btn:not(.webapp-btn)'); assert.ok(btn); assert.equal(btn.textContent.trim(), 'Invitér til Rolff');
     assert.ok(btn.compareDocumentPosition(d.querySelector('.convitems')) & 4, 'button is before the list');
     assert.equal(btn.querySelector('svg').getAttribute('aria-hidden'), 'true');
     await click(btn); await delay(60);
-    const s = d.querySelector('.sheet'); assert.equal(s.getAttribute('aria-label'), 'Inviter person'); assert.ok(s.classList.contains('anchored-card'));
+    const s = d.querySelector('.sheet'); assert.equal(s.getAttribute('aria-label'), 'Invitér til Rolff'); assert.ok(s.classList.contains('anchored-card'));
     assert.match(s.textContent, /De andre i samtalen ser din e-mail\. Du logger altid ind med din e-mail\./);
     assert.equal(s.querySelectorAll('ul.invite-points li').length, 4); assert.ok(!/hun eller han/.test(s.textContent)); assert.match(s.textContent, /efter, vedkommende er kommet med/);
     assert.equal(s.querySelector('#ie').getAttribute('placeholder'), 'navn@eksempel.dk');
     assert.ok(!/Mit visningsnavn|indtil du vælger/.test(s.textContent));
     await closeSheet(d);
-    await click(label(d, 'Menu')); assert.ok(items(d).some(i => i.textContent.trim() === 'Inviter person'), 'menu entry kept'); await click(label(d, 'Menu'));
+    await click(label(d, 'Menu')); assert.ok(items(d).some(i => i.textContent.trim() === 'Invitér til Rolff'), 'menu entry kept'); await click(label(d, 'Menu'));
   } finally { await f.close(); }
 });
 

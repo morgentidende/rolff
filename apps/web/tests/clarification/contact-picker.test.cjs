@@ -7,8 +7,8 @@ const put = async (w, el, v) => { Object.getOwnPropertyDescriptor(w.HTMLInputEle
 
 const btn = (d, text) => [...d.querySelectorAll('button')].find(b => b.textContent.trim() === text);
 async function openFrontInvite(d) {
-  const open = [...d.querySelectorAll('button')].find(b => b.textContent.trim() === 'Inviter person');
-  assert.ok(open, 'front Inviter person');
+  const open = [...d.querySelectorAll('button')].find(b => b.textContent.trim() === 'Invitér til Rolff');
+  assert.ok(open, 'front Invitér til Rolff');
   await click(open); await delay(60);
 }
 async function openChatInvite(d, w) {
@@ -28,7 +28,7 @@ test('without a picker the contacts button is hidden on both invite cards', asyn
   } finally { await f.close(); }
 });
 
-test('Inviter person: picking one email fills the field and is not stored or sent yet', async () => {
+test('Invitér til Rolff: picking one email fills the field and is not stored or sent yet', async () => {
   const f = await env(); const { d, w } = f; try {
     const picked = [];
     w.QA.setContactEmailPicker({

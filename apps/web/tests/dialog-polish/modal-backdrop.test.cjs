@@ -224,7 +224,7 @@ test('every card, sheet, dialog and menu closes on a backdrop tap; the page behi
   try {
     const listRow = () => d.querySelector('.convbtn');
     await assertBackdropCloses(w, d, '⋮ menu', '.menu', async () => { await click(label(d, 'Menu')); await delay(20); }, listRow, seen);
-    for (const [name, item] of [['App-sprog', 'App-sprog'], ['Notifikationer', 'Notifikationer'], ['FAQ', 'FAQ'], ['Abonnement', 'Abonnement'], ['Kontakt', 'Kontakt'], ['Konto', 'Konto (e-mail og adgangskode)'], ['Inviter person', 'Inviter person']]) {
+    for (const [name, item] of [['App-sprog', 'App-sprog'], ['Notifikationer', 'Notifikationer'], ['FAQ', 'FAQ'], ['Abonnement', 'Abonnement'], ['Kontakt', 'Kontakt'], ['Konto', 'Konto (e-mail og adgangskode)'], ['Invitér til Rolff', 'Invitér til Rolff']]) {
       await assertBackdropCloses(w, d, name, '.sheet', () => openMenuItem(d, item), listRow, seen);
     }
     await assertBackdropCloses(w, d, 'Kontaktens kaldenavn', 'dialog.contact-alias-dialog[open]', async () => {
