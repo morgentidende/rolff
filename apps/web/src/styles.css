@@ -5,16 +5,26 @@
 /* Never let the page grow sideways: during the list→chat slide the incoming page sits translated off to the right, and
    mobile Chrome then widened the layout viewport (the list copy re-wrapped and shifted up, the page zoomed out). */
 html,body{overflow-x:clip}
+html{-webkit-tap-highlight-color:transparent}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:17px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
 .wrap{max-width:720px;margin:0 auto;padding:16px;min-height:100vh;display:flex;flex-direction:column;gap:12px}
 .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px}
 h1{font-size:28px;margin:8px 0}h2{font-size:20px;margin:4px 0 8px}
 button{min-height:44px;padding:8px 16px;border-radius:10px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-text);font-size:16px;cursor:pointer}
+/* Android draws a rectangular tap flash and a :focus outline on pointer taps. Hide both; keep a keyboard :focus-visible ring. */
+button,a,[role=button],[role=switch],[role=menuitem],[role=menuitemcheckbox],.textbtn,.check-row{-webkit-tap-highlight-color:transparent}
+button:focus:not(:focus-visible),[role=button]:focus:not(:focus-visible),[role=switch]:focus:not(:focus-visible),[role=menuitem]:focus:not(:focus-visible),[role=menuitemcheckbox]:focus:not(:focus-visible),a:focus:not(:focus-visible){outline:none}
 button.ghost{background:transparent;color:var(--accent)}button:disabled{opacity:.6;cursor:default}
 /* Shared text-field style. Border >= 3:1 against the surrounding surface in both themes (WCAG 1.4.11); focus = solid brand-teal border + ring. */
 input,select,textarea{font-family:inherit;min-height:44px;padding:8px 10px;border-radius:10px;border:1px solid var(--field-border);background:var(--field-bg);color:var(--text);font-size:16px;width:100%}
 input::placeholder,textarea::placeholder{color:var(--muted);opacity:1}
 .invite-points{margin:0 0 12px;padding-left:20px;font-size:15px;line-height:1.45;color:var(--muted)}.invite-points li{margin:0 0 6px}.invite-points li::marker{color:var(--accent)}.invite-points strong{color:var(--text)}
+.invite-email-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin:6px 0 2px}
+.invite-email-head label{margin:0;flex:1;min-width:0}
+.invite-email-head .contact-pick{flex:none;white-space:nowrap;min-height:44px;padding:6px 4px}
+.contact-emails{display:flex;flex-direction:column;gap:6px;margin:8px 0 4px}
+.contact-emails .meta{margin:0}
+.contact-email-opt{width:100%;justify-content:flex-start;text-align:left}
 input:where(:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file])):focus,select:focus,textarea:focus{border-color:var(--field-focus);outline:2px solid var(--field-focus);outline-offset:1px}
 label{display:block;margin:6px 0 2px;color:var(--muted);font-size:14px}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.spacer{flex:1}
@@ -281,7 +291,6 @@ button.danger{background:#c0392b;color:#fff;border-color:#c0392b}button.danger:d
 [data-theme=dark] .danger-card{border-color:#ff8a80;background:color-mix(in srgb,#ff8a80 6%,var(--card))}
 .sub-manage{margin-top:24px}.sub-manage h2{margin:0 0 8px}.sub-manage button{width:100%;white-space:normal}
 .account-delete{margin-top:24px}
-.account-delete-export{margin:8px 0 12px}
 .danger-card button.danger{width:100%;white-space:normal;text-align:center;line-height:1.3;height:auto}
 .check-row{display:flex;align-items:center;gap:12px;min-height:44px;padding:4px 0;cursor:pointer;font-size:inherit}
 .check-row span{flex:1}

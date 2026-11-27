@@ -56,7 +56,7 @@ test('no pending invites: no bar', async () => {
 test('Tilføj person: Enter with invalid email shows inline error and keeps the text; valid Enter closes sheet, toast, new bar row', async () => {
   const f = await env(); const { w, d } = f; try {
     w.QA.allowMemberInvite(true); await openChat(d);
-    await click(label(d, 'Tilføj person'));
+    await click(label(d, 'Invitér person til denne samtale'));
     const input = d.getElementById('me'); assert.ok(input);
     assert.equal(input.getAttribute('inputmode'), 'email'); assert.equal(input.getAttribute('enterkeyhint'), 'send'); assert.equal(input.getAttribute('autocomplete'), 'off');
     input.focus(); await put(w, input, 'ikke-en-mail');

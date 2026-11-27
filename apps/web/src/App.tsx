@@ -14,6 +14,7 @@ import { MessageBubble, ReplyComposer, type Message } from "./MessageBubble";
 import { EditComposer } from "./EditComposer";
 import { DELAYED_SEND_SECONDS, isHeldMessage, isPendingSend, pendingSeconds, soonestPending } from "./delayedSend";
 import { invActions, invText, invitePoints, type PendingInv } from "./inviteText";
+import { useInviteContactPick } from "./InviteContactPick";
 import { Toast, showToast } from "./toast";
 import { ConfirmHost, confirmDialog } from "./confirmDialog";
 import { PolicyView } from "./PolicyView";
@@ -178,17 +179,18 @@ export function App() {
   },[session?.user.id]);
   const menu: MenuItem[] = [
     // Front page only: app-wide settings. The conversation ⋮ menu has conversation actions only.
-    { label: t.lang, run: () => setSheet("lang") },
-    { label: da ? "Notifikationer" : "Notifications", run: () => setSheet("notifications") },
-    { label: "FAQ", run: () => setSheet("faq") },
-    { label: da ? "Abonnement" : "Plan", run: () => setSheet("plans") },
+    // Groups: invite | everyday settings | help | log out. divider draws a thin separator above that item.
+    { label: da ? "Inviter person" : "Invite person", run: () => setSheet("invite") },
+    { label: da ? "Notifikationer" : "Notifications", run: () => setSheet("notifications"), divider: true },
     { label: da ? "Konto (e-mail og adgangskode)" : "Account (email and password)", run: () => setSheet("account") },
+    { label: da ? "Abonnement" : "Plan", run: () => setSheet("plans") },
     { label: da ? "Privatliv og sletning" : "Privacy and deletion", run: () => setSheet("privacy") },
+    { label: t.lang, run: () => setSheet("lang") },
+    { label: "FAQ", run: () => setSheet("faq"), divider: true },
+    { label: da ? "Kontakt" : "Contact", run: () => setSheet("feedback") },
     // In-app screen (same text as the public privatliv.html); Back returns here instead of closing the PWA.
     { label: da ? "Privatlivspolitik" : "Privacy policy", run: () => setPolicyOpen(true) },
-    { label: da ? "Kontakt" : "Contact", run: () => setSheet("feedback") },
-    { label: da ? "Inviter person" : "Invite person", run: () => setSheet("invite") },
-    { label: t.logout, run: () => { homeCache.clear(); chatCache.clear(); setCardCacheOwner(null); setPushOwner(null); resetBackNavigation(); setConv(null); resetSheet(); cacheClear().finally(() => supabase.auth.signOut()); }, danger: true },
+    { label: t.logout, run: () => { homeCache.clear(); chatCache.clear(); setCardCacheOwner(null); setPushOwner(null); resetBackNavigation(); setConv(null); resetSheet(); cacheClear().finally(() => supabase.auth.signOut()); }, danger: true, divider: true },
   ];
   const close = () => {
     if (sheet === "recover" && recoverFrom === "account") { setSheet("account"); setRecoverFrom(null); return; }
@@ -239,7 +241,7 @@ export function App() {
       {session && renameContacts && <ContactAliasDialog key={`alias:${session.user.id}`} lang={lang} contacts={renameContacts}
         close={() => setRenameContacts(null)} save={async (id, alias, pending) => { const uid=session.user.id; const { error } = await (pending ? supabase.rpc("set_invitation_alias", { p_invitation: id, p_alias: alias }) : supabase.rpc("set_contact_alias", { p_contact: id, p_alias: alias })).setHeader("Authorization", `Bearer ${session.access_token}`); if (error) throw error; if((await supabase.auth.getSession()).data.session?.user.id!==uid)return; const name=alias.trim()||null; setConv(c => c ? (pending ? (c.pending_invitation_id === id ? { ...c, pending_alias: name } : c) : { ...c, others: c.others.map(o => o.user_id === id ? { ...o, alias:name } : o) }) : c); setHomeKey(k => k + 1); }}
         saved={() => setRenameContacts(null)} />}
-      {sheet === "account" && <SheetView title={da ? "Konto" : "Account"} close={close} lang={lang} anchor={menuButtonRef}><AccountPanel lang={lang} openPrivacy={() => setSheet("privacy")} openPlans={() => setSheet("plans")} onForgot={(email) => openRecover(email, "account")} /></SheetView>}
+      {sheet === "account" && <SheetView title={da ? "Konto" : "Account"} close={close} lang={lang} anchor={menuButtonRef}><AccountPanel lang={lang} openPlans={() => setSheet("plans")} onForgot={(email) => openRecover(email, "account")} /></SheetView>}
       {sheet === "recover" && <SheetView title={da ? "Glemt adgangskode" : "Forgot password"} close={close} lang={lang} anchor={session ? menuButtonRef : undefined}><RecoverPassword lang={lang} initialEmail={recoverEmail} /></SheetView>}
       {sheet === "newpw" && session && <SheetView title={da ? "Vælg ny adgangskode" : "Choose a new password"} close={close} lang={lang} anchor={menuButtonRef}><NewPassword lang={lang} done={close} /></SheetView>}
       {sheet === "privacy" && <SheetView title={da ? "Privatliv og sletning" : "Privacy and deletion"} close={close} lang={lang} anchor={menuButtonRef}><PrivacyPanel lang={lang} openPlans={() => setSheet("plans")} /></SheetView>}
@@ -492,7 +494,7 @@ function PrivacyPanel({ lang, openPlans }: { lang: Lang; openPlans: () => void }
   );
 }
 
-function DeleteAccountSection({ lang, openPrivacy }: { lang: Lang; openPrivacy: () => void }) {
+function DeleteAccountSection({ lang }: { lang: Lang }) {
   const da = lang === "da";
   const [pw, setPw] = useState(""); const [ok, setOk] = useState(false); const [transcript, setTranscript] = useState(true);
   const [state, setState] = useState<"" | "busy" | "wrong" | "err" | "export" | "nopw" | "noack">("");
@@ -514,7 +516,6 @@ function DeleteAccountSection({ lang, openPrivacy }: { lang: Lang; openPrivacy: 
       <p className="meta">{da
         ? "Sletningen sker med det samme og fjerner din konto og alle data i appen – blandt andet indstillinger, kaldenavne, farver og feedback på serveren samt alt, Rolff har gemt på denne enhed. Det er ikke kun en deaktivering og kan ikke fortrydes. Den resterende periode på et betalt abonnement går tabt. En eventuel refusion sker via App Store eller Google Play; Rolff kan ikke betale beløbet tilbage. Vil du beholde kontoen og bruge perioden færdig, så vælg i stedet “Opsig abonnement”. Hvis du vil beholde noget, skal du først lave en udskrift (i samtalen: ⋮ → Eksportér samtale) eller hente en kopi af dine data. Der er endnu ingen betaling via App Store eller Google Play; testabonnementet ophører med kontoen. Hvis du senere har et abonnement via Apple, skal du selv opsige det hos Apple (Indstillinger eller apps.apple.com/account/subscriptions), ellers kan betalingen fortsætte. Via Google Play: Play Butik → Betalinger og abonnementer."
         : "Deletion is immediate and removes your account and all data in the app – including settings, nicknames, colours and feedback on the server, plus everything Rolff stored on this device. This is not a mere deactivation and cannot be undone. Any remaining paid period is lost. Refunds are handled by the App Store or Google Play; Rolff cannot refund the amount. To keep the account and finish the period, choose “Cancel subscription” instead. If you want to keep anything, first make a transcript (in the conversation: ⋮ → Export conversation) or download a copy of your data. There is not yet any App Store or Google Play billing; the test plan ends with the account. If you later have a subscription billed by Apple, you must cancel it with Apple (Settings or apps.apple.com/account/subscriptions), or billing may continue. Via Google Play: Play Store → Payments & subscriptions."}</p>
-      <p className="account-delete-export"><button type="button" className="textbtn strong" onClick={openPrivacy}>{da ? "Hent mine data først" : "Download my data first"}</button></p>
       <p className="notice">{evidenceNote(lang)}</p>
       <form noValidate onSubmit={del}>
         <label htmlFor="delpw">{da ? "Bekræft med din adgangskode" : "Confirm with your password"}</label>
@@ -861,6 +862,7 @@ function blurActive() { const a = document.activeElement; if (a instanceof HTMLE
 function InviteByEmail({ lang, done }: { lang: Lang; done: (toast: string, tone?: "success" | "neutral") => void }) {
   const da = lang === "da";
   const [email, setEmail] = useState(""); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState<{ ok: boolean; text: string; plan?: boolean } | null>(null);
+  const pick = useInviteContactPick(lang, (addr) => { setEmail(addr); if (msg && !msg.ok) setMsg(null); });
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); if (busy) return;
     const addr = email.trim();
@@ -876,8 +878,10 @@ function InviteByEmail({ lang, done }: { lang: Lang; done: (toast: string, tone?
   return (
     <form onSubmit={submit} noValidate>
       <ul className="invite-points" role="note">{invitePoints(lang).map((p, i) => <li key={i}>{p.lead && <strong>{p.lead} </strong>}{p.text}</li>)}</ul>
-      <label htmlFor="ie">{da ? "E-mail" : "Email"}</label><input id="ie" {...inviteEmailProps} placeholder={da ? "navn@eksempel.dk" : "name@example.com"} required aria-invalid={msg && !msg.ok ? true : undefined} aria-describedby={msg && !msg.ok ? "ie-err" : undefined} value={email} onChange={(e) => { setEmail(e.target.value); if (msg && !msg.ok) setMsg(null); }} />
+      <div className="invite-email-head"><label htmlFor="ie">{da ? "E-mail" : "Email"}</label>{pick.button}</div>
+      <input id="ie" {...inviteEmailProps} placeholder={da ? "navn@eksempel.dk" : "name@example.com"} required aria-invalid={msg && !msg.ok ? true : undefined} aria-describedby={msg && !msg.ok ? "ie-err" : undefined} value={email} onChange={(e) => { setEmail(e.target.value); if (msg && !msg.ok) setMsg(null); }} />
       {msg && <p id="ie-err" ref={(el) => el?.scrollIntoView?.({ block: "nearest" })} className={msg.ok ? "meta field-msg" : "err field-msg"} role={msg.ok ? "status" : "alert"}>{msg.text}</p>}
+      {pick.panel}
       <div className="row end"><button type="submit" disabled={busy}>{busy ? (da ? "Sender…" : "Sending…") : "Send invitation"}</button></div>
     </form>
   );
@@ -1303,15 +1307,16 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
         <ColorDot lang={lang} conv={{ ...conv, color }} label={label} initial={d.initial} changed={setColor} />
         <div role="heading" aria-level={2} className="chattitle">{others.length ? others.map((o) => <button key={o.user_id} type="button" className="contact-heading" title={da ? "Privat kaldenavn" : "Private nickname"} onClick={() => rename([o])}>{labelOf(o)}</button>) : <>{conv.pending_invitation_id ? <button type="button" className="contact-heading" title={da ? "Privat kaldenavn" : "Private nickname"} onClick={() => rename(renameTargets(conv))}>{d.title}</button> : <span className="convname">{d.title}</span>}{d.status && <span className="meta convstatus"> · {d.status}</span>}</>}</div>
         <button ref={searchBtnRef} className="icon" aria-label={da ? "Søg i samtalen" : "Search conversation"} aria-pressed={q !== null} onClick={() => { setQ(q === null ? "" : null); setCur(0); }}><Icon d={<><circle cx="11" cy="11" r="7" /><path d="M21 21l-4.3-4.3" /></>} /></button>
-        {conv.role === "parent" && <button ref={addPersonRef} className="icon" aria-label={da ? "Tilføj person" : "Add person"} aria-haspopup="dialog" aria-expanded={sheet === "addMember"} onClick={() => setSheet("addMember")}><Icon d={<><circle cx="9" cy="8" r="4" /><path d="M2 21c0-4 3-6 7-6s7 2 7 6" /><path d="M19 8v6M16 11h6" /></>} /></button>}
+        {conv.role === "parent" && <button ref={addPersonRef} className="icon" aria-label={da ? "Invitér person til denne samtale" : "Invite person to this conversation"} aria-haspopup="dialog" aria-expanded={sheet === "addMember"} onClick={() => setSheet("addMember")}><Icon d={<><circle cx="9" cy="8" r="4" /><path d="M2 21c0-4 3-6 7-6s7 2 7 6" /><path d="M19 8v6M16 11h6" /></>} /></button>}
         {/* Conversation-only actions; app-wide settings live on the front-page menu. */}
-        <Menu lang={lang} buttonRef={menuButtonRef} items={[{ label: da ? "Forsinkede beskeder" : "Delayed messages", checked: delayedOn, run: () => { void (async () => { const next = !delayedOn; const { error } = await supabase.rpc("set_delayed_send", { conv: conv.id, p_enabled: next }); if (error) { showToast(da ? "Kunne ikke gemme indstillingen. Prøv igen." : "Could not save the setting. Try again.", { at: "top", ms: 3000 }); return; } setDelayedOn(next); showToast(next ? (da ? "Forsinkede beskeder er slået til" : "Delayed messages are on") : (da ? "Forsinkede beskeder er slået fra" : "Delayed messages are off"), { tone: "success", at: "top", ms: 2500 }); })(); } },
-          { label: muteMenuLabel(mute, da), run: mute ? () => { void unmute(); } : () => setMuteOpen(true) },
+        <Menu lang={lang} buttonRef={menuButtonRef} items={[
+          ...(renameTargets({ ...conv, others }).length ? [{ label: da ? "Kontaktens kaldenavn" : "Contact nickname", run: () => rename(renameTargets({ ...conv, others })) }] : []),
+          { label: muteMenuLabel(mute, da), run: mute ? () => { void unmute(); } : () => setMuteOpen(true), divider: !!renameTargets({ ...conv, others }).length },
+          { label: da ? "Forsinkede beskeder" : "Delayed messages", checked: delayedOn, run: () => { void (async () => { const next = !delayedOn; const { error } = await supabase.rpc("set_delayed_send", { conv: conv.id, p_enabled: next }); if (error) { showToast(da ? "Kunne ikke gemme indstillingen. Prøv igen." : "Could not save the setting. Try again.", { at: "top", ms: 3000 }); return; } setDelayedOn(next); showToast(next ? (da ? "Forsinkede beskeder er slået til" : "Delayed messages are on") : (da ? "Forsinkede beskeder er slået fra" : "Delayed messages are off"), { tone: "success", at: "top", ms: 2500 }); })(); } },
           { label: t.windows, run: () => setSheet("times") },
           { label: da ? "Beskedfrekvens" : "Message frequency", run: () => setSheet("members") },
-          ...(renameTargets({ ...conv, others }).length ? [{ label: da ? "Kontaktens kaldenavn" : "Contact nickname", run: () => rename(renameTargets({ ...conv, others })) }] : []),
-          { label: da ? "Eksportér samtale" : "Export conversation", run: () => setSheet("export") },
           { label: da ? "Blokeringer" : "Blocking lists", run: () => setSheet("words") },
+          { label: da ? "Eksportér samtale" : "Export conversation", run: () => setSheet("export"), divider: true },
           { label: da ? "Rapportér" : "Report", run: () => setSheet("report"), divider: true },
           blocked ? { label: da ? "Afblokér samtale" : "Unblock conversation", run: () => { void askBlock(false); } } : { label: da ? "Blokér samtale" : "Block conversation", run: () => { void askBlock(true); }, danger: true }]} />
         {/* Search overlays the header row (no layout shift: the invite card and messages stay put). */}
@@ -1352,7 +1357,7 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
       {sheet === "words" && <SheetView title={da ? "Blokeringer" : "Blocking lists"} close={() => setSheet(null)} lang={lang}><BlockingLists key={`${session.user.id}:${conv.id}`} session={session} lang={lang} conv={conv.id} /></SheetView>}
       {sheet === "members" && <SheetView title={da ? "Beskedfrekvens" : "Message frequency"} close={() => setSheet(null)} lang={lang}><Members lang={lang} conv={conv.id} isParent={conv.role === "parent"} left={back} openWords={() => setSheet("words")} /></SheetView>}
       {sheet === "export" && <SheetView title={da ? "Udskrift af samtale" : "Conversation transcript"} close={() => setSheet(null)} lang={lang}><ConversationExport lang={lang} conv={conv.id} plan={plan} onPlan={setPlan} ownEmail={session.user.email ?? ""} openPlans={() => { setSheet(null); openPlans(); }} /></SheetView>}
-      {sheet === "addMember" && <SheetView title={da ? "Tilføj person" : "Add person"} close={() => setSheet(null)} lang={lang} anchor={addPersonRef}><AddMember lang={lang} conv={conv.id} done={(toast, tone = "success") => { load(); setSheet(null); showToast(toast, { tone, ms: tone === "success" ? 4000 : 9000, at: "top" }); }} openPlans={openPlans} /></SheetView>}
+      {sheet === "addMember" && <SheetView title={da ? "Invitér person til denne samtale" : "Invite person to this conversation"} close={() => setSheet(null)} lang={lang} anchor={addPersonRef}><AddMember lang={lang} conv={conv.id} done={(toast, tone = "success") => { load(); setSheet(null); showToast(toast, { tone, ms: tone === "success" ? 4000 : 9000, at: "top" }); }} openPlans={openPlans} /></SheetView>}
       {muteOpen && <MuteDialog lang={lang} done={(d) => { setMuteOpen(false); if (d) void applyMute(d); }} />}
       {sheet === "times" && <SheetView title={t.windows} close={() => setSheet(null)} lang={lang}><ReceiveSettings key={`${session.user.id}:${conv.id}`} lang={lang} conv={conv.id} onCancel={() => setSheet(null)} /></SheetView>}
     </>
@@ -1450,6 +1455,7 @@ function PendingBar({ lang, invs, answer, manage, roleTxt }: { lang: Lang; invs:
 function AddMember({ lang, conv, done, openPlans }: { lang: Lang; conv: string; done: (toast: string, tone?: "success" | "neutral") => void; openPlans: () => void }) {
   const da = lang === "da";
   const [email, setEmail] = useState(""); const [role, setRole] = useState("reader"); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState<{ ok: boolean; text: string; plan?: boolean } | null>(null);
+  const pick = useInviteContactPick(lang, (addr) => { setEmail(addr); if (msg && !msg.ok) setMsg(null); });
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); if (busy) return;
     const addr = email.trim();
@@ -1465,8 +1471,10 @@ function AddMember({ lang, conv, done, openPlans }: { lang: Lang; conv: string; 
   return (
     <form onSubmit={submit} noValidate>
       <p className="meta">{da ? "Fx advokat eller sagsbehandler. Personen får først adgang, når alle i samtalen har godkendt. Ét afslag stopper det. Personen ser ingen beskeder fra før." : "E.g. a lawyer or caseworker. Access only after everyone approves. One rejection stops it. No earlier history is shown."}</p>
-      <label htmlFor="me">{da ? "E-mail" : "Email"}</label><input id="me" {...inviteEmailProps} required aria-invalid={msg && !msg.ok ? true : undefined} aria-describedby={msg && !msg.ok ? "me-err" : undefined} value={email} onChange={(e) => { setEmail(e.target.value); if (msg && !msg.ok) setMsg(null); }} />
+      <div className="invite-email-head"><label htmlFor="me">{da ? "E-mail" : "Email"}</label>{pick.button}</div>
+      <input id="me" {...inviteEmailProps} required aria-invalid={msg && !msg.ok ? true : undefined} aria-describedby={msg && !msg.ok ? "me-err" : undefined} value={email} onChange={(e) => { setEmail(e.target.value); if (msg && !msg.ok) setMsg(null); }} />
       {msg && !msg.plan && <p id="me-err" ref={(el) => el?.scrollIntoView?.({ block: "nearest" })} className={msg.ok ? "meta field-msg" : "err field-msg"} role={msg.ok ? "status" : "alert"}>{msg.text}</p>}
+      {pick.panel}
       <label>{da ? "Rolle" : "Role"}</label>
       <Choice name="role" value={role} set={setRole} opts={[["reader", da ? "Kun læse" : "Read only"], ["writer", da ? "Læse og skrive" : "Read and write"]]} />
       <div className="row end"><button type="submit" disabled={busy}>{busy ? (da ? "Sender…" : "Sending…") : (da ? "Send til godkendelse" : "Send for approval")}</button></div>
@@ -1497,7 +1505,7 @@ function NewPassword({ lang, done }: { lang: Lang; done: () => void }) {
   </form>);
 }
 
-function AccountPanel({ lang, openPrivacy, openPlans, onForgot }: { lang: Lang; openPrivacy: () => void; openPlans: () => void; onForgot: (email: string) => void }) {
+function AccountPanel({ lang, openPlans, onForgot }: { lang: Lang; openPlans: () => void; onForgot: (email: string) => void }) {
   const da = lang === "da";
   const [email, setEmail] = useState("");
   useEffect(() => { supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? "")); }, []);
@@ -1550,7 +1558,7 @@ function AccountPanel({ lang, openPrivacy, openPlans, onForgot }: { lang: Lang; 
       <button type="submit" disabled={busy}>{da ? "Skift e-mail" : "Change email"}</button>
     </form>
     <SubscriptionManage lang={lang} openPlans={openPlans} />
-    <DeleteAccountSection lang={lang} openPrivacy={openPrivacy} />
+    <DeleteAccountSection lang={lang} />
   </>);
 }
 

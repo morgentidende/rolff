@@ -2,23 +2,34 @@
 const { test } = require('node:test'); const assert = require('node:assert/strict');
 const { env, delay, label, click, button } = require('./support.cjs');
 const openChat = async (d) => { await click(d.querySelector('.convbtn')); await delay(80); };
-const menu = async (d) => { await click(label(d, 'Menu')); return [...d.querySelectorAll('[role=menuitem]')]; };
+const menu = async (d) => { await click(label(d, 'Menu')); return [...d.querySelectorAll('[role=menuitem], [role=menuitemcheckbox]')]; };
 const put = async (w, el, v) => { Object.getOwnPropertyDescriptor(w.HTMLTextAreaElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new w.Event('input', { bubbles: true })); await delay(20); };
 
-test('conversation ⋮ menu holds only conversation actions, Rapportér + Blokér last after a divider', async () => {
+test('conversation ⋮ menu is grouped: nickname | settings | export | report/block', async () => {
   const f = await env(); const { d } = f; try {
     await openChat(d);
     const items = await menu(d);
-    assert.deepEqual(items.map(b => b.textContent), ['Slå notifikationer fra', 'Modtagetider', 'Beskedfrekvens', 'Kontaktens kaldenavn', 'Eksportér samtale', 'Blokeringer', 'Rapportér', 'Blokér samtale']);
-    const sep = d.querySelector('.menu [role=separator]'); assert.ok(sep && sep.nextElementSibling.textContent === 'Rapportér');
+    assert.deepEqual(items.map(b => b.textContent), ['Kontaktens kaldenavn', 'Slå notifikationer fra', 'Forsinkede beskeder', 'Modtagetider', 'Beskedfrekvens', 'Blokeringer', 'Eksportér samtale', 'Rapportér', 'Blokér samtale']);
+    const delayed = items.find(b => b.textContent === 'Forsinkede beskeder');
+    assert.equal(delayed.getAttribute('role'), 'menuitemcheckbox');
+    const seps = [...d.querySelectorAll('.menu [role=separator]')];
+    assert.equal(seps.length, 3);
+    assert.equal(seps[0].nextElementSibling.textContent, 'Slå notifikationer fra');
+    assert.equal(seps[1].nextElementSibling.textContent, 'Eksportér samtale');
+    assert.equal(seps[2].nextElementSibling.textContent, 'Rapportér');
     assert.ok(items.at(-1).classList.contains('danger'));
   } finally { await f.close(); }
 });
 
-test('front-page ⋮ keeps every app-wide item', async () => {
+test('front-page ⋮ is grouped: invite | settings | help | log out', async () => {
   const f = await env(); const { d } = f; try {
     const labels = (await menu(d)).map(b => b.textContent);
-    for (const l of ['App-sprog', 'FAQ', 'Abonnement', 'Konto (e-mail og adgangskode)', 'Privatliv og sletning', 'Privatlivspolitik', 'Kontakt', 'Inviter person', 'Log ud']) assert.ok(labels.includes(l), l);
+    assert.deepEqual(labels, ['Inviter person', 'Notifikationer', 'Konto (e-mail og adgangskode)', 'Abonnement', 'Privatliv og sletning', 'App-sprog', 'FAQ', 'Kontakt', 'Privatlivspolitik', 'Log ud']);
+    const seps = [...d.querySelectorAll('.menu [role=separator]')];
+    assert.equal(seps.length, 3);
+    assert.equal(seps[0].nextElementSibling.textContent, 'Notifikationer');
+    assert.equal(seps[1].nextElementSibling.textContent, 'FAQ');
+    assert.equal(seps[2].nextElementSibling.textContent, 'Log ud');
     assert.ok(!labels.includes('Modtagetider'), 'Modtagetider moved to the conversation menu');
   } finally { await f.close(); }
 });

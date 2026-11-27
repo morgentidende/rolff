@@ -39,3 +39,51 @@ test('after turning on, the sheet stays short: toggle and one line, no devices o
  const text=root.textContent;
  assert(!text.includes('Enhed 1'));assert(!text.includes('Enheder'));assert(!text.includes('Denne enhed'));assert(!text.includes('Fjern'));assert(!text.includes('Slå fra på alle enheder'));assert(!text.includes('fornyes'));assert(!text.includes('90 dage'));assert(!text.includes('Ny besked fra Far'));assert(!text.includes('Udløber'));assert(!text.includes('Forny'));
  await e.close();});
+
+test('settings switch flips instantly while subscribe is still pending, and ignores a second tap',async()=>{
+ const e=await env();await e.click('settings');
+ e.w.QA.holdNextSave();
+ const sw=()=>e.d.querySelector('button[role=switch]');
+ assert.equal(sw().getAttribute('aria-checked'),'false');
+ const t0=performance.now();
+ sw().click();
+ // React 18 flushes the click update on the next microtask in jsdom; that is still the same frame for the user.
+ while(sw().getAttribute('aria-checked')!=='true' && performance.now()-t0<30)await Promise.resolve();
+ const ms=performance.now()-t0;
+ assert.equal(sw().getAttribute('aria-checked'),'true','visual flip is immediate');
+ assert.ok(ms<30,'time-to-visual-flip '+ms+'ms');
+ console.log('time-to-visual-flip-ms',ms.toFixed(2));
+ assert.equal(sw().disabled,false,'pending does not freeze the switch');
+ assert.equal(sw().getAttribute('aria-busy'),'true');
+ assert(!e.w.QA.calls.includes('save_my_push'));
+ sw().click();
+ assert.equal(sw().getAttribute('aria-checked'),'true','second tap ignored while pending');
+ e.w.QA.releaseHeldSave();
+ await delay();
+ assert(e.w.QA.calls.includes('save_my_push'));
+ assert.equal(sw().getAttribute('aria-checked'),'true');
+ assert.notEqual(sw().getAttribute('aria-busy'),'true');
+ await e.close();
+});
+
+test('failed enable reverts the switch and shows a short message',async()=>{
+ const e=await env();await e.click('settings');
+ e.w.QA.failNextSave();
+ const sw=e.d.querySelector('button[role=switch]');
+ const t0=performance.now();
+ sw.click();
+ while(sw.getAttribute('aria-checked')!=='true' && performance.now()-t0<30)await Promise.resolve();
+ assert.equal(sw.getAttribute('aria-checked'),'true');
+ await delay();
+ assert.equal(sw.getAttribute('aria-checked'),'false');
+ assert.match(e.d.querySelector('.err').textContent,/Ændringen kunne ikke bekræftes\. Prøv igen\./);
+ await e.close();
+});
+
+test('styles hide the Android tap square but keep a keyboard focus-visible ring',async()=>{
+ const fs=require('node:fs'),path=require('node:path');
+ const css=fs.readFileSync(path.join(__dirname,'../../src/styles.css'),'utf8');
+ assert.match(css,/-webkit-tap-highlight-color:\s*transparent/);
+ assert.match(css,/button:focus:not\(:focus-visible\)[^}]*outline:\s*none/);
+ assert.match(css,/button:focus-visible\{[^}]*outline:\s*2px solid var\(--accent\)/);
+});

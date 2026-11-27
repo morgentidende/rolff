@@ -11,6 +11,8 @@ ROLFF er stadig en webapp. Intet er pakket ind som app endnu. Denne side viser, 
 - **Invitationslinks.** Links fungerer også, mens ROLFF er åben. Det gælder både den nuværende `…/#invite=KODE`, `…/invite/KODE` og `rolff://invite/KODE`. Det samme gælder links til nulstilling af adgangskode og skift af e-mail (`src/native/deepLinks.ts`).
 - **Ingen popups.** ROLFF bruger ikke `window.open`, `alert`, `confirm` eller `prompt`, og en test sikrer, at det bliver ved med at være sådan. PDF-vedhæftninger får knapperne "Åbn PDF" og "Gem PDF". Eksterne links åbner i telefonens browser, når ROLFF kører som app (`src/native/externalLinks.ts`).
 - **"Tilføj til hjemmeskærm"** vises ikke inde i en app.
+- **Invitation fra kontakter.** Knappen “Vælg fra kontakter” sidder ved e-mail-feltet og vises kun, når en vælger findes. I webappen er det Contact Picker API (Android Chrome). Den beder aldrig om hele kontaktlisten; kun den valgte e-mail kommer ind i feltet og gemmes ikke. Interfacet ligger i `src/native/contactPicker.ts`, så en senere iOS-app kan bruge `CNContactPickerViewController` og Android systemets vælger (Flutter eller Capacitor) uden at ændre invitationskortene.
+
 
 Alt det native slår først til, når appen er pakket ind (`window.Capacitor`). På nettet ændrer det ingenting.
 

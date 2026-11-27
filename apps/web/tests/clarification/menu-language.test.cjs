@@ -56,7 +56,7 @@ test('language: switching applies at once (menu, html lang, storage) and invitat
     assert.equal(d.querySelector('.sheet h2').textContent, 'App language', 'open sheet re-renders in English without reload');
     await closeSheet(d);
     await click(label(d, 'Menu')); const labels = items(d).map(i => i.textContent.trim()); await click(label(d, 'Menu'));
-    assert.ok(labels.includes('App language') && labels.includes('Plan') && labels.includes('Privacy and deletion') && labels.includes('Contact') && labels.includes('Invite person'), labels.join(', '));
+    assert.deepEqual(labels, ['Invite person', 'Notifications', 'Account (email and password)', 'Plan', 'Privacy and deletion', 'App language', 'FAQ', 'Contact', 'Privacy policy', 'Log out'], labels.join(', '));
     assert.equal(await inviteLang('Invite person', /Send|Invite/), 'en');
   } finally { await f.close(); }
 });
@@ -108,11 +108,11 @@ test('Konto: delete lives in a danger card with export warning and the long acti
     assert.match(card.textContent, /Opsig abonnement/);
 
     assert.match(card.textContent, /Eksportér samtale/);
-    const go = [...card.querySelectorAll('button')].find(b => b.textContent.trim() === 'Hent mine data først');
-    assert.ok(go, 'link to download data');
-    await click(go); await delay(60);
-    const priv = d.querySelector('.sheet');
-    assert.equal(priv.getAttribute('aria-label'), 'Privatliv og sletning');
+    assert.ok(![...card.querySelectorAll('button')].some(b => /Hent mine data først|Download my data first/.test(b.textContent)));
+    assert.ok(card.querySelector('#delexport'), 'transcript checkbox remains');
+    assert.match(card.querySelector('label[for="delexport"], #delexport') ? card.querySelector('#delexport').closest('label').textContent : '', /fuld udskrift/);
+    await closeSheet(d);
+    const priv = await openItem(d, 'Privatliv og sletning');
     assert.match(priv.textContent, /Download mine data/);
   } finally { await f.close(); }
 });
