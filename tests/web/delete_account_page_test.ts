@@ -38,15 +38,20 @@ Deno.test("slet-konto.html is bilingual, names Rolff, and offers in-app + email 
 Deno.test("privatliv.html points to the public deletion page and states retention on account deletion", () => {
   assertStringIncludes(policy, 'href="./slet-konto.html"');
   assertStringIncludes(policy, "slet-konto.html#en");
-  assertStringIncludes(policy, "Sidst opdateret: 26. november 2026.");
+  assertStringIncludes(policy, "Sidst opdateret: 27. november 2026.");
   assertStringIncludes(policy, "Modpartens kopi af det, du har sendt, beholdes");
   assertStringIncludes(policy, "The other party’s copy of what you sent is kept");
 });
 
 Deno.test("privatliv.html states legal bases, 18+ age, 30-day abuse monitoring and SCC transfer (not DPF)", () => {
-  assertStringIncludes(policy, "CVR: [CVR]");
-  assertStringIncludes(policy, "[postadresse]");
-  assertStringIncludes(policy, "skal godkendes af jurist");
+  assertStringIncludes(policy, "Psykolog Nicolai Petersen er dataansvarlig");
+  assertStringIncludes(policy, "Psykolog Nicolai Petersen is the controller");
+  assertStringIncludes(policy, "CVR: 36152699");
+  assertStringIncludes(policy, "c/o Nicolai Petersen, Ibstrupvænget 7, st. 3, 2820 Gentofte");
+  assert(!/\[CVR\]|\[postadresse\]/.test(policy));
+  assert(!/skal godkendes af jurist|to be approved by a lawyer|UDKAST|DRAFT – to be reviewed/.test(policy));
+  assertStringIncludes(policy, "berettiget interesse");
+  assertStringIncludes(policy, "legitimate interest");
   assertStringIncludes(policy, "eu.api.openai.com");
   assertStringIncludes(policy, "30 dage til misbrugskontrol");
   assertStringIncludes(policy, "up to 30 days for abuse monitoring");
@@ -56,7 +61,9 @@ Deno.test("privatliv.html states legal bases, 18+ age, 30-day abuse monitoring a
   assertStringIncludes(policy, "We do not claim that OpenAI is certified under the EU-US Data Privacy Framework");
   assertStringIncludes(policy, "fyldt 18 år");
   assertStringIncludes(policy, "aged 18 or older");
-  assertStringIncludes(policy, "Tilbagetrækning af samtykke");
+  assertStringIncludes(policy, "Indsigelse");
+  assertStringIncludes(policy, "You may object to the AI processing");
+  assert(!/Tilbagetrækning af samtykke|withdraw your consent to AI/.test(policy));
   assert(!/Brugere under 13|Users under 13/.test(policy));
   assert(!/globale endpoint|global endpoint – processed in the US/.test(policy));
 });

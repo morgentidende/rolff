@@ -14,7 +14,7 @@ test('Home → Privatlivspolitik opens in-app (Danish) → Back returns to Home,
     const v = d.querySelector('.docview'); assert.ok(v, 'in-app policy screen'); assert.equal(opened.length, 0, 'no new window/tab');
     assert.equal(v.getAttribute('aria-label'), 'Privatlivspolitik'); assert.ok(v.querySelector('[aria-label="Tilbage"]'));
     const t = v.querySelector('.policy').textContent;
-    assert.match(t, /Sidst opdateret: 26\. november 2026/); assert.match(t, /UDKAST – skal gennemgås af jurist\/DPO/);
+    assert.match(t, /Sidst opdateret: 27\. november 2026/); assert.match(t, /Rolff er i test\. Skriv kun opdigtede beskeder/); assert.ok(!/UDKAST|jurist\/DPO/.test(t));
     assert.ok(!/English below|Privacy policy \(English\)|← Rolff/.test(t)); assert.ok(!v.querySelector('.policy script, .policy style, .policy img, .policy [style], .policy [onclick]'));
     assert.equal(w.history.state.__rolffBack.kind, 'guard'); assertPrivateHistory(w);
     await back(w);
@@ -30,7 +30,7 @@ test('back arrow closes it too; English app shows only the English part', async 
     await click(d.querySelector('.sheet [aria-label="Close"]')); await delay(40);
     await menuItem(d, 'Privacy policy');
     const v = d.querySelector('.docview'); const t = v.querySelector('.policy').textContent;
-    assert.match(t, /Privacy policy \(English\)/); assert.match(t, /DRAFT – to be reviewed by a lawyer\/DPO/); assert.ok(!/Privatlivspolitik for Rolff|Sidst opdateret/.test(t));
+    assert.match(t, /Privacy policy \(English\)/); assert.match(t, /Rolff is in testing\. Write made-up messages only/); assert.ok(!/DRAFT – to be reviewed|lawyer\/DPO/.test(t)); assert.ok(!/Privatlivspolitik for Rolff|Sidst opdateret/.test(t));
     assert.match(t, /Blocked topics/, 'bilingual tail section kept');
     await click(v.querySelector('[aria-label="Back"]')); await delay(60);
     assert.equal(d.querySelector('.docview'), null); assert.equal(w.history.state.__rolffBack.kind, 'base');
