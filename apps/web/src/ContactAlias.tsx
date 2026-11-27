@@ -9,7 +9,7 @@ import { chatDialogStyle, useBackdropDismiss, useModalLayer, useUnderChatHeader 
 export type AliasContact = { user_id: string; email: string; alias: string | null; pending?: boolean };
 
 /** A short tap opens the conversation; a cancelled gesture must never navigate. */
-export function ContactButton({ children, open, rename }: { children: React.ReactNode; open: () => void; rename: () => void }) {
+export function ContactButton({ children, open, rename, onPrime }: { children: React.ReactNode; open: () => void; rename: () => void; onPrime?: () => void }) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const start = useRef<{ x: number; y: number } | null>(null);
   const suppress = useRef(false);
@@ -22,7 +22,7 @@ export function ContactButton({ children, open, rename }: { children: React.Reac
   }, []);
   const show = () => { clear(); suppress.current = true; rename(); };
   return <button type="button" className="convbtn contact-button" aria-keyshortcuts="Shift+F10"
-    onPointerDown={e => { if (!e.isPrimary || e.button !== 0) return; clear(); suppress.current = false; start.current = { x: e.clientX, y: e.clientY }; timer.current = setTimeout(show, 500); }}
+    onPointerDown={e => { if (!e.isPrimary || e.button !== 0) return; clear(); suppress.current = false; start.current = { x: e.clientX, y: e.clientY }; timer.current = setTimeout(show, 500); onPrime?.(); }}
     onPointerMove={e => { if (start.current && Math.hypot(e.clientX - start.current.x, e.clientY - start.current.y) > 10) cancel(); }}
     onPointerUp={() => { clear(); start.current = null; }} onPointerCancel={cancel} onPointerLeave={cancel}
     onContextMenu={e => { e.preventDefault(); show(); }}

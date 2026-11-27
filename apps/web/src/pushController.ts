@@ -34,7 +34,7 @@ export class PushController {
  async state():Promise<{state:PushState;active:boolean;binding:string|null}> {
    const s=this.snapshot();const state:PushState=await this.ports.rpc(s.owner,"my_push_state");this.check(s);
    await this.identityTask;const b=await this.ports.current();this.check(s);
-   // `binding` only identifies "this device" in the settings list; it never grants anything.
+   // `binding` identifies this device among the server subscriptions; it never grants anything.
    return {state,binding:b?.owner===s.owner.id?b.binding??null:null,active:!!(state.available && state.enabled && this.ports.permission()==="granted" && b?.owner===s.owner.id && b?.binding && state.devices.some(d=>d.id===b.binding && Date.parse(d.expires_at)>this.now()))};
  }
  async decline(){const s=this.snapshot();await this.ports.rpc(s.owner,"decline_my_push");this.check(s);}
