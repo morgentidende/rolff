@@ -14,6 +14,7 @@ import { MessageBubble, ReplyComposer, type Message } from "./MessageBubble";
 import { EditComposer } from "./EditComposer";
 import { DELAYED_SEND_SECONDS, isHeldMessage, isPendingSend, pendingSeconds, soonestPending } from "./delayedSend";
 import { invActions, invText, invitePoints, type PendingInv } from "./inviteText";
+import { useInviteContactPick } from "./InviteContactPick";
 import { Toast, showToast } from "./toast";
 import { ConfirmHost, confirmDialog } from "./confirmDialog";
 import { PolicyView } from "./PolicyView";
@@ -861,6 +862,7 @@ function blurActive() { const a = document.activeElement; if (a instanceof HTMLE
 function InviteByEmail({ lang, done }: { lang: Lang; done: (toast: string, tone?: "success" | "neutral") => void }) {
   const da = lang === "da";
   const [email, setEmail] = useState(""); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState<{ ok: boolean; text: string; plan?: boolean } | null>(null);
+  const pick = useInviteContactPick(lang, (addr) => { setEmail(addr); if (msg && !msg.ok) setMsg(null); });
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); if (busy) return;
     const addr = email.trim();
@@ -876,8 +878,10 @@ function InviteByEmail({ lang, done }: { lang: Lang; done: (toast: string, tone?
   return (
     <form onSubmit={submit} noValidate>
       <ul className="invite-points" role="note">{invitePoints(lang).map((p, i) => <li key={i}>{p.lead && <strong>{p.lead} </strong>}{p.text}</li>)}</ul>
-      <label htmlFor="ie">{da ? "E-mail" : "Email"}</label><input id="ie" {...inviteEmailProps} placeholder={da ? "navn@eksempel.dk" : "name@example.com"} required aria-invalid={msg && !msg.ok ? true : undefined} aria-describedby={msg && !msg.ok ? "ie-err" : undefined} value={email} onChange={(e) => { setEmail(e.target.value); if (msg && !msg.ok) setMsg(null); }} />
+      <div className="invite-email-head"><label htmlFor="ie">{da ? "E-mail" : "Email"}</label>{pick.button}</div>
+      <input id="ie" {...inviteEmailProps} placeholder={da ? "navn@eksempel.dk" : "name@example.com"} required aria-invalid={msg && !msg.ok ? true : undefined} aria-describedby={msg && !msg.ok ? "ie-err" : undefined} value={email} onChange={(e) => { setEmail(e.target.value); if (msg && !msg.ok) setMsg(null); }} />
       {msg && <p id="ie-err" ref={(el) => el?.scrollIntoView?.({ block: "nearest" })} className={msg.ok ? "meta field-msg" : "err field-msg"} role={msg.ok ? "status" : "alert"}>{msg.text}</p>}
+      {pick.panel}
       <div className="row end"><button type="submit" disabled={busy}>{busy ? (da ? "Sender…" : "Sending…") : "Send invitation"}</button></div>
     </form>
   );
@@ -1451,6 +1455,7 @@ function PendingBar({ lang, invs, answer, manage, roleTxt }: { lang: Lang; invs:
 function AddMember({ lang, conv, done, openPlans }: { lang: Lang; conv: string; done: (toast: string, tone?: "success" | "neutral") => void; openPlans: () => void }) {
   const da = lang === "da";
   const [email, setEmail] = useState(""); const [role, setRole] = useState("reader"); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState<{ ok: boolean; text: string; plan?: boolean } | null>(null);
+  const pick = useInviteContactPick(lang, (addr) => { setEmail(addr); if (msg && !msg.ok) setMsg(null); });
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); if (busy) return;
     const addr = email.trim();
@@ -1466,8 +1471,10 @@ function AddMember({ lang, conv, done, openPlans }: { lang: Lang; conv: string; 
   return (
     <form onSubmit={submit} noValidate>
       <p className="meta">{da ? "Fx advokat eller sagsbehandler. Personen får først adgang, når alle i samtalen har godkendt. Ét afslag stopper det. Personen ser ingen beskeder fra før." : "E.g. a lawyer or caseworker. Access only after everyone approves. One rejection stops it. No earlier history is shown."}</p>
-      <label htmlFor="me">{da ? "E-mail" : "Email"}</label><input id="me" {...inviteEmailProps} required aria-invalid={msg && !msg.ok ? true : undefined} aria-describedby={msg && !msg.ok ? "me-err" : undefined} value={email} onChange={(e) => { setEmail(e.target.value); if (msg && !msg.ok) setMsg(null); }} />
+      <div className="invite-email-head"><label htmlFor="me">{da ? "E-mail" : "Email"}</label>{pick.button}</div>
+      <input id="me" {...inviteEmailProps} required aria-invalid={msg && !msg.ok ? true : undefined} aria-describedby={msg && !msg.ok ? "me-err" : undefined} value={email} onChange={(e) => { setEmail(e.target.value); if (msg && !msg.ok) setMsg(null); }} />
       {msg && !msg.plan && <p id="me-err" ref={(el) => el?.scrollIntoView?.({ block: "nearest" })} className={msg.ok ? "meta field-msg" : "err field-msg"} role={msg.ok ? "status" : "alert"}>{msg.text}</p>}
+      {pick.panel}
       <label>{da ? "Rolle" : "Role"}</label>
       <Choice name="role" value={role} set={setRole} opts={[["reader", da ? "Kun læse" : "Read only"], ["writer", da ? "Læse og skrive" : "Read and write"]]} />
       <div className="row end"><button type="submit" disabled={busy}>{busy ? (da ? "Sender…" : "Sending…") : (da ? "Send til godkendelse" : "Send for approval")}</button></div>

@@ -19,6 +19,12 @@ button.ghost{background:transparent;color:var(--accent)}button:disabled{opacity:
 input,select,textarea{font-family:inherit;min-height:44px;padding:8px 10px;border-radius:10px;border:1px solid var(--field-border);background:var(--field-bg);color:var(--text);font-size:16px;width:100%}
 input::placeholder,textarea::placeholder{color:var(--muted);opacity:1}
 .invite-points{margin:0 0 12px;padding-left:20px;font-size:15px;line-height:1.45;color:var(--muted)}.invite-points li{margin:0 0 6px}.invite-points li::marker{color:var(--accent)}.invite-points strong{color:var(--text)}
+.invite-email-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin:6px 0 2px}
+.invite-email-head label{margin:0;flex:1;min-width:0}
+.invite-email-head .contact-pick{flex:none;white-space:nowrap;min-height:44px;padding:6px 4px}
+.contact-emails{display:flex;flex-direction:column;gap:6px;margin:8px 0 4px}
+.contact-emails .meta{margin:0}
+.contact-email-opt{width:100%;justify-content:flex-start;text-align:left}
 input:where(:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file])):focus,select:focus,textarea:focus{border-color:var(--field-focus);outline:2px solid var(--field-focus);outline-offset:1px}
 label{display:block;margin:6px 0 2px;color:var(--muted);font-size:14px}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.spacer{flex:1}

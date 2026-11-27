@@ -29,6 +29,13 @@ På Googles gratis niveau må Google bruge input til at forbedre sine produkter.
 - Ingen beskedtekst i logs. Service-role-nøglen findes kun i Edge Functions.
 - Ikke ende-til-ende-krypteret: klartekst ligger i Postgres (krypteret at rest hos Supabase) og sendes til AI-udbyderen ved vurdering.
 
+## Kontaktvælger ved invitation
+Knappen “Vælg fra kontakter” / “Choose from contacts” vises ved e-mail-feltet på både “Inviter person” og “Invitér person til denne samtale”, men kun når en kontaktvælger er tilgængelig. I webappen er det Contact Picker API (`navigator.contacts.select(['email'], { multiple: false })`), som i dag findes i Android Chrome. På iPhone i browseren er knappen skjult, og man skriver e-mailen selv.
+
+UI'en taler kun med interfacet `ContactEmailPicker` i `apps/web/src/native/contactPicker.ts`. Den åbner telefonens egen vælger for **én** kontakt, tager kun e-mailen (har kontakten flere, vælger brugeren en), og skriver den i feltet. Appen beder aldrig om adgang til hele kontaktlisten og gemmer eller sender ikke valget noget sted.
+
+Når Rolff udgives som rigtig app, registreres en native adapter i samme stik: på iPhone `CNContactPickerViewController` (kun e-mail), på Android systemets kontaktvælger. Det kan være Flutter (den planlagte app) eller et Capacitor-plugin — UI'en skal ikke ændres. Se også `docs/native-readiness.md`.
+
 ## Kør tests
 ```
 npm run test:sql
