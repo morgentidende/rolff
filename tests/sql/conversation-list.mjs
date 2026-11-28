@@ -76,6 +76,7 @@ export async function testConversationList({ db, as, svc, t, assert }) {
     const c4 = await conv('3 years', [O, B]);
     await db.query(`update memberships set joined_at=now()-interval '3 years' where conversation_id=$1`, [c4]);
     await put(c4, B, 'Meget gammel syntetisk besked', '2 years');
+    await as(O, `select set_my_data_prefs(false,'1y')`);
     const r = (await as(O, `select * from list_my_conversations_v2()`));
     assert.equal(r.length, 1); assert.equal(r[0].last_body, null);
   });

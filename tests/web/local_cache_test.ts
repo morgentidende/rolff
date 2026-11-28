@@ -5,8 +5,9 @@ function eq(a: unknown, b: unknown) { if (JSON.stringify(a) !== JSON.stringify(b
 const now = Date.parse("2026-11-26T13:00:00Z");
 const msg = (id: string, created: string) => ({ id, created_at: created, body: "hemmelig" });
 
-Deno.test("1 year is the default and the shortest official retention", () => {
-  eq(retentionMs("1y"), retentionMs("nope"));
+Deno.test("keep-forever is the default: missing/unknown values never drop messages; 1y is shorter than 5y", () => {
+  eq(retentionMs("nope"), retentionMs("unlimited"));
+  if (Number.isFinite(retentionMs("nope"))) throw new Error("unknown must not drop");
   if (!(retentionMs("5y") > retentionMs("1y"))) throw new Error("5y");
   if (Number.isFinite(retentionMs("unlimited"))) throw new Error("unlimited");
 });
@@ -22,9 +23,11 @@ Deno.test("messages older than the chosen retention are dropped; unlimited keeps
   eq(withinRetention(rows, "unlimited", now).map((m) => m.id), ["old", "mid", "new"]);
 });
 
-Deno.test("a legacy bare array is treated as 1 year; an envelope keeps its retention", () => {
+Deno.test("a legacy bare array keeps everything (default); an envelope keeps its own retention", () => {
   const rows = [msg("old", "2024-11-26T13:00:00Z"), msg("new", "2026-11-26T12:00:00Z")];
-  eq(normalizeCached(rows, now).messages.map((m) => (m as { id: string }).id), ["new"]);
+  eq(normalizeCached(rows, now).messages.map((m) => (m as { id: string }).id), ["old", "new"]);
+  eq(normalizeCached(wrapCache(rows, "1y", now), now).messages.map((m) => (m as { id: string }).id), ["new"]);
+  eq(wrapCache(rows, undefined, now).retention, "unlimited");
   eq(normalizeCached(wrapCache(rows, "5y", now), now).messages.map((m) => (m as { id: string }).id), ["old", "new"]);
   eq(normalizeCached(wrapCache(rows, "5y", now), now).retention, "5y");
 });

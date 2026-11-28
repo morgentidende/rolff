@@ -14,6 +14,7 @@ let messages: any[] = [{ ...seedMsg }];
 let msgSeq = 2;
 let currentPlan = 'text_attachments';
 let prefCloudSync = false;
+let prefRetention = 'unlimited'; // the server default since 2026-11-28 (keep until the user deletes)
 const fixtureInvite = { id: 'pending-invite-fixture', role: 'reader', invitee_email: 'advokat.test@example.invalid', consents: 1, required: 2, i_consented: true, mine: true };
 let pendingInvites: any[] = [fixtureInvite];
 let memberInviteOk = false;
@@ -48,9 +49,9 @@ function rpc(name: string, args: any) {
     let data: any = [];
     if (name === 'list_my_conversations')
         data = [conv()];
-    if (name === 'set_my_data_prefs') { if (args?.p_cloud_sync && currentPlan !== 'text_attachments') { return { data: null, error: { message: 'plan_required', code: '42501' } }; } prefCloudSync = !!args?.p_cloud_sync; data = []; }
+    if (name === 'set_my_data_prefs') { if (args?.p_cloud_sync && currentPlan !== 'text_attachments') { return { data: null, error: { message: 'plan_required', code: '42501' } }; } prefCloudSync = !!args?.p_cloud_sync; prefRetention = String(args?.p_retention ?? prefRetention); data = []; }
     if (name === 'get_my_privacy')
-        data = [{ inactivity_delete: false, inactivity_days: 90, cloud_sync: prefCloudSync, retention: '1y' }];
+        data = [{ inactivity_delete: false, inactivity_days: 90, cloud_sync: prefCloudSync, retention: prefRetention }];
     if (name === 'get_my_plan')
         data = [{ plan: currentPlan, price: currentPlan === 'text_attachments' ? 79 : currentPlan === 'text' ? 49 : 0, pending_plan: pendingPlan, period_end: '2026-12-09T00:00:00Z', test_switch: true }];
     if (name === 'set_my_plan_test') { currentPlan = args?.p_plan ?? currentPlan; pendingPlan = null; data = [{ plan: currentPlan, pending_plan: null, period_end: '2026-12-09T00:00:00Z' }]; }

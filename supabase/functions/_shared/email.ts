@@ -152,9 +152,9 @@ export function feedbackMail(p: { category: string; body: string; senderName: st
 }
 
 export type MailAttachment = { filename: string; content_type: "application/pdf" | "text/html"; content_b64: string };
-export type MailKind = "invite" | "invite_copy" | "member_invite" | "approval" | "resend" | "account" | "export" | "report" | "feedback" | "inactivity" | "test" | "other";
+export type MailKind = "invite" | "invite_copy" | "member_invite" | "approval" | "resend" | "account" | "export" | "report" | "feedback" | "inactivity" | "retention" | "test" | "other";
 export type MailResult = { ok: boolean; provider: "smtp" | "relay" | "none"; code: number | null; reason: string };
-type MailMsg = { subject: string; html: string; text: string; reply_to?: string; attachments?: MailAttachment[] };
+export type MailMsg = { subject: string; html: string; text: string; reply_to?: string; attachments?: MailAttachment[] };
 /** Env lookup that never throws (tests run with a narrow --allow-env). */
 const env = (k: string): string | undefined => { try { return Deno.env.get(k) || undefined; } catch { return undefined; } };
 let smtpConnect: Connect | undefined;
@@ -243,6 +243,43 @@ ${btn(p.link, "Log in")}
 ${btn(p.link, "Log ind")}
 <p style="margin:22px 0 0;font-size:13px;color:#7a807e">Det, du har skrevet til andre, bliver hos dem – også efter sletning.</p>`, lang);
   const text = `${TESTWARN}Hej,\n\nDu har ikke logget ind i Rolff i et stykke tid. Om 14 dage sletter vi din konto og dine egne data automatisk. Log ind for at beholde den: ${p.link}\nDu kan slå automatisk sletning fra under ⋮ → Privatliv.\n\nDet, du har skrevet til andre, bliver hos dem – også efter sletning.`;
+  return { subject, html, text };
+}
+
+/** Retention label as the user knows it from the dropdown. */
+const retentionLabel = (r: string, lang: MailLang) => r === "5y" ? (lang === "en" ? "5 years" : "5 år") : (lang === "en" ? "1 year" : "1 år");
+/**
+ * One warning, 3 days before the first of the user's old messages passes the shorter limit they chose.
+ * Neutral: no message text, no names, no counts. `link` opens the app at "Privatliv og sletning".
+ */
+export function retentionWarningMail(p: { link: string; retention: string; lang?: MailLang }) {
+  const lang = mailLang(p.lang);
+  const label = retentionLabel(p.retention, lang);
+  if (lang === "en") {
+    const subject = "Rolff: Some of your old messages will be deleted in 3 days";
+    const html = shell(subject, `<p style="margin:0 0 14px">Hi,</p>
+<p style="margin:0 0 14px">You chose to keep your messages for <strong>${esc(label)}</strong>. In 3 days the first of your oldest messages will disappear for you, and they are deleted from the server once everyone in the conversation has reached their own limit.</p>
+<p style="margin:0 0 8px"><strong>What you can do:</strong></p>
+<ul style="margin:0 0 20px;padding-left:20px">
+<li style="margin:0 0 8px"><strong>Save them:</strong> open the conversation, tap ⋮ → Export conversation and save it as a PDF.</li>
+<li><strong>Keep them:</strong> choose a longer time, or “Until I delete them”, under ⋮ → Privacy and deletion → Keep my messages for.</li>
+</ul>
+${btn(p.link, "Open Privacy and deletion")}
+<p style="margin:22px 0 0;font-size:13px;color:#7a807e">This is the only warning for this round. As long as you keep the shorter time, older messages are then deleted continuously. This e-mail contains no messages. What you have sent to others stays with them.</p>`, lang);
+    const text = `${TESTWARN_EN}Hi,\n\nYou chose to keep your messages for ${label}. In 3 days the first of your oldest messages will disappear for you, and they are deleted from the server once everyone in the conversation has reached their own limit.\n\nWhat you can do:\n- Save them: open the conversation, tap ⋮ → Export conversation and save it as a PDF.\n- Keep them: choose a longer time, or "Until I delete them", under ⋮ → Privacy and deletion → Keep my messages for.\n\nOpen Privacy and deletion: ${p.link}\n\nThis is the only warning for this round. As long as you keep the shorter time, older messages are then deleted continuously. This e-mail contains no messages. What you have sent to others stays with them.\n\n${TEXT_FOOT}`;
+    return { subject, html, text };
+  }
+  const subject = "Rolff: Nogle af dine gamle beskeder slettes om 3 dage";
+  const html = shell(subject, `<p style="margin:0 0 14px">Hej,</p>
+<p style="margin:0 0 14px">Du har valgt at beholde dine beskeder i <strong>${esc(label)}</strong>. Om 3 dage forsvinder de første af dine ældste beskeder for dig, og de slettes fra serveren, når alle i samtalen har nået deres egen grænse.</p>
+<p style="margin:0 0 8px"><strong>Det kan du gøre:</strong></p>
+<ul style="margin:0 0 20px;padding-left:20px">
+<li style="margin:0 0 8px"><strong>Gem dem:</strong> åbn samtalen, tryk ⋮ → Eksportér samtale og gem den som PDF.</li>
+<li><strong>Behold dem:</strong> vælg en længere tid – eller “Indtil jeg sletter dem” – under ⋮ → Privatliv og sletning → Behold mine beskeder i.</li>
+</ul>
+${btn(p.link, "Åbn Privatliv og sletning")}
+<p style="margin:22px 0 0;font-size:13px;color:#7a807e">Det er den eneste advarsel for denne omgang. Så længe du beholder den korte tid, slettes ældre beskeder derefter løbende. Mailen indeholder ingen beskeder. Det, du har sendt til andre, bliver hos dem.</p>`, lang);
+  const text = `${TESTWARN}Hej,\n\nDu har valgt at beholde dine beskeder i ${label}. Om 3 dage forsvinder de første af dine ældste beskeder for dig, og de slettes fra serveren, når alle i samtalen har nået deres egen grænse.\n\nDet kan du gøre:\n- Gem dem: åbn samtalen, tryk ⋮ → Eksportér samtale og gem den som PDF.\n- Behold dem: vælg en længere tid – eller "Indtil jeg sletter dem" – under ⋮ → Privatliv og sletning → Behold mine beskeder i.\n\nÅbn Privatliv og sletning: ${p.link}\n\nDet er den eneste advarsel for denne omgang. Så længe du beholder den korte tid, slettes ældre beskeder derefter løbende. Mailen indeholder ingen beskeder. Det, du har sendt til andre, bliver hos dem.\n\n${TEXT_FOOT}`;
   return { subject, html, text };
 }
 
