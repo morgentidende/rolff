@@ -191,4 +191,4 @@ await test('shortened choice is still honoured: with a 1y limit old messages sta
   await svc('select retention_sweep()');assert.equal((await query('select count(*)::int n from messages where id=$1',[id]))[0].n,1);
   await setRet(V,'1y');await svc('select retention_sweep()');assert.equal((await query('select count(*)::int n from messages where id=$1',[id]))[0].n,0);
 });
-console.log(`keep-messages: ${pass} passed`);
+console.log(`keep-messages: ${pass} passed`);await db.close();
