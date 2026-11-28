@@ -36,7 +36,7 @@ import { createPortal } from "react-dom";
 import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { callFn, supabase } from "./supabase";
-import { detectLang, strings, type Lang } from "./i18n";
+import { detectLang, logoutConfirmCopy, strings, type Lang } from "./i18n";
 import { passwordPairState, passwordsMatch, pwText, toggleLabel } from "./pw";
 import { cacheClear, cacheGet, cacheSet, cacheSetPrefs, clearCachedMessages, loadCachedMessages, peekCachedMessages, pruneCached } from "./localStore";
 import { LunaIndicator } from "./LunaRobot";
@@ -205,7 +205,12 @@ export function App() {
     { label: da ? "Kontakt" : "Contact", run: () => setSheet("feedback") },
     // In-app screen (same text as the public privatliv.html); Back returns here instead of closing the PWA.
     { label: da ? "Privatlivspolitik" : "Privacy policy", run: () => setPolicyOpen(true) },
-    { label: t.logout, run: () => { homeCache.clear(); chatCache.clear(); setCardCacheOwner(null); setPushOwner(null); resetBackNavigation(); clearInviteEmailDrafts(); setConv(null); resetSheet(); cacheClear().finally(() => supabase.auth.signOut()); }, danger: true, divider: true },
+    { label: t.logout, run: () => { void (async () => {
+      const copy = logoutConfirmCopy(lang);
+      const ok = await confirmDialog({ title: copy.title, body: copy.body, dismiss: copy.dismiss, confirm: copy.confirm, danger: true, actionsEnd: true });
+      if (!ok) return;
+      homeCache.clear(); chatCache.clear(); setCardCacheOwner(null); setPushOwner(null); resetBackNavigation(); clearInviteEmailDrafts(); setConv(null); resetSheet(); cacheClear().finally(() => supabase.auth.signOut());
+    })(); }, danger: true, divider: true },
   ];
   const close = () => {
     if (sheet === "recover" && recoverFrom) { setSheet(recoverFrom); setRecoverFrom(null); return; }

@@ -53,3 +53,14 @@ const en: typeof da = {
 };
 export const strings = { da, en };
 export const detectLang = (): Lang => (localStorage.getItem("lang") as Lang) || (navigator.language.startsWith("da") ? "da" : "en");
+
+/** Copy for the front-page “Log ud” confirmation card. */
+export function logoutConfirmCopy(lang: Lang): { title: string; body: string; dismiss: string; confirm: string } {
+  const da = lang === "da";
+  return {
+    title: da ? "Sikker på, at du vil logge ud?" : "Are you sure you want to log out?",
+    body: da ? "Dine beskeder bliver. Du kan logge ind igen." : "Your messages are kept. You can log in again.",
+    dismiss: da ? "Bliv logget ind" : "Stay logged in",
+    confirm: da ? "Log ud" : "Log out",
+  };
+}
