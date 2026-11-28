@@ -59,7 +59,7 @@ test('message menu lists 👍 first, and a reacted bubble shows the pill', { tim
         theirs.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
         await delay(30);
         const items = [...d.querySelectorAll('.message-panel [role=menuitem]')].map((b) => (b.querySelector('span:last-child') || b).textContent.trim());
-        assert.deepEqual(items, ['Svar med 👍', 'Besvar', 'Kopiér', 'Information']);
+        assert.deepEqual(items, ['Svar med 👍', 'Besvar', 'Kopiér', 'Blokér ord eller emne', 'Information']);
         const thumb = menuButton(d, 'Svar med 👍');
         assert.equal(thumb.getAttribute('aria-pressed'), 'false');
         assert.equal(thumb.getAttribute('aria-label'), 'Svar på beskeden med 👍');
@@ -86,7 +86,7 @@ test('English labels, and tapping your own 👍 removes it', { timeout: 10000 },
         d.querySelector('.msg.theirs').dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
         await delay(30);
         const items = [...d.querySelectorAll('.message-panel [role=menuitem]')].map((b) => (b.querySelector('span:last-child') || b).textContent.trim());
-        assert.deepEqual(items, ['Remove', 'Reply', 'Copy', 'Information']);
+        assert.deepEqual(items, ['Remove', 'Reply', 'Copy', 'Block word or topic', 'Information']);
         assert.equal(menuButton(d, 'Remove').getAttribute('aria-label'), 'Remove your 👍');
         { const o = d.querySelector('.message-overlay'); o.dispatchEvent(new w.Event('pointerdown', { bubbles: true })); o.dispatchEvent(new w.Event('pointerup', { bubbles: true })); o.click(); } // a full tap: closing happens at click time
         await delay(30);

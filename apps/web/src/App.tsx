@@ -81,7 +81,7 @@ function readOpenConversation(): string | null {
   return OPEN_ID.test(m[1]) ? m[1].toLowerCase() : null;
 }
 
-type Sheet = "notifications" | "members" | "privacy" | "words" | null | "lang" | "times" | "faq" | "feedback" | "invite" | "export" | "addMember" | "report" | "account" | "newpw" | "recover" | "plans";
+type Sheet = "notifications" | "members" | "privacy" | "words" | "blockPick" | null | "lang" | "times" | "faq" | "feedback" | "invite" | "export" | "addMember" | "report" | "account" | "newpw" | "recover" | "plans";
 export type MenuItem = { label: string; run: () => void; danger?: boolean; divider?: boolean; checked?: boolean };
 
 export function App() {
@@ -1053,6 +1053,8 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
     setBlocked(on); showToast(on ? (da ? "Samtalen er blokeret" : "Conversation blocked") : (da ? "Samtalen er afblokeret" : "Conversation unblocked"), { tone: "success", at: "top", ms: 3000 });
   };
   const [sheet, setSheet, resetSheet] = usePanelState<Sheet>(null);
+  const [blockIntent, setBlockIntent] = useState<{ focus: "words" | "topics"; prefill: string } | null>(null);
+  const blockPrefillRef = useRef("");
   const addPersonRef = useRef<HTMLButtonElement>(null);
   const [q, setQ] = useState<string | null>(null); const [cur, setCur] = useState(0);
   // Closing search (✕, Escape or Android back) returns focus to the search button.
@@ -1341,7 +1343,7 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
           { label: da ? "Forsinkede beskeder" : "Delayed messages", checked: delayedOn, run: () => { void (async () => { const next = !delayedOn; const { error } = await supabase.rpc("set_delayed_send", { conv: conv.id, p_enabled: next }); if (error) { showToast(da ? "Kunne ikke gemme indstillingen. Prøv igen." : "Could not save the setting. Try again.", { at: "top", ms: 3000 }); return; } setDelayedOn(next); showToast(next ? (da ? "Forsinkede beskeder er slået til" : "Delayed messages are on") : (da ? "Forsinkede beskeder er slået fra" : "Delayed messages are off"), { tone: "success", at: "top", ms: 2500 }); })(); } },
           { label: t.windows, run: () => setSheet("times") },
           { label: da ? "Beskedfrekvens" : "Message frequency", run: () => setSheet("members") },
-          { label: da ? "Blokeringer" : "Blocking lists", run: () => setSheet("words") },
+          { label: da ? "Blokeringer" : "Blocking lists", run: () => { setBlockIntent(null); setSheet("words"); } },
           { label: da ? "Eksportér samtale" : "Export conversation", run: () => setSheet("export"), divider: true },
           { label: da ? "Rapportér" : "Report", run: () => setSheet("report"), divider: true },
           blocked ? { label: da ? "Afblokér samtale" : "Unblock conversation", run: () => { void askBlock(false); } } : { label: da ? "Blokér samtale" : "Block conversation", run: () => { void askBlock(true); }, danger: true }]} />
@@ -1361,7 +1363,7 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
         {msgs.length === 0 && <p className="meta">{t.empty}</p>}
         {groupMessagesByDay(timelineMsgs).map((g) => <section className="day-group" key={g.key}>
           <div className="day-sep" role="separator" aria-label={dayLabel(g.msgs[0].created_at, lang)}><span>{dayLabel(g.msgs[0].created_at, lang)}</span></div>
-          {g.msgs.map((m, j) => { const i = g.start + j; const newDay = j === 0; return <Fragment key={m.id}>{eventsBefore(events, timelineMsgs, i).map((e) => <EventNotice key={e.id} e={e} lang={lang} />)}<MessageBubble m={m} lang={lang} index={i} hit={i === curIdx} tailed={newDay || !sameSender(timelineMsgs[i - 1], m)} flash={m.mine && m.id === flashId} canReply={conv.role !== "reader" && !sending} canReact={conv.role !== "reader" && !isPendingSend(m.deliver_after, tickNow)} onReply={beginReply} onThumb={toggleThumb} pendingSec={pendingSeconds(m.deliver_after, tickNow)} onEdit={m.mine && isPendingSend(m.deliver_after, tickNow) && !m.att_mime ? beginEdit : undefined} onDelete={m.mine && isPendingSend(m.deliver_after, tickNow) ? askCancelDelayed : undefined}>{q ? markAll(m.body, q, i === curIdx) : m.body}{m.att_mime && <AttachmentView lang={lang} m={m} />}</MessageBubble></Fragment>; })}
+          {g.msgs.map((m, j) => { const i = g.start + j; const newDay = j === 0; return <Fragment key={m.id}>{eventsBefore(events, timelineMsgs, i).map((e) => <EventNotice key={e.id} e={e} lang={lang} />)}<MessageBubble m={m} lang={lang} index={i} hit={i === curIdx} tailed={newDay || !sameSender(timelineMsgs[i - 1], m)} flash={m.mine && m.id === flashId} canReply={conv.role !== "reader" && !sending} canReact={conv.role !== "reader" && !isPendingSend(m.deliver_after, tickNow)} onReply={beginReply} onThumb={toggleThumb} pendingSec={pendingSeconds(m.deliver_after, tickNow)} onEdit={m.mine && isPendingSend(m.deliver_after, tickNow) && !m.att_mime ? beginEdit : undefined} onDelete={m.mine && isPendingSend(m.deliver_after, tickNow) ? askCancelDelayed : undefined} onBlock={!m.mine ? (prefill) => { setBlockIntent(null); setSheet("blockPick"); blockPrefillRef.current = prefill; } : undefined}>{q ? markAll(m.body, q, i === curIdx) : m.body}{m.att_mime && <AttachmentView lang={lang} m={m} />}</MessageBubble></Fragment>; })}
         </section>)}
         {eventsBefore(events, timelineMsgs, timelineMsgs.length).map((e) => <EventNotice key={e.id} e={e} lang={lang} />)}
         <div ref={endRef} />
@@ -1380,7 +1382,14 @@ function Chat({ session, lang, conv, back, openPlans, planKey, rename, menuButto
         </fieldset></div>) : <div className="notice" role="note">{t.readOnly}</div>}
       {blocked && <div className="notice" role="status">{da ? "Du har blokeret samtalen. De andre kan ikke sende beskeder her. " : "You blocked this conversation. The others cannot send messages here. "}<button className="ghost" onClick={() => { void askBlock(false); }}>{da ? "Afblokér" : "Unblock"}</button></div>}
       {sheet === "report" && <SheetView title={reportStep === "preview" ? (da ? "Rapportér · Tjek og send" : "Report · Check and send") : (da ? "Rapportér" : "Report")} close={() => { setSheet(null); setReportStep("edit"); }} lang={lang} anchor={menuButtonRef}><ReportForm lang={lang} conv={conv.id} msgs={msgs} who={(m) => m.mine ? (da ? "Dig" : "You") : replyWho(m)} onStep={setReportStep} done={() => { setSheet(null); setReportStep("edit"); }} /></SheetView>}
-      {sheet === "words" && <SheetView title={da ? "Blokeringer" : "Blocking lists"} close={() => setSheet(null)} lang={lang}><BlockingLists key={`${session.user.id}:${conv.id}`} session={session} lang={lang} conv={conv.id} /></SheetView>}
+      {sheet === "blockPick" && <SheetView title={da ? "Blokér ord eller emne" : "Block word or topic"} close={() => setSheet(null)} lang={lang}>
+        <p className="meta">{da ? "Vælg, hvad du vil blokere. Intet tilføjes, før du bekræfter det." : "Choose what you want to block. Nothing is added until you confirm it."}</p>
+        <div className="block-pick">
+          <button type="button" onClick={() => { const prefill = [...blockPrefillRef.current].slice(0, 120).join(""); resetSheet(); setBlockIntent({ focus: "words", prefill }); setSheet("words"); }}>{da ? "Blokér ord" : "Block word"}</button>
+          <button type="button" onClick={() => { const prefill = [...blockPrefillRef.current].slice(0, 240).join(""); resetSheet(); setBlockIntent({ focus: "topics", prefill }); setSheet("words"); }}>{da ? "Blokér emne" : "Block topic"}</button>
+        </div>
+      </SheetView>}
+      {sheet === "words" && <SheetView title={da ? "Blokeringer" : "Blocking lists"} close={() => { setSheet(null); setBlockIntent(null); }} lang={lang}><BlockingLists key={`${session.user.id}:${conv.id}:${blockIntent?.focus ?? ""}:${blockIntent?.prefill ?? ""}`} session={session} lang={lang} conv={conv.id} draftWord={blockIntent?.focus === "words" ? blockIntent.prefill : undefined} draftTopic={blockIntent?.focus === "topics" ? blockIntent.prefill : undefined} focus={blockIntent?.focus} /></SheetView>}
       {sheet === "members" && <SheetView title={da ? "Beskedfrekvens" : "Message frequency"} close={() => setSheet(null)} lang={lang}><Members lang={lang} conv={conv.id} isParent={conv.role === "parent"} left={back} openWords={() => setSheet("words")} /></SheetView>}
       {sheet === "export" && <SheetView title={da ? "Udskrift af samtale" : "Conversation transcript"} close={() => setSheet(null)} lang={lang}><ConversationExport lang={lang} conv={conv.id} plan={plan} onPlan={setPlan} ownEmail={session.user.email ?? ""} openPlans={() => { setSheet(null); openPlans(); }} /></SheetView>}
       {sheet === "addMember" && <SheetView title={da ? "Invitér person til denne samtale" : "Invite person to this conversation"} close={() => setSheet(null)} lang={lang} anchor={addPersonRef}><AddMember lang={lang} conv={conv.id} done={(toast, tone = "success") => { load(); setSheet(null); showToast(toast, { tone, ms: tone === "success" ? 4000 : 9000, at: "top" }); }} openPlans={openPlans} /></SheetView>}

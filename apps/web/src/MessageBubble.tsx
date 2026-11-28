@@ -12,6 +12,7 @@ const icons = {
   edit: <><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></>,
   resume: <path d="M7 4.5v15l12-7.5Z" />,
   trash: <><path d="M3 6h18" /><path d="M8 6V4h8v2" /><path d="M6 6l1 14h10l1-14" /></>,
+  block: <><circle cx="12" cy="12" r="9" /><path d="M7.2 7.2l9.6 9.6" /></>,
 };
 
 export type Message = { id: string; sender_id: string | null; sender_name: string | null; sender_email?: string | null; body: string; created_at: string; mine: boolean; att_mime?: string | null; att_name?: string | null; att_alt?: string | null; att_pages?: number | null; reply_to_id?: string | null; reply_body?: string | null; has_reply?: boolean; deliver_after?: string | null; held?: boolean; thumb_count?: number; i_thumbed?: boolean };
@@ -38,7 +39,15 @@ export function ReplyComposer({ who, body, unavailable = false, lang, onCancel }
   );
 }
 const clearSelection = () => { try { window.getSelection()?.removeAllRanges(); } catch { /* ignore */ } };
-export function MessageBubble({ m, lang, children, onReply, canReply = true, onThumb, canReact = true, hit = false, index, tailed = false, flash = false, pendingSec = null, onEdit, onDelete, onResume }: { m: Message; lang: string; children?: React.ReactNode; onReply: (m: Message) => void; canReply?: boolean; onThumb?: (m: Message) => void; canReact?: boolean; hit?: boolean; index?: number; tailed?: boolean; flash?: boolean; pendingSec?: number | null; onEdit?: (m: Message) => void; onDelete?: (m: Message) => void; onResume?: (m: Message) => void }) {
+/** Prefer a live text selection; otherwise the message body. Empty unless at least 2 characters. Never auto-adds. */
+function capturedPrefill(body: string): string {
+  let raw = "";
+  try { raw = window.getSelection()?.toString() ?? ""; } catch { /* ignore */ }
+  const compact = (raw || body || "").replace(/\s+/g, " ").trim();
+  if ([...compact].length < 2) return "";
+  return [...compact].slice(0, 240).join("");
+}
+export function MessageBubble({ m, lang, children, onReply, canReply = true, onThumb, canReact = true, hit = false, index, tailed = false, flash = false, pendingSec = null, onEdit, onDelete, onResume, onBlock }: { m: Message; lang: string; children?: React.ReactNode; onReply: (m: Message) => void; canReply?: boolean; onThumb?: (m: Message) => void; canReact?: boolean; hit?: boolean; index?: number; tailed?: boolean; flash?: boolean; pendingSec?: number | null; onEdit?: (m: Message) => void; onDelete?: (m: Message) => void; onResume?: (m: Message) => void; onBlock?: (prefill: string) => void }) {
   // held = the sender tapped Ret: the server keeps the message back (no countdown) until it is saved, resumed or deleted.
   const held = m.mine && !!m.held;
   const pending = m.mine && (held || (pendingSec != null && pendingSec > 0));
@@ -72,7 +81,9 @@ export function MessageBubble({ m, lang, children, onReply, canReply = true, onT
   const start = useRef<{ x: number; y: number } | null>(null);
   const cancel = () => { if (timer.current) clearTimeout(timer.current); timer.current = null; start.current = null; };
   const close = () => { setArmed(false); setPanel(null); bubble.current?.focus({ preventScroll: true }); };
+  const blockPrefill = useRef("");
   const openActions = (fromHold: boolean) => {
+    blockPrefill.current = capturedPrefill(m.body);
     cancel();
     clearSelection();
     if (fromHold) setArmed(true);
@@ -193,6 +204,7 @@ export function MessageBubble({ m, lang, children, onReply, canReply = true, onT
           {!pending && <div className="message-menu-sep" role="separator" />}
           <button type="button" role="menuitem" disabled={!canReply || pending} onClick={guarded(() => { close(); onReply(m); })}><ActionIcon d={icons.reply} /><span>{da ? "Besvar" : "Reply"}</span></button>
           <button type="button" role="menuitem" onClick={guarded(copy)}><ActionIcon d={icons.copy} /><span>{da ? "Kopiér" : "Copy"}</span></button>
+          {!pending && !m.mine && onBlock && <button type="button" role="menuitem" onClick={guarded(() => { const prefill = blockPrefill.current; close(); onBlock(prefill); })}><ActionIcon d={icons.block} /><span>{da ? "Blokér ord eller emne" : "Block word or topic"}</span></button>}
           <button type="button" role="menuitem" onClick={guarded(() => setPanel("info"))}><ActionIcon d={icons.info} /><span>Information</span></button>
         </> : <>
           <h2>Information</h2>
