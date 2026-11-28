@@ -1,6 +1,7 @@
 /* Push-only worker. No fetch handler, no message caching, no token storage, no payload URLs.
    The push may carry the recipient's own private nickname(s) for the sender plus counts, never message text.
-   An "invitation accepted" push (t:'a') carries only a conversation id and one name; tapping it opens that conversation. */
+   An "invitation accepted" push (t:'a') carries only a conversation id and one name; tapping it opens that conversation.
+   A retention notice (t:'r') is a bare flag: fixed text, tapping it opens Privacy and deletion. */
 'use strict';
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 let queue=Promise.resolve();
@@ -40,6 +41,12 @@ function acceptText(p){
  if(!name)return en?{title:'Your invitation was accepted',body:'You can now chat on Rolff.'}:{title:'Din invitation er accepteret',body:'Nu kan I chatte på Rolff.'};
  return en?{title:name+' accepted your invitation',body:'You can now chat on Rolff.'}:{title:name+' har accepteret din invitation',body:'Nu kan I chatte på Rolff.'};
 }
+// "Some of your old messages will be deleted in 3 days" (only for users who chose a shorter retention). Fixed text,
+// no names, counts or message content.
+function retentionText(p){
+ return p.l==='en'?{title:'Rolff: Some of your old messages will be deleted in 3 days',body:'Export the conversation as a PDF or choose a longer time.'}
+  :{title:'Rolff: Nogle af dine gamle beskeder slettes om 3 dage',body:'Eksportér samtalen som PDF eller vælg en længere tid.'};
+}
 async function closeNotifications(){for(const n of await self.registration.getNotifications())if(typeof n.tag==='string' && n.tag.startsWith('rolff-'))n.close();}
 self.addEventListener('install',event=>event.waitUntil(self.skipWaiting()));
 self.addEventListener('activate',event=>event.waitUntil(self.clients.claim()));
@@ -76,6 +83,11 @@ self.addEventListener('push',event=>event.waitUntil(serial(async()=>{
    await self.registration.showNotification(t.title,{body:t.body,lang:p.l==='en'?'en':'da',tag:'rolff-accept'+(c?'-'+c:''),badge,data:c?{binding:s.binding,c}:{binding:s.binding}});
    return;
   }
+  if(p.t==='r'){
+   const t=retentionText(p);
+   await self.registration.showNotification(t.title,{body:t.body,lang:p.l==='en'?'en':'da',tag:'rolff-retention',badge,data:{binding:s.binding,r:true}});
+   return;
+  }
   const t=noticeText(p);
   await self.registration.showNotification(t.title,{body:t.body,lang:p.l==='en'?'en':'da',tag:'rolff-ready',badge,data:{binding:s.binding}});
  }catch{/* Fail closed without logging payload or capabilities. */}
@@ -86,11 +98,12 @@ self.addEventListener('notificationclick',event=>{
   // Fixed same-origin overview only. Never trust any URL carried by a push. For an acceptance notice the only extra
   // is a validated conversation id, put in the URL fragment by this worker; the app opens it only for a member.
   const overview=new URL('./',self.registration.scope).href;
-  const c=typeof event.notification.data?.c==='string' && uuid.test(event.notification.data.c)?event.notification.data.c.toLowerCase():null;
+  const r=event.notification.data?.r===true;
+  const c=!r && typeof event.notification.data?.c==='string' && uuid.test(event.notification.data.c)?event.notification.data.c.toLowerCase():null;
   const windows=await self.clients.matchAll({type:'window',includeUncontrolled:false});
   const existing=windows.find(w=>w.url.split('#')[0]===overview);
-  if(existing){await existing.focus();if(c)existing.postMessage({type:'ROLFF_OPEN_CONVERSATION',c});}
-  else await self.clients.openWindow(c?overview+'#open='+c:overview);
+  if(existing){await existing.focus();if(c)existing.postMessage({type:'ROLFF_OPEN_CONVERSATION',c});if(r)existing.postMessage({type:'ROLFF_OPEN_PRIVACY'});}
+  else await self.clients.openWindow(c?overview+'#open='+c:r?overview+'#privacy':overview);
  }));
 });
 self.addEventListener('pushsubscriptionchange',event=>event.waitUntil(serial(async()=>{

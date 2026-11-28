@@ -38,7 +38,7 @@ Deno.test("slet-konto.html is bilingual, names Rolff, and offers in-app + email 
 Deno.test("privatliv.html points to the public deletion page and states retention on account deletion", () => {
   assertStringIncludes(policy, 'href="./slet-konto.html"');
   assertStringIncludes(policy, "slet-konto.html#en");
-  assertStringIncludes(policy, "Sidst opdateret: 27. november 2026.");
+  assertStringIncludes(policy, "Sidst opdateret: 28. november 2026.");
   assertStringIncludes(policy, "Modpartens kopi af det, du har sendt, beholdes");
   assertStringIncludes(policy, "The other party’s copy of what you sent is kept");
 });

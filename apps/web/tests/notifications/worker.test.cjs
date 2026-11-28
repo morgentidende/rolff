@@ -132,6 +132,30 @@ test('invitation accepted: expired/foreign-binding pushes are dropped like any o
  const h=harness();await bind(h);await h.push({...payload({t:'a',c:CONV,s:['Far']}),expires:Date.now()-1});await h.push({...payload({t:'a',c:CONV,s:['Far']}),binding:'40000000-0000-4000-8000-000000000004'});assert.equal(h.shown.length,0);
 });
 
+test('retention warning (da): fixed neutral text, own tag, badge only; carries nothing but the flag',async()=>{
+ const h=harness();await bind(h);await h.push(payload({t:'r'}));const n=h.shown[0];
+ assert.equal(n.title,'Rolff: Nogle af dine gamle beskeder slettes om 3 dage');assert.equal(n.body,'Eksportér samtalen som PDF eller vælg en længere tid.');assert.equal(n.lang,'da');
+ assert.equal(n.tag,'rolff-retention');assert.equal(n.badge,'https://synthetic.invalid/app/icons/rolff-badge-96.png?v=4');assert(!('icon' in n)&&!('image' in n));
+ assert.equal(JSON.stringify(n.data),JSON.stringify({binding,r:true}));
+});
+test('retention warning (en) follows the app language',async()=>{
+ const h=harness();await bind(h);await h.push(payload({l:'en',t:'r'}));
+ assert.equal(h.shown[0].title,'Rolff: Some of your old messages will be deleted in 3 days');assert.equal(h.shown[0].body,'Export the conversation as a PDF or choose a longer time.');assert.equal(h.shown[0].lang,'en');
+});
+test('retention warning ignores any other payload text (names, counts, body, links)',async()=>{
+ const h=harness();await bind(h);await h.push(payload({t:'r',s:['Far'],k:3,n:9,c:CONV,body:'MALICIOUS BODY',title:'EVIL',url:'https://evil.invalid'}));
+ const n=h.shown[0],all=JSON.stringify(n);for(const bad of ['MALICIOUS','EVIL','evil.invalid','Far'])assert(!all.includes(bad),bad);assert.deepEqual(Object.keys(n.data).sort(),['binding','r']);
+});
+test('tap on a retention warning opens Privatliv og sletning: cold start #privacy, or a ROLFF_OPEN_PRIVACY message when the app is open',async()=>{
+ const h=harness();await bind(h);await h.push(payload({t:'r'}));await h.emit('notificationclick',{notification:h.shown[0]});
+ assert.deepEqual(h.opened,['https://synthetic.invalid/app/#privacy']);
+ const g=harness();await bind(g);const sent=[];let focused=0;g.windows.push({url:'https://synthetic.invalid/app/#x',focus:async()=>{focused++;},postMessage:m=>sent.push(m)});
+ await g.push(payload({t:'r'}));await g.emit('notificationclick',{notification:g.shown[0]});
+ assert.equal(focused,1);assert.equal(JSON.stringify(sent),JSON.stringify([{type:'ROLFF_OPEN_PRIVACY'}]));assert.deepEqual(g.opened,[]);
+ // a tampered notification cannot choose a URL or conversation
+ const k=harness();await bind(k);await k.push(payload({t:'r'}));k.shown[0].data.url='https://evil.invalid/';k.shown[0].data.c=CONV;await k.emit('notificationclick',{notification:k.shown[0]});assert.deepEqual(k.opened,['https://synthetic.invalid/app/#privacy']);
+});
+
 // App icon size: the speech bubble fills most of the icon (like Signal/WhatsApp) and the maskable/monochrome
 // artwork still sits inside Android's 80 % safe-zone circle (radius 40 % of the width).
 test('app icon: bubble is at least 70 % of the width, and the monochrome/maskable artwork stays inside the safe-zone circle',()=>{

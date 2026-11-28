@@ -116,7 +116,7 @@ export async function cacheGetPrefs(uid: string): Promise<Retention | null> {
 
 export async function cacheSet(uid: string, conv: string, value: unknown, retention?: Retention) {
   try {
-    const ret = retention ?? memRetention.get(uid) ?? "1y";
+    const ret = retention ?? memRetention.get(uid) ?? "unlimited";
     const envelope = wrapCache(Array.isArray(value) ? value : normalizeCached(value).messages, ret);
     rememberCachedMessages(conv, envelope.messages);
     memRetention.set(uid, ret);

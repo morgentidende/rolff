@@ -27,6 +27,14 @@ the inviter's receive window for that conversation is open (like messages), at m
 The inviter and the person who accepted must both still be members. The encrypted payload is
 `{t:'a', c:<conversation uuid>, s:[name]}` plus the usual `v/binding/l/expires`: never message text and no read or delivery
 status of any message (nothing about messages is involved; the person who accepted learns nothing).
+**Retention warning (migration `20261128100000_keep_messages_default.sql`):** a user who chose a shorter retention (1y/5y)
+gets one notice 3 days before the first messages would disappear for them: “Rolff: Nogle af dine gamle beskeder slettes om 3 dage” /
+“Rolff: Some of your old messages will be deleted in 3 days”, body “Eksportér samtalen som PDF eller vælg en længere tid.” /
+“Export the conversation as a PDF or choose a longer time.” `notification_jobs.kind='retention_warning'` (no conversation, subject
+or invitation), created by `claim_retention_warnings()` in the daily `inactivity-sweep` run together with the mail, only for users
+with notifications on. Payload `{t:'r'}` plus the usual `v/binding/l/expires`: no names, counts, conversation or message data. It
+ignores per-conversation mute, follows the global receive times (24-hour lifetime) and is closed unsent if the user has chosen
+“keep until I delete them” in the meantime. Tap => `#privacy` (cold start) or a `ROLFF_OPEN_PRIVACY` message => Privatliv og sletning.
 **Tap:** the service worker validates `c` as a uuid and opens `…/#open=<uuid>` (or, if Rolff is already open, focuses it and
 posts `ROLFF_OPEN_CONVERSATION`); the app opens that conversation only if the signed-in user is a member of it.
 Own tag `rolff-accept-<conversation>`, so it neither replaces nor is replaced by the message notice.

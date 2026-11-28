@@ -334,9 +334,9 @@ await t('Sletning: modpartens kopi er uændret (samme beskeder, tekst og tid; af
   assert.deepEqual(r.map(x => [x.id, x.body, +x.created_at]), qBefore.map(x => [x.id, x.body, +x.created_at]));
   assert.equal(r.length, 2); assert.ok(r.some(x => x.mine)); const p = r.find(x => !x.mine); assert.equal(p.sender_name, 'Slettet bruger'); assert.equal(p.sender_id, null);
 });
-await t('Privatliv: standard ingen sky, 1 år; inaktivitetssletning er slået fra', async () => {
+await t('Privatliv: standard ingen sky, beholdes indtil brugeren selv sletter; inaktivitetssletning er slået fra', async () => {
   const r = (await as(Q, `select * from get_my_privacy()`))[0];
-  assert.deepEqual(r, { inactivity_delete: false, inactivity_days: 90, cloud_sync: false, retention: '1y' });
+  assert.deepEqual(r, { inactivity_delete: false, inactivity_days: 90, cloud_sync: false, retention: 'unlimited' });
 });
 await t('Privatliv: set_my_privacy cannot turn inactivity deletion back on', async () => {
   await as(Q, `select set_my_privacy(true, 10)`);
@@ -426,8 +426,8 @@ await t('Rapport: rate limit 3/døgn', async () => {
   await rejects(as(B, `select * from submit_report($1,'other','{}')`, [conv]), /rate_limited/);
 });
 
-await t('Opbevaring: standard 1 år; ugyldigt valg afvises', async () => {
-  assert.equal((await as(A, `select * from get_my_privacy()`))[0].retention, '1y');
+await t('Opbevaring: standard "indtil jeg sletter dem"; ugyldigt valg afvises', async () => {
+  assert.equal((await as(A, `select * from get_my_privacy()`))[0].retention, 'unlimited');
   await rejects(as(A, `select set_my_data_prefs(true,'10y')`), /bad_input/);
 });
 await t('Opbevaring: gamle beskeder skjules for 1 år, bevares fysisk hvis modparten valgte ubegrænset', async () => {
@@ -440,6 +440,8 @@ await t('Opbevaring: gamle beskeder skjules for 1 år, bevares fysisk hvis modpa
   await svc(`select retention_sweep()`);
   assert.equal((await svc(`select count(*)::int n from messages where id=$1`, [id]))[0].n, 1);
   await as(B, `select set_my_data_prefs(false,'1y')`);
+  // every other active member must have a limit too (members without a choice now keep forever)
+  await svc(`insert into user_privacy(user_id,retention) select user_id,'1y' from memberships where conversation_id=$1 and left_at is null on conflict (user_id) do update set retention=case when user_privacy.retention='unlimited' then '1y' else user_privacy.retention end`, [conv]);
   await svc(`select retention_sweep()`);
   assert.equal((await svc(`select count(*)::int n from messages where id=$1`, [id]))[0].n, 0);
   await rejects(as(A, `select retention_sweep()`), /permission|denied/);
@@ -642,7 +644,7 @@ await t('Reply: attachment uses same validated reference and exact retry identit
 await t('Reply: membership and per-recipient retention apply to original and quote',async()=>{
  await db.query(`update memberships set joined_at=now()-interval '3 years' where conversation_id=$1`,[rc]);
  await db.query(`update messages set created_at=now()-interval '2 years' where id=$1`,[original]);
- await as(RA,`select set_my_data_prefs(false,'5y')`);
+ await as(RA,`select set_my_data_prefs(false,'5y')`);await as(RB,`select set_my_data_prefs(false,'1y')`);
  assert.ok((await as(RA,`select * from get_messages_v2($1)`,[rc])).find(m=>m.id===response).reply_body);
  assert.equal((await as(RB,`select * from get_messages_v2($1)`,[rc])).find(m=>m.id===response).reply_body,null);
  await rejects(svc(`select assert_reply_target($1,$2,$3)`,[RB,rc,original]),/invalid_reply/);

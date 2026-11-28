@@ -27,14 +27,14 @@ Lokal krypteret kopi   Modtager-enhed (lokal krypteret kopi)
 |---|---|---|
 | Lagring | Lokalt på enheden, krypteret (web: IndexedDB, AES-GCM-nøgle fra WebCrypto, ikke-eksporterbar; mobil: Keychain/Keystore) | – |
 | Sky-synk | **Fra** (eksplicit opt-in, kun Premium) | Til/fra på Premium. Fra, eller tab af Premium → sky-kopi og synk-nøgle slettes straks (web-demo: beskeder bliver på serveren). |
-| Opbevaring | **1 år** (loft) | 1 år / 5 år / ubegrænset |
+| Opbevaring | **Indtil brugeren selv sletter** (ingen automatisk sletning) | Indtil jeg sletter dem (standard) / 5 år / 1 år – advarsel på mail og notifikation 3 dage før de første beskeder forsvinder |
 | Inaktivitet | Ingen automatisk sletning | – |
 
 Bemærk: lokal kryptering i browseren beskytter mod tilfældig adgang til lagret data, ikke mod en kompromitteret enhed eller browser.
 
 ## 3. Datamodel (ny)
 
-- `user_privacy(user_id pk, cloud_sync bool default false, retention text check in ('1y','5y','unlimited') default '1y', inactivity_delete bool default false (retired, always false), last_seen_at timestamptz, warned_at timestamptz)`
+- `user_privacy(user_id pk, cloud_sync bool default false, retention text check in ('1y','5y','unlimited') default 'unlimited' (var '1y' før 2026-11-28), retention_warned_at timestamptz, inactivity_delete bool default false (retired, always false), last_seen_at timestamptz, warned_at timestamptz)`
 - `message_deliveries.fetched_at` (findes delvist) → bruges til "alle har hentet".
 - Synk-nøgle: kun hvis sky-synk: `sync_keys(user_id, wrapped_key bytea)` – nøglen er wrappet på klienten; slettes ved fravalg/sletning.
 
@@ -97,6 +97,6 @@ Supabase (DB, auth, functions – Frankfurt), Hostinger (web + mail-relay), Open
 - Opbevaring: kun `report_log` (bruger, samtale, kategori, antal vedhæftede, tidspunkt). Ingen tekst gemmes og ingen tekst logges; indholdet findes kun i mailen. Slettes med kontoen (cascade).
 
 ## Opbevaring og sky-synk (implementeret 2026-11-02)
-- `user_privacy.retention` 1y (standard) / 5y / unlimited, sat via `set_my_data_prefs`. `get_messages` skjuler beskeder ældre end kalderens grænse.
+- `user_privacy.retention` unlimited (standard = beholdes, indtil brugeren selv sletter) / 5y / 1y, sat via `set_my_data_prefs`. `get_messages` skjuler beskeder ældre end kalderens grænse.
 - `retention_sweep()` (dagligt via inactivity-sweep-cron) sletter en besked fysisk først, når den er ældre end grænsen for ALLE aktive medlemmer (bevismodellen).
 - `cloud_sync` (standard fra) gemmes. **Begrænsning:** i web-demoen er serveren eneste faste kopi, så "slet efter levering" er ikke aktiveret der. Det aktiveres i Flutter-appen, når lokal (krypteret) lagring er den primære kopi; sync fra ⇒ serverkopi slettes efter levering og synk-nøglen slettes straks.
