@@ -24,7 +24,7 @@ test('conversation ⋮ menu is grouped: nickname | settings | export | report/bl
 test('front-page ⋮ is grouped: invite | settings | help | log out', async () => {
   const f = await env(); const { d } = f; try {
     const labels = (await menu(d)).map(b => b.textContent);
-    assert.deepEqual(labels, ['Inviter person', 'Notifikationer', 'Konto (e-mail og adgangskode)', 'Abonnement', 'Privatliv og sletning', 'App-sprog', 'FAQ', 'Kontakt', 'Privatlivspolitik', 'Log ud']);
+    assert.deepEqual(labels, ['Invitér til Rolff', 'Notifikationer', 'Konto (e-mail og adgangskode)', 'Abonnement', 'Privatliv og sletning', 'App-sprog', 'FAQ', 'Kontakt', 'Privatlivspolitik', 'Log ud']);
     const seps = [...d.querySelectorAll('.menu [role=separator]')];
     assert.equal(seps.length, 3);
     assert.equal(seps[0].nextElementSibling.textContent, 'Notifikationer');

@@ -63,6 +63,13 @@ test('Opsig abonnement on the Abonnement sheet keeps the account and shows the e
     const plans = await openPlans(f);
     const sheet = d.querySelector('.sheet'); const cancel = [...sheet.querySelectorAll('button')].find(b => b.textContent.trim() === 'Opsig abonnement');
     assert.ok(cancel, 'cancel on plans sheet');
+    assert.ok(cancel.classList.contains('plan-cancel'), 'discreet link, not a primary button');
+    const rules = [...sheet.querySelectorAll('.plan-rule')];
+    assert.ok(rules.length >= 2, 'footnotes present');
+    const lastRule = rules[rules.length - 1];
+    assert.ok(cancel.compareDocumentPosition(lastRule) & 2, 'cancel link is after the footnotes');
+    const css = require('fs').readFileSync(require('path').join(__dirname, '../../src/styles.css'), 'utf8');
+    assert.match(css, /button\.plan-cancel,\.plan-cancel\{[^}]*min-height:44px/);
     await click(cancel); await delay(60);
     const card = d.querySelector('.confirm-card'); assert.ok(card);
     assert.match(card.textContent, /Konto og data bliver/);

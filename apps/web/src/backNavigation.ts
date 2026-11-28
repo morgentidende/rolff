@@ -9,7 +9,7 @@ const KEY="__rolffBack";
  * Every Back consumes one visible window. At bare Home there is no guard.
  */
 class BackNavigation {
-  private doc=crypto.randomUUID(); private layers:Layer[]=[]; private attached=false; private pruning:string|null=null; private boundary=false; private retired=new Set<string>(); private revision=0;
+  private doc=crypto.randomUUID(); private layers:Layer[]=[]; private attached=false; private pruning:string|null=null; private boundary=false; private retired=new Set<string>(); private revision=0; private holds=0;
   epoch=()=>this.revision;
   layerCount=()=>this.layers.length;
   private marker():Marker|null {const m=history.state?.[KEY];return m?.v===1&&(m.kind==="base"||m.kind==="guard")?m:null;}
@@ -57,6 +57,9 @@ class BackNavigation {
       return;
     }
     const top=this.layers.at(-1);
+    // A system UI (e.g. the Android Chrome contact picker) can pop history
+    // when it closes. Keep the open card and put the guard back.
+    if(top&&this.holds){this.reconcile();return;}
     if(top)flushSync(()=>top.dismiss());
     this.reconcile();
   };
@@ -75,6 +78,7 @@ class BackNavigation {
     this.reconcile();
     return()=>{this.revision++;this.layers=this.layers.filter(x=>x.id!==layer.id);queueMicrotask(this.reconcile);};
   };
+  holdDismiss=()=>{this.holds++;let released=false;return()=>{if(released)return;released=true;this.holds=Math.max(0,this.holds-1);};};
   reset=()=>{
     const old=this.layers;this.layers=[];
     for(const layer of [...old].reverse())layer.dismiss();
@@ -87,6 +91,8 @@ export function useBackNavigationRoot():void {useEffect(()=>{nav().attach();},[]
 export function resetBackNavigation():void {navigation?.reset();}
 /** True when a sheet/dialog/conversation is open (used by the native back button). */
 export function hasBackLayers():boolean {return navigation?.layerCount()?true:false;}
+/** While a system picker is open, ignore the popstate that would close the card. */
+export function holdBackDismiss():()=>void {if(typeof window==="undefined")return()=>{};nav().attach();return nav().holdDismiss();}
 export function useBackLayer(active:boolean,dismiss:()=>void,kind:"view"|"overlay"="overlay"):void {
   const id=useId(), latest=useRef(dismiss);latest.current=dismiss;
   useLayoutEffect(()=>{

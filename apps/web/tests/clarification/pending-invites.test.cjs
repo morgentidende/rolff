@@ -81,9 +81,9 @@ test('Tilføj person: Enter with invalid email shows inline error and keeps the 
   } finally { await f.close(); }
 });
 
-test('Inviter person (front page): Enter validates inline; success closes the sheet and shows a toast', async () => {
+test('Invitér til Rolff (front page): Enter validates inline; success closes the sheet and shows a toast', async () => {
   const f = await env(); const { w, d } = f; try {
-    const open = [...d.querySelectorAll('button')].find(b => /Inviter person/.test(b.textContent)); assert.ok(open); await click(open);
+    const open = [...d.querySelectorAll('button')].find(b => /Invitér til Rolff/.test(b.textContent)); assert.ok(open); await click(open);
     const input = d.getElementById('ie'); assert.ok(input); assert.equal(input.getAttribute('enterkeyhint'), 'send');
     await put(w, input, 'x@'); await enter(w, input);
     assert.equal(input.value, 'x@'); assert.match(d.getElementById('ie-err').textContent, /gyldig e-mailadresse/);

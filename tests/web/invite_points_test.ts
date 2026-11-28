@@ -27,3 +27,20 @@ Deno.test("bullet 4 no longer mentions the private nickname (da + en)", () => {
   assertEquals(invitePoints("en")[3].text, "The others in the conversation see your email. You always log in with your email.");
   for (const l of ["da", "en"] as const) assert(!/kaldenavn|nickname/i.test(all(l)), l);
 });
+
+Deno.test("those facts now live in the FAQ, not on the invite form", () => {
+  const app = Deno.readTextFileSync(new URL("../../apps/web/src/App.tsx", import.meta.url));
+  const faq = app.slice(app.indexOf("function Faq"), app.indexOf("export const evidenceNote"));
+  assert(!app.includes("ul className=\"invite-points\""), "bullets removed from the invite card");
+  assert(faq.includes("Hvad sker der med beskeder, hvis jeg sletter min konto?"));
+  assert(faq.includes("What happens to messages if I delete my account?"));
+  for (const f of ["dokumentation", "bliver hos de andre i samtalen", "også hvis du senere sletter din konto", "slette din egen kopi", "ikke kræve de andres slettet", "vedkommende er kommet med", "oprettes den mellem jer to"]) {
+    assert(faq.includes(f), f);
+  }
+  for (const f of ["used as a record", "stays with the others in the conversation", "even if you later delete your account", "delete your own copy", "cannot require the others' copy to be deleted", "only sees messages from after joining", "created for the two of you"]) {
+    assert(faq.includes(f), f);
+  }
+  // Email visibility was already in "Hvad kan de andre se om mig?" — not duplicated as a new item.
+  assert(faq.includes("Du logger ind med din e-mail"));
+  assert(faq.includes("Your e-mail is also the name others in the conversation see"));
+});

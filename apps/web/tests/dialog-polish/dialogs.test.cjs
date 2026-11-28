@@ -97,6 +97,11 @@ test('Kontakt and Slet konto: tapping an incomplete form explains why and moves 
     del.closest('form').requestSubmit(); await delay(20);
     assert.equal(d.getElementById('delack-hint').textContent, 'Sæt flueben i ”Jeg forstår …” for at slette.'); assert.equal(d.activeElement, d.getElementById('delack'));
     assert.equal(d.getElementById('delack').getAttribute('aria-describedby'), 'delack-hint');
+    const row = d.getElementById('delack').closest('label.check-row');
+    assert.ok(row.classList.contains('needs-attention'), 'reddish box kept');
+    const fs = require('node:fs'); const path = require('node:path');
+    const css = fs.readFileSync(path.join(__dirname, '../../src/styles.css'), 'utf8');
+    assert.match(css, /\.check-row\.needs-attention\{padding:8px 12px;border-radius:10px;box-sizing:border-box\}/);
     await click(d.getElementById('delack')); assert.ok(!d.getElementById('delack-hint'), 'cleared when ticked');
   } finally { await fx.close(); }
 });
@@ -106,7 +111,7 @@ test('Front page: pills row, dismissible press-and-hold tip remembered in localS
   try {
     assert.ok(!d.querySelector('.convlist-head h2'));
     const pills = [...d.querySelectorAll('.convlist-head button')].map(b => b.textContent.trim());
-    assert.equal(pills[pills.length - 1], 'Inviter person');
+    assert.equal(pills[pills.length - 1], 'Invitér til Rolff');
     const hint = d.querySelector('.convhint'); assert.ok(hint); assert.match(hint.textContent, /Hold fingeren på en samtale/);
     await click(hint.querySelector('button[aria-label="Skjul tip"]'));
     assert.equal(d.querySelector('.convhint'), null); assert.equal(w.localStorage.getItem('convHintDismissed'), '1');

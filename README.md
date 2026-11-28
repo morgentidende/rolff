@@ -30,7 +30,7 @@ På Googles gratis niveau må Google bruge input til at forbedre sine produkter.
 - Ikke ende-til-ende-krypteret: klartekst ligger i Postgres (krypteret at rest hos Supabase) og sendes til AI-udbyderen ved vurdering.
 
 ## Kontaktvælger ved invitation
-Knappen “Vælg fra kontakter” / “Choose from contacts” vises ved e-mail-feltet på både “Inviter person” og “Invitér person til denne samtale”, men kun når en kontaktvælger er tilgængelig. I webappen er det Contact Picker API (`navigator.contacts.select(['email'], { multiple: false })`), som i dag findes i Android Chrome. På iPhone i browseren er knappen skjult, og man skriver e-mailen selv.
+Knappen “Vælg fra kontakter” / “Choose from contacts” vises ved e-mail-feltet på både “Invitér til Rolff” og “Invitér person til denne samtale”, men kun når en kontaktvælger er tilgængelig. I webappen er det Contact Picker API (`navigator.contacts.select(['email'], { multiple: false })`), som i dag findes i Android Chrome. På iPhone i browseren er knappen skjult, og man skriver e-mailen selv.
 
 UI'en taler kun med interfacet `ContactEmailPicker` i `apps/web/src/native/contactPicker.ts`. Den åbner telefonens egen vælger for **én** kontakt, tager kun e-mailen (har kontakten flere, vælger brugeren en), og skriver den i feltet. Appen beder aldrig om adgang til hele kontaktlisten og gemmer eller sender ikke valget noget sted.
 
