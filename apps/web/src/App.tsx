@@ -1580,7 +1580,7 @@ export const planName = (id: string, da: boolean) => id === "free" ? (da ? "Inge
 const planEndLabel = (iso: string, da: boolean) => new Date(iso).toLocaleDateString(da ? "da-DK" : "en-GB", { dateStyle: "long" });
 type MyPlan = { plan: string; pending_plan: string | null; period_end: string | null; test_switch: boolean };
 
-function SubscriptionManage({ lang, openPlans, plan, onChange, ready = true, hideTitle = false }: { lang: Lang; openPlans?: () => void; plan?: MyPlan | null; onChange?: () => void; ready?: boolean; hideTitle?: boolean }) {
+function SubscriptionManage({ lang, openPlans, plan, onChange, ready = true, hideTitle = false, quietCancel = false }: { lang: Lang; openPlans?: () => void; plan?: MyPlan | null; onChange?: () => void; ready?: boolean; hideTitle?: boolean; quietCancel?: boolean }) {
   const da = lang === "da";
   // Shows the last known plan at once (cardCache); cancelling/resuming waits for a fresh server read (fail-strict).
   const [own, setOwn] = useState<MyPlan | null>(() => peekCard<MyPlan | null>("plan") ?? null);
@@ -1633,11 +1633,11 @@ function SubscriptionManage({ lang, openPlans, plan, onChange, ready = true, hid
     return openPlans ? <div className="sub-manage"><p className="meta">{da ? "Du har intet betalt abonnement." : "You have no paid subscription."} {openPlans && <button type="button" className="textbtn strong" onClick={openPlans}>{da ? "Vælg en plan" : "Choose a plan"}</button>}</p></div> : null;
   }
   return (
-    <div className="sub-manage">
+    <div className={quietCancel ? "sub-manage quiet" : "sub-manage"}>
       {!hideTitle && <h2>{da ? "Abonnement" : "Subscription"}</h2>}
       {cancelling && p.period_end && <p className="notice" role="status">{da ? `Dit abonnement udløber ${planEndLabel(p.period_end, da)}.` : `Your subscription ends on ${planEndLabel(p.period_end, da)}.`}</p>}
       {cancelling && <button type="button" className="ghost" disabled={busy || !canAct} onClick={resume}>{da ? "Genoptag abonnement" : "Resume subscription"}</button>}
-      {paid && !cancelling && <button type="button" disabled={busy || !canAct} onClick={() => void cancel()}>{da ? "Opsig abonnement" : "Cancel subscription"}</button>}
+      {paid && !cancelling && <button type="button" className={quietCancel ? "plan-cancel" : undefined} disabled={busy || !canAct} onClick={() => void cancel()}>{da ? "Opsig abonnement" : "Cancel subscription"}</button>}
       {err && <p className="err" role="alert">{err}</p>}
     </div>
   );
@@ -1684,11 +1684,11 @@ function Plans({ lang }: { lang: Lang }) {
     </div>
     {p.pending_plan && p.pending_plan !== "free" && <div className="row end"><button className="ghost" disabled={!fresh || busy} onClick={() => change(p.plan)}>{da ? `Behold ${name(p.plan)}` : `Keep ${name(p.plan)}`}</button>
       <button className="ghost" disabled={!fresh || busy} onClick={() => change(p.pending_plan!, true)}>{da ? "Skift straks (kun test)" : "Switch now (test only)"}</button></div>}
-    <SubscriptionManage lang={lang} plan={p} onChange={load} ready={fresh} hideTitle />
     <p className="meta plan-rule">{da ? "Opgradering gælder med det samme. Nedgradering gælder fra næste periode." : "Upgrades apply right away. Downgrades apply from the next period."}</p>
     <p className="meta plan-rule">{da ? "Planen gælder kun dig – den anden forælder kan have en anden plan, og alle kan altid se vedhæftninger, de modtager." : "The plan only applies to you – the other parent may have a different plan, and everyone can always see attachments they receive."}</p>
     {p.pending_plan && p.pending_plan !== "free" && p.period_end && <p className="meta">{da ? "Periode slutter" : "Period ends"}: {planEndLabel(p.period_end, da)}</p>}
     {err && <p className="notice" role="alert">{err}</p>}
+    <SubscriptionManage lang={lang} plan={p} onChange={load} ready={fresh} hideTitle quietCancel />
   </div>);
 }
 
