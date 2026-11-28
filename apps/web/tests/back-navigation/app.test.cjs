@@ -123,7 +123,7 @@ for (const strict of [false, true])
             await back(w);
             await click(label(d, 'Menu'));
             await click(button(d, 'Log ud'));
-            await delay(30);
+            await confirmLogOut(d);
             assert.ok(!d.querySelector('.topbar.chat'), 'Chat should be closed');
             assert.ok(!d.querySelector('.convbtn'), 'Home should not remain after signout');
             await forward(w);
@@ -154,7 +154,7 @@ for (const strict of [false, true])
                 await back(w);
                 await click(label(d, 'Menu'));
                 await click(button(d, 'Log ud'));
-                await delay(50);
+                await confirmLogOut(d);
                 assert.equal(d.querySelectorAll('.convbtn').length, 0, 'No stale contact rows after signout');
                 assert.ok(!d.querySelector('.topbar.chat'));
                 assert.ok(d.querySelector('input[type=email]'));
@@ -170,6 +170,15 @@ for (const strict of [false, true])
         });
     }
 // The visible pencil is gone from the list; the private nickname opens via long-press/context menu.
+async function confirmLogOut(d) {
+    await delay(40);
+    const card = d.querySelector('.confirm-card');
+    assert.ok(card, 'logout confirm card');
+    const ok = [...card.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Log ud');
+    assert.ok(ok, 'Log ud on the card');
+    await click(ok);
+    await delay(40);
+}
 async function longPressAlias(w, d) {
     d.querySelector('.convbtn').dispatchEvent(new w.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
     await delay(25);
