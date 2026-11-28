@@ -8,7 +8,7 @@ import { useBackdropDismiss, useModalLayer, useUnderChatHeader } from "./modalLa
 // Esc / Android back / ✕ = cancel. Promise-based so callers read like confirm().
 // `cancel` is accepted for call-site compatibility but is not shown: the ✕ is the only dismiss.
 export type ConfirmChoice = boolean | "secondary";
-export type ConfirmOptions = { title: string; body?: string; confirm: string; cancel?: string; danger?: boolean; secondary?: string };
+export type ConfirmOptions = { title: string; body?: string; points?: string[]; confirm: string; cancel?: string; danger?: boolean; secondary?: string; dismiss?: string; actionsEnd?: boolean };
 type Req = ConfirmOptions & { resolve: (ok: ConfirmChoice) => void };
 const EVENT = "rolff:confirm";
 
@@ -53,10 +53,12 @@ function ConfirmView({ req, done }: { req: Req; done: (ok: ConfirmChoice) => voi
   };
   return (
     <div className={underHeader !== null ? "overlay confirm-overlay top-overlay" : "overlay confirm-overlay"} ref={layer} style={underHeader !== null ? { paddingTop: underHeader } : undefined} {...backdrop}>
-      <div className="confirm-card" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby={req.body ? "confirm-body" : undefined} ref={box} onKeyDown={trap}>
+      <div className="confirm-card" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby={req.body && req.points?.length ? "confirm-body confirm-points" : req.body ? "confirm-body" : req.points?.length ? "confirm-points" : undefined} ref={box} onKeyDown={trap}>
         <CardHeader title={req.title} titleId="confirm-title" onClose={() => done(false)} />
         {req.body && <p id="confirm-body">{req.body}</p>}
-        <div className="confirm-actions">
+        {req.points && req.points.length > 0 && <ul className="confirm-points" id="confirm-points">{req.points.map((pt) => <li key={pt}>{pt}</li>)}</ul>}
+        <div className={req.actionsEnd ? "confirm-actions end" : "confirm-actions"}>
+          {req.dismiss && <button type="button" className="ghost" onClick={() => done(false)}>{req.dismiss}</button>}
           {req.secondary && <button type="button" className="ghost" onClick={() => done("secondary")}>{req.secondary}</button>}
           <button type="button" className={req.danger ? "danger" : undefined} onClick={() => done(true)}>{req.confirm}</button>
         </div>

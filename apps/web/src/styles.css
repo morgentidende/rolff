@@ -334,6 +334,11 @@ textarea.feedback-text{resize:none;height:9.5em;min-height:9.5em;overflow-y:auto
 .confirm-card p{margin:0 0 16px;font-size:15px;line-height:1.45;color:var(--muted)}
 .confirm-actions{display:grid;grid-template-columns:1fr;gap:10px}
 .confirm-actions button{min-height:44px;width:100%;border-radius:10px;font-weight:600}
+.confirm-actions.end{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:8px}
+.confirm-actions.end button{width:auto}
+.confirm-points{margin:0 0 16px;padding-left:20px;font-size:15px;line-height:1.45;color:var(--muted)}
+.confirm-points li{margin:0 0 6px}
+.confirm-points li:last-child{margin:0}
 .confirm-actions button.ghost{border-color:var(--border);color:var(--text)}
 @keyframes confirm-fade{from{opacity:0}to{opacity:1}}
 @media (prefers-reduced-motion:reduce){.confirm-overlay{animation:none}}
