@@ -6,7 +6,7 @@ export function validEndpoint(raw: unknown): raw is string {
 }
 export type Who = {s?:unknown;k?:unknown;n?:unknown};
 export type Accept = {c?:unknown;s?:unknown};
-export type Prepared = {endpoint: string; keys: {p256dh:string;auth:string};binding:string;lang?:string;who?:Who|null;accept?:Accept|null;prepared_at:string;expires_at:string};
+export type Prepared = {endpoint: string; keys: {p256dh:string;auth:string};binding:string;lang?:string;who?:Who|null;accept?:Accept|null;ret?:boolean|null;prepared_at:string;expires_at:string};
 /** Notification language follows the recipient's app language (profiles.locale); default Danish. */
 export const pushLang=(p:Pick<Prepared,"lang">):"da"|"en"=>p.lang==="en"?"en":"da";
 /** Display-name fields for the notification title: only the recipient's own private nicknames
@@ -33,9 +33,12 @@ export function pushAccept(p:Pick<Prepared,"accept">):{t:"a";c?:string;s?:string
   const name=cleanName(a.s);
   return {t:"a",...(typeof a.c==="string" && UUID.test(a.c)?{c:a.c}:{}),...(name?{s:[name]}:{})};
 }
+/** "Old messages will be deleted in 3 days" notice (shorter retention). A bare flag: no names, counts, conversation or
+ *  message data. The service worker holds the fixed da/en text. */
+export const pushRetention=(p:Pick<Prepared,"ret">):{t:"r"}|null=>p.ret===true?{t:"r"}:null;
 /** The exact (pre-encryption) push payload: binding, language, expiry and, if valid, either the acceptance notice
  *  or nickname(s)+counts. A malformed acceptance notice keeps the generic acceptance text and opens the overview. */
-export const pushPayload=(p:Prepared,now=Date.now())=>JSON.stringify({v:1,binding:p.binding,l:pushLang(p),...(p.accept?pushAccept(p):(pushWho(p)??{})),expires:now+30000});
+export const pushPayload=(p:Prepared,now=Date.now())=>JSON.stringify({v:1,binding:p.binding,l:pushLang(p),...(p.ret?(pushRetention(p)??{}):p.accept?pushAccept(p):(pushWho(p)??{})),expires:now+30000});
 export type Outcome = "accepted" | "gone" | "permanent" | "retry" | "deferred" | "expired";
 export function outcome(status:number):Outcome {
   if (status>=200 && status<300) return "accepted";

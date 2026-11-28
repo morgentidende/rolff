@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createECDH } from "node:crypto";
 import { Buffer } from "node:buffer";
 import { sendPush } from "../../supabase/functions/notification-dispatch/transport.ts";
-import { validEndpoint,outcome,handoffFresh,pushLang,pushWho,pushAccept,pushPayload,cleanName, type Prepared } from "../../supabase/functions/notification-dispatch/policy.ts";
+import { validEndpoint,outcome,handoffFresh,pushLang,pushWho,pushAccept,pushRetention,pushPayload,cleanName, type Prepared } from "../../supabase/functions/notification-dispatch/policy.ts";
 import { dispatch } from "../../supabase/functions/notification-dispatch/worker.ts";
 // Known, deterministic PUBLIC test scalars (not deployable secrets). Never generate production keys here.
 const raw=(n:number)=>{const e=createECDH("prime256v1");e.setPrivateKey(Buffer.alloc(32,n));return e.getPublicKey().toString("base64url");};
@@ -145,4 +145,14 @@ Deno.test("worker sends an invitation-accepted job through the same claim/prepar
  const counts=await dispatch(rpc,async(p,authorize)=>{sent.push(p);await authorize("a".repeat(64));return"accepted";});
  assert.equal(counts.accepted,1);assert.deepEqual(calls,["push_release_tick","claim_push_work","prepare_push","handoff_push","finish_push","cleanup_push_work"]);
  assert.deepEqual((sent[0] as Prepared).accept,{c:CONV,s:"Far"});
+});
+
+Deno.test("retention warning payload is only the flag: {t:'r'} next to v/binding/l/expires; hostile extras never travel",()=>{
+ const base=prepared();
+ const r=JSON.parse(pushPayload({...base,ret:true}));assert.deepEqual(r,{v:1,binding:base.binding,l:"da",t:"r",expires:r.expires});
+ const en=JSON.parse(pushPayload({...base,lang:"en",ret:true}));assert.equal(en.l,"en");
+ const mixed=JSON.parse(pushPayload({...base,ret:true,who:{s:["Far"],k:1,n:1},accept:{c:"x",s:"y"}} as never));assert.deepEqual(Object.keys(mixed).sort(),["binding","expires","l","t","v"]);
+ for(const ret of [false,null,undefined,"true",1] as never[])assert.equal(pushRetention({ret}),null,String(ret));
+ assert.deepEqual(Object.keys(JSON.parse(pushPayload({...base,ret:false}))).sort(),["binding","expires","l","v"],"no flag: generic payload as before");
+ assert(pushPayload({...base,ret:true}).length<200);
 });

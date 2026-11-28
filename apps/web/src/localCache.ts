@@ -8,7 +8,8 @@ const YEAR_MS = 365.25 * 24 * 3600 * 1000;
 export function retentionMs(retention: string): number {
   if (retention === "unlimited") return Infinity;
   if (retention === "5y") return 5 * YEAR_MS;
-  return YEAR_MS; // default and unknown values: the shortest official choice (1 year)
+  if (retention === "1y") return YEAR_MS;
+  return Infinity; // default and unknown values: keep (messages are kept until the user deletes them)
 }
 
 export function withinRetention<T extends { created_at?: string }>(messages: T[], retention: string, now = Date.now()): T[] {
@@ -30,20 +31,20 @@ export function isRetention(v: unknown): v is Retention {
   return v === "1y" || v === "5y" || v === "unlimited";
 }
 
-/** Accept the current envelope or a legacy bare array (treated as 1 year). */
+/** Accept the current envelope or a legacy bare array (no limit: nothing is dropped without the user's explicit choice). */
 export function normalizeCached(value: unknown, now = Date.now()): { retention: Retention; messages: { created_at?: string }[] } {
-  let retention: Retention = "1y";
+  let retention: Retention = "unlimited";
   let messages: { created_at?: string }[] = [];
   if (Array.isArray(value)) messages = value;
   else if (value && typeof value === "object" && Array.isArray((value as { messages?: unknown }).messages)) {
     const r = (value as { retention?: unknown }).retention;
-    retention = isRetention(r) ? r : "1y";
+    retention = isRetention(r) ? r : "unlimited";
     messages = (value as { messages: { created_at?: string }[] }).messages;
   }
   return { retention, messages: newestKept(withinRetention(messages, retention, now)) };
 }
 
-export function wrapCache(messages: unknown[], retention: Retention = "1y", now = Date.now()): CacheEnvelope {
+export function wrapCache(messages: unknown[], retention: Retention = "unlimited", now = Date.now()): CacheEnvelope {
   const kept = newestKept(withinRetention(messages as { created_at?: string }[], retention, now));
   return { v: 1, retention, messages: kept };
 }
