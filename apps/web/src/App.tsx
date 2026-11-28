@@ -98,7 +98,7 @@ export function App() {
   useEffect(() => { if (rawConv && !conv) setConv(null); }, [rawConv, conv]);
   const [sheet, setSheet, resetSheet] = usePanelState<Sheet>(null);
   const [recoverEmail, setRecoverEmail] = useState("");
-  const [recoverFrom, setRecoverFrom] = useState<"account" | null>(null);
+  const [recoverFrom, setRecoverFrom] = useState<"account" | "privacy" | null>(null);
   const [homeKey, setHomeKey] = useState(0);
   const [renameContacts, setRenameContacts] = useState<Other[] | null>(null);
   // Nothing to nickname (e.g. an invitation that expired long ago): do not open an empty dialog.
@@ -195,10 +195,10 @@ export function App() {
     { label: t.logout, run: () => { homeCache.clear(); chatCache.clear(); setCardCacheOwner(null); setPushOwner(null); resetBackNavigation(); clearInviteEmailDrafts(); setConv(null); resetSheet(); cacheClear().finally(() => supabase.auth.signOut()); }, danger: true, divider: true },
   ];
   const close = () => {
-    if (sheet === "recover" && recoverFrom === "account") { setSheet("account"); setRecoverFrom(null); return; }
+    if (sheet === "recover" && recoverFrom) { setSheet(recoverFrom); setRecoverFrom(null); return; }
     setSheet(null); setRecoverFrom(null);
   };
-  const openRecover = (email: string, from: "account" | null = null) => { setRecoverEmail(email); setRecoverFrom(from); setSheet("recover"); };
+  const openRecover = (email: string, from: "account" | "privacy" | null = null) => { setRecoverEmail(email); setRecoverFrom(from); setSheet("recover"); };
   // All sheets from the ⋮ menu open as a card under the ⋮ button at the top, like "Tilføj person".
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const [policyOpen, setPolicyOpen] = useState(false);
@@ -246,7 +246,7 @@ export function App() {
       {sheet === "account" && <SheetView title={da ? "Konto" : "Account"} close={close} lang={lang} anchor={menuButtonRef}><AccountPanel lang={lang} openPlans={() => setSheet("plans")} onForgot={(email) => openRecover(email, "account")} /></SheetView>}
       {sheet === "recover" && <SheetView title={da ? "Glemt adgangskode" : "Forgot password"} close={close} lang={lang} anchor={session ? menuButtonRef : undefined}><RecoverPassword lang={lang} initialEmail={recoverEmail} /></SheetView>}
       {sheet === "newpw" && session && <SheetView title={da ? "Vælg ny adgangskode" : "Choose a new password"} close={close} lang={lang} anchor={menuButtonRef}><NewPassword lang={lang} done={close} /></SheetView>}
-      {sheet === "privacy" && <SheetView title={da ? "Privatliv og sletning" : "Privacy and deletion"} close={close} lang={lang} anchor={menuButtonRef}><PrivacyPanel lang={lang} openPlans={() => setSheet("plans")} /></SheetView>}
+      {sheet === "privacy" && <SheetView title={da ? "Privatliv og sletning" : "Privacy and deletion"} close={close} lang={lang} anchor={menuButtonRef}><PrivacyPanel lang={lang} openPlans={() => setSheet("plans")} onForgot={(email) => openRecover(email, "privacy")} /></SheetView>}
       {sheet === "feedback" && <SheetView title={da ? "Kontakt" : "Contact"} close={close} lang={lang} anchor={menuButtonRef}><FeedbackForm lang={lang} /></SheetView>}
       {sheet === "invite" && <SheetView title={da ? "Invitér til Rolff" : "Invite to Rolff"} close={close} lang={lang} anchor={menuButtonRef}><InviteByEmail lang={lang} done={(toast, tone = "success") => { setHomeKey(homeKey + 1); close(); showToast(toast, { tone, ms: tone === "success" ? 4000 : 9000, at: "top" }); }} /></SheetView>}
       {policyOpen && <PolicyView lang={lang} close={() => setPolicyOpen(false)} />}
@@ -425,7 +425,7 @@ export const evidenceNote = (lang: Lang) => lang === "da"
   ? "Vigtigt: Rolff er lavet til at kunne bruges som dokumentation. Det, du skriver og modtager, bliver hos de andre i samtalen – også hvis du senere sletter din konto. Du kan slette din egen kopi, men ikke kræve de andres slettet."
   : "Important: Rolff is designed to serve as a record. What you write and receive stays with the others in the conversation – even if you later delete your account. You can delete your own copy, but you cannot require the others' copy to be deleted.";
 
-function MyDataExport({ lang }: { lang: Lang }) {
+function MyDataExport({ lang, email, onForgot }: { lang: Lang; email: string; onForgot: (email: string) => void }) {
   const da = lang === "da";
   const [pw, setPw] = useState(""); const [st, setSt] = useState<"" | "busy" | "ok" | "wrong" | "limit" | "err" | "nopw">("");
   const go = async (e: React.FormEvent) => {
@@ -445,9 +445,7 @@ function MyDataExport({ lang }: { lang: Lang }) {
       <h3 id="export" className="psec-h">{da ? "Download mine data" : "Download my data"}</h3>
       <p className="meta">{da ? "Hent en kopi af dine data: konto, indstillinger, dine samtaler (det, du selv kan se), kaldenavne, blokerede ord, invitationer, samtykker, feedback og metadata. Filen (ZIP) laves på din enhed. Højst 3 gange i døgnet." : "Get a copy of your data: account, settings, your conversations (what you can see yourself), nicknames, blocked words, invitations, consents, feedback and metadata. The file (ZIP) is made on your device. At most 3 times a day."}</p>
       <label htmlFor="xpw">{da ? "Bekræft med din adgangskode" : "Confirm with your password"}</label>
-      <input id="xpw" name="password" type="password" autoComplete="current-password" value={pw} aria-invalid={st === "nopw" || st === "wrong" || undefined} aria-describedby={st === "nopw" ? "xpw-hint" : st === "wrong" ? "xpw-err" : undefined} onChange={(e) => { setPw(e.target.value); if (st === "nopw") setSt(""); }} required />
-      {st === "nopw" && <p id="xpw-hint" className="field-hint" role="alert">{da ? "Skriv din adgangskode for at downloade." : "Enter your password to download."}</p>}
-      {st === "wrong" && <p id="xpw-err" className="err field-msg" role="alert">{da ? "Forkert adgangskode." : "Wrong password."}</p>}
+      <CurrentPasswordField id="xpw" lang={lang} value={pw} onChange={(v) => { setPw(v); if (st === "nopw" || st === "wrong") setSt(""); }} email={email} onForgot={onForgot} wrong={st === "wrong"} errorId="xpw-err" hint={st === "nopw" ? (da ? "Skriv din adgangskode for at downloade." : "Enter your password to download.") : undefined} hintId="xpw-hint" />
       <div className="row end"><button type="submit" disabled={st === "busy"} aria-disabled={!pw || undefined}>{da ? "Download" : "Download"}</button></div>
       {st === "ok" && <p className="meta" role="status">{da ? "Downloadet." : "Downloaded."}</p>}
       {st === "limit" && <p className="err" role="alert">{da ? "Højst 3 gange i døgnet." : "At most 3 times a day."}</p>}
@@ -455,8 +453,10 @@ function MyDataExport({ lang }: { lang: Lang }) {
     </form>);
 }
 
-function PrivacyPanel({ lang, openPlans }: { lang: Lang; openPlans: () => void }) {
+function PrivacyPanel({ lang, openPlans, onForgot }: { lang: Lang; openPlans: () => void; onForgot: (email: string) => void }) {
   const da = lang === "da";
+  const [email, setEmail] = useState("");
+  useEffect(() => { supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? "")); }, []);
   const [p, setP] = useState<{ cloud_sync: boolean; retention: string } | null>(null);
   const [plan, setPlan] = useState<string | null>(() => peekCard<{ plan: string } | null>("plan")?.plan ?? null);
   useEffect(() => {
@@ -493,7 +493,7 @@ function PrivacyPanel({ lang, openPlans }: { lang: Lang; openPlans: () => void }
           ? (da ? "Valgfrit og slået fra, til du selv slår det til. Ændringen gemmes med det samme. I denne testversion ligger dine beskeder altid på en server i EU (Frankfurt), uanset hvad du vælger. I mobilappen betyder “fra”, at serveren kun gemmer en besked, indtil den er leveret, og at din synk-kopi og -nøgle slettes straks. Modpartens kopi røres ikke. Mister du Premium, slås sky-synk fra automatisk med samme virkning." : "Optional and off until you turn it on. The change is saved right away. In this test version your messages are always stored on a server in the EU (Frankfurt), whatever you choose. In the mobile app, “off” means the server only keeps a message until it has been delivered, and your sync copy and key are deleted immediately. The other party’s copy is not touched. If you leave Premium, cloud sync turns off automatically with the same effect.")
           : (da ? "I denne testversion ligger dine beskeder altid på en server i EU (Frankfurt). I mobilappen betyder “fra”, at serveren kun gemmer en besked, indtil den er leveret." : "In this test version your messages are always stored on a server in the EU (Frankfurt). In the mobile app, “off” means the server only keeps a message until it has been delivered.")}</p></>}
       </section>
-      <section className="psec"><MyDataExport lang={lang} /></section>
+      <section className="psec"><MyDataExport lang={lang} email={email} onForgot={onForgot} /></section>
     </div>
   );
 }
@@ -523,10 +523,7 @@ function DeleteAccountSection({ lang, email, onForgot }: { lang: Lang; email: st
       <p className="notice">{evidenceNote(lang)}</p>
       <form noValidate onSubmit={del}>
         <label htmlFor="delpw">{da ? "Bekræft med din adgangskode" : "Confirm with your password"}</label>
-        <PasswordInput id="delpw" lang={lang} value={pw} onChange={(v) => { setPw(v); if (state !== "busy" && state !== "noack") setState(""); }} minLength={1} autoComplete="current-password" invalid={state === "nopw" || state === "wrong"} describedBy={state === "nopw" ? "delpw-hint" : state === "wrong" ? "delpw-err" : undefined} />
-        {state === "nopw" && <p id="delpw-hint" className="field-hint" role="alert">{da ? "Skriv din adgangskode for at slette kontoen." : "Enter your password to delete your account."}</p>}
-        {state === "wrong" && <p id="delpw-err" className="err field-msg" role="alert">{da ? "Forkert adgangskode." : "Wrong password."}</p>}
-        <p><button type="button" className="linkish" onClick={() => onForgot(email)}>{da ? "Glemt adgangskode?" : "Forgot password?"}</button></p>
+        <CurrentPasswordField id="delpw" lang={lang} value={pw} onChange={(v) => { setPw(v); if (state !== "busy" && state !== "noack") setState(""); }} email={email} onForgot={onForgot} wrong={state === "wrong"} errorId="delpw-err" hint={state === "nopw" ? (da ? "Skriv din adgangskode for at slette kontoen." : "Enter your password to delete your account.") : undefined} hintId="delpw-hint" />
         <CheckRow id="delexport" checked={transcript} onChange={setTranscript} label={da ? "Send mig en fuld udskrift af alle mine samtaler, før kontoen slettes" : "Email me a full transcript of all my conversations before my account is deleted"} />
         <p className="meta">{da ? "Udskriften sendes til din e-mail. Hvis afsendelsen ikke lykkes, slettes kontoen ikke." : "The transcript is sent to your e-mail. If sending fails, your account is not deleted."}</p>
         <CheckRow id="delack" checked={ok} onChange={(v) => { setOk(v); if (v && state === "noack") setState(""); }} label={da ? "Jeg forstår, at sletningen er endelig." : "I understand that deletion is final."} attention={state === "noack"} describedBy={state === "noack" ? "delack-hint" : undefined} />
@@ -713,7 +710,9 @@ function Auth({ lang, peek, onForgot }: { lang: Lang; peek?: Peek | null; onForg
       <form onSubmit={submit}>
         <label htmlFor="e">{t.email}</label><input id="e" type="email" required autoComplete="email" readOnly={!!peek} value={email} onChange={(e) => setEmail(e.target.value)} />
         <label htmlFor="p">{t.password}</label>
-        <PasswordInput id="p" lang={lang} value={pw} onChange={setPw} minLength={mode === "signup" ? 8 : 1} autoComplete={mode === "login" ? "current-password" : "new-password"} />
+        {mode === "login"
+          ? <CurrentPasswordField id="p" lang={lang} value={pw} onChange={(v) => { setPw(v); setErr(""); }} email={email} onForgot={onForgot} minLength={1} />
+          : <PasswordInput id="p" lang={lang} value={pw} onChange={setPw} minLength={8} autoComplete="new-password" />}
         {mode === "signup" && <><label htmlFor="p2">{pwText[lang].repeat}</label>
           <PasswordInput id="p2" lang={lang} value={pw2} onChange={(v) => { setPw2(v); setErr(""); }} minLength={8} autoComplete="new-password" invalid={pair === "mismatch"} describedBy="pwerr" /></>}
         {mode === "signup" && <PasswordPairStatus lang={lang} a={pw} b={pw2} id="pwerr" />}
@@ -727,7 +726,6 @@ function Auth({ lang, peek, onForgot }: { lang: Lang; peek?: Peek | null; onForg
           <button type="button" className="ghost" onClick={() => { setMode(mode === "login" ? "signup" : "login"); setPw2(""); setErr(""); }}>{mode === "login" ? t.signup : t.login}</button>
           <button type="submit" disabled={busy}>{mode === "login" ? t.login : t.signup}</button>
         </div>
-        {mode === "login" && <p><button type="button" className="linkish" onClick={() => onForgot(email)}>{lang === "da" ? "Glemt adgangskode?" : "Forgot password?"}</button></p>}
       </form>
     </div>
   );
@@ -747,6 +745,30 @@ function PasswordInput(p: { id: string; lang: Lang; value: string; onChange: (v:
         </svg>
       </button>
     </div>
+  );
+}
+
+const forgotPasswordLabel = (lang: Lang) => lang === "da" ? "Glemt adgangskode?" : "Forgot password?";
+const wrongPasswordLabel = (lang: Lang) => lang === "da" ? "Forkert adgangskode." : "Wrong password.";
+
+/** Link that opens the existing recover card. Used under every current-password field. */
+function ForgotPasswordLink({ lang, email, onForgot }: { lang: Lang; email: string; onForgot: (email: string) => void }) {
+  return <p className="forgot-pw"><button type="button" className="linkish" onClick={() => onForgot(email)}>{forgotPasswordLabel(lang)}</button></p>;
+}
+
+/** Current-password field with the inline wrong-password error and a “Glemt adgangskode?” link under it. */
+function CurrentPasswordField({ id, lang, value, onChange, email, onForgot, wrong = false, errorId, hint, hintId, minLength = 1 }: {
+  id: string; lang: Lang; value: string; onChange: (v: string) => void; email: string; onForgot: (email: string) => void;
+  wrong?: boolean; errorId?: string; hint?: string; hintId?: string; minLength?: number;
+}) {
+  const describedBy = wrong && errorId ? errorId : hint && hintId ? hintId : undefined;
+  return (
+    <>
+      <PasswordInput id={id} lang={lang} value={value} onChange={onChange} minLength={minLength} autoComplete="current-password" invalid={wrong || !!hint} describedBy={describedBy} />
+      {hint && hintId && <p id={hintId} className="field-hint" role="alert">{hint}</p>}
+      {wrong && errorId && <p id={errorId} className="err field-msg" role="alert">{wrongPasswordLabel(lang)}</p>}
+      <ForgotPasswordLink lang={lang} email={email} onForgot={onForgot} />
+    </>
   );
 }
 
@@ -1520,7 +1542,7 @@ function AccountPanel({ lang, openPlans, onForgot }: { lang: Lang; openPlans: ()
     if (!passwordsMatch(pw, pw2)) return;
     setBusy(true);
     const re = await supabase.auth.signInWithPassword({ email, password: cur });
-    if (re.error) { setBusy(false); setPwMsg([false, da ? "Nuværende adgangskode er forkert." : "Current password is wrong."]); return; }
+    if (re.error) { setBusy(false); setPwMsg([false, wrongPasswordLabel(lang)]); return; }
     const r = await supabase.auth.updateUser({ password: pw }); setBusy(false);
     setPwMsg(r.error ? [false, da ? "Kunne ikke gemme. Mindst 8 tegn, og den skal være ny." : "Could not save. At least 8 characters, and it must be new."] : [true, da ? "Adgangskoden er skiftet." : "Password changed."]);
     if (!r.error) { setCur(""); setPw(""); setPw2(""); }
@@ -1531,7 +1553,7 @@ function AccountPanel({ lang, openPlans, onForgot }: { lang: Lang; openPlans: ()
     setBusy(false);
     const err = r.data?.error;
     setEMsg(r.status === 200 ? [true, da ? `Vi har sendt et bekræftelseslink til ${ne}. E-mailen skiftes, når du trykker på linket. ${email} får besked om ændringen.` : `We sent a confirmation link to ${ne}. The email changes when you open it. ${email} is notified.`]
-      : [false, err === "wrong_password" ? (da ? "Adgangskoden er forkert." : "Wrong password.")
+      : [false, err === "wrong_password" ? wrongPasswordLabel(lang)
         : err === "rate_limited" ? (da ? "For mange forsøg. Prøv igen om en time." : "Too many attempts. Try again in an hour.")
         : err === "email_taken" ? (da ? "Den e-mail kan ikke bruges." : "That email cannot be used.")
         : err === "address_rejected" ? (da ? "Denne e-mailadresse kan ikke bruges i Rolff, fordi den kan opfattes som sårende. Vælg en anden." : "This e-mail address cannot be used in Rolff because it may be seen as hurtful. Please choose another one.")
@@ -1544,9 +1566,8 @@ function AccountPanel({ lang, openPlans, onForgot }: { lang: Lang; openPlans: ()
     <p className="account-email">{da ? "Din e-mail: " : "Your email: "}<strong>{email}</strong></p>
     <form onSubmit={changePw}>
       <h2>{da ? "Skift adgangskode" : "Change password"}</h2>
-      <label htmlFor="cp">{da ? "Nuværende adgangskode" : "Current password"}</label><PasswordInput id="cp" lang={lang} value={cur} onChange={(v) => { setCur(v); if (pwMsg && !pwMsg[0]) setPwMsg(null); }} minLength={1} autoComplete="current-password" invalid={!!(pwMsg && !pwMsg[0] && /forkert|wrong/i.test(pwMsg[1]))} describedBy={pwMsg && !pwMsg[0] && /forkert|wrong/i.test(pwMsg[1]) ? "cp-err" : undefined} />
-      {pwMsg && !pwMsg[0] && /forkert|wrong/i.test(pwMsg[1]) && <p id="cp-err" className="err field-msg" role="alert">{pwMsg[1]}</p>}
-      <p><button type="button" className="linkish" onClick={() => onForgot(email)}>{da ? "Glemt adgangskode?" : "Forgot password?"}</button></p>
+      <label htmlFor="cp">{da ? "Nuværende adgangskode" : "Current password"}</label>
+      <CurrentPasswordField id="cp" lang={lang} value={cur} onChange={(v) => { setCur(v); if (pwMsg && !pwMsg[0]) setPwMsg(null); }} email={email} onForgot={onForgot} wrong={!!(pwMsg && !pwMsg[0] && /forkert|wrong/i.test(pwMsg[1]))} errorId="cp-err" />
       <label htmlFor="cp1">{da ? "Ny adgangskode" : "New password"}</label><PasswordInput id="cp1" lang={lang} value={pw} onChange={setPw} minLength={8} autoComplete="new-password" />
       <label htmlFor="cp2">{pwText[lang].repeat}</label>
       <PasswordInput id="cp2" lang={lang} value={pw2} onChange={setPw2} minLength={8} autoComplete="new-password" invalid={passwordPairState(pw, pw2) === "mismatch"} describedBy="cperr" />
@@ -1557,9 +1578,8 @@ function AccountPanel({ lang, openPlans, onForgot }: { lang: Lang; openPlans: ()
     <form onSubmit={changeEmail} style={{ marginTop: 24 }}>
       <h2>{da ? "Skift e-mail" : "Change email"}</h2>
       <label htmlFor="ne">{da ? "Ny e-mail" : "New email"}</label><input id="ne" type="email" required autoComplete="email" value={ne} onChange={(e) => setNe(e.target.value)} />
-      <label htmlFor="ep">{da ? "Din adgangskode" : "Your password"}</label><PasswordInput id="ep" lang={lang} value={ep} onChange={(v) => { setEp(v); if (eMsg && !eMsg[0]) setEMsg(null); }} minLength={1} autoComplete="current-password" invalid={!!(eMsg && !eMsg[0] && /forkert|wrong/i.test(eMsg[1]))} describedBy={eMsg && !eMsg[0] && /forkert|wrong/i.test(eMsg[1]) ? "ep-err" : undefined} />
-      {eMsg && !eMsg[0] && /forkert|wrong/i.test(eMsg[1]) && <p id="ep-err" className="err field-msg" role="alert">{eMsg[1]}</p>}
-      <p><button type="button" className="linkish" onClick={() => onForgot(email)}>{da ? "Glemt adgangskode?" : "Forgot password?"}</button></p>
+      <label htmlFor="ep">{da ? "Din adgangskode" : "Your password"}</label>
+      <CurrentPasswordField id="ep" lang={lang} value={ep} onChange={(v) => { setEp(v); if (eMsg && !eMsg[0]) setEMsg(null); }} email={email} onForgot={onForgot} wrong={!!(eMsg && !eMsg[0] && /forkert|wrong/i.test(eMsg[1]))} errorId="ep-err" />
       <p className="meta">{da ? "Vi sender et bekræftelseslink til den nye adresse og en besked til den nuværende. Din e-mail er dit navn over for andre, så den nye adresse tjekkes først for sårende indhold, og de andre i dine samtaler får en lille besked, når skiftet er bekræftet." : "We send a confirmation link to the new address and a notice to the current one. Your e-mail is your name towards others, so the new address is checked for hurtful content first, and the others in your conversations get a small notice once the change is confirmed."}</p>
       {eMsg && !(!eMsg[0] && /forkert|wrong/i.test(eMsg[1])) && <p className={eMsg[0] ? "notice" : "err"} role={eMsg[0] ? "status" : "alert"}>{eMsg[1]}</p>}
       <div className="row end"><button type="submit" disabled={busy}>{da ? "Skift e-mail" : "Change email"}</button></div>
