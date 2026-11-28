@@ -18,6 +18,7 @@ import { useInviteContactPick } from "./InviteContactPick";
 import { clearInviteEmailDrafts, getInviteEmailDraft, setInviteEmailDraft } from "./native/contactPicker";
 import { Toast, showToast } from "./toast";
 import { ConfirmHost, confirmDialog } from "./confirmDialog";
+import { downgradeConfirmCopy } from "./planText";
 import { PolicyView } from "./PolicyView";
 import { MuteDialog } from "./MuteDialog";
 import { MutedBellIcon } from "./icons";
@@ -1605,6 +1606,9 @@ function SubscriptionManage({ lang, openPlans, plan, onChange, ready = true, hid
     });
     if (!choice) return;
     if (choice === "secondary") {
+      const copy = downgradeConfirmCopy(lang, { periodEndLabel: p.period_end ? planEndLabel(p.period_end, da) : null });
+      const ok = await confirmDialog({ title: copy.title, body: copy.body, points: copy.points, dismiss: copy.dismiss, confirm: copy.confirm, actionsEnd: true });
+      if (ok !== true) return;
       setBusy(true); setErr("");
       const r = await supabase.rpc("set_my_plan_test", { p_plan: "text", p_now: false }); setBusy(false);
       if (r.error) { setErr(da ? "Planen kunne ikke skiftes. Prøv igen." : "Could not change plan. Try again."); return; }
@@ -1656,6 +1660,11 @@ function Plans({ lang }: { lang: Lang }) {
   useEffect(() => { load(); }, []);
   const change = async (plan: string, now = false) => {
     if (!fresh) return;
+    if (p && p.plan === "text_attachments" && plan === "text") {
+      const copy = downgradeConfirmCopy(lang, { immediate: now, periodEndLabel: !now && p.period_end ? planEndLabel(p.period_end, da) : null });
+      const ok = await confirmDialog({ title: copy.title, body: copy.body, points: copy.points, dismiss: copy.dismiss, confirm: copy.confirm, actionsEnd: true });
+      if (ok !== true) return;
+    }
     setBusy(true); setErr("");
     const r = await supabase.rpc("set_my_plan_test", { p_plan: plan, p_now: now }); setBusy(false);
     if (r.error) { setErr(da ? "Planen kunne ikke skiftes. Prøv igen." : "Could not change plan. Try again."); return; }
