@@ -27,9 +27,9 @@ export function InfoButton({ label, open }: { label: string; open: ()=>void }) {
  onContextMenu={e=>e.preventDefault()} onKeyDown={e=>{if(e.key==="Enter"||e.key===" ")suppress.current=false;}} onClick={e=>{if(suppress.current){suppress.current=false;e.preventDefault();return;}open();}}><span aria-hidden="true">ⓘ</span></button>;
 }
 const Trash=()=> <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7m4-7v7"/></svg>;
-export function BlockingLists({ lang, conv, session }: { lang: Lang; conv: string; session: Session }) {
+export function BlockingLists({ lang, conv, session, draftWord, draftTopic, focus }: { lang: Lang; conv: string; session: Session; draftWord?: string; draftTopic?: string; focus?: "words" | "topics" }) {
  const da=lang==="da", cacheKey=`blocking:${conv}`,[cached]=useState(()=>peekCard<{words:BlockEntry[];topics:BlockEntry[];photos:boolean;files:boolean}>(cacheKey)),[words,setWords]=useState<BlockEntry[]>(cached?.words??[]),[topics,setTopics]=useState<BlockEntry[]>(cached?.topics??[]);
- const [word,setWord]=useState(""),[topic,setTopic]=useState(""),[ack,setAck]=useState(false),[topicAck,setTopicAck]=useState(false),[sort,setSort]=useState<BlockSort>("oldest");
+ const [word,setWord]=useState(draftWord??""),[topic,setTopic]=useState(draftTopic??""),[ack,setAck]=useState(false),[topicAck,setTopicAck]=useState(false),[sort,setSort]=useState<BlockSort>("oldest");
  const [busy,setBusy]=useState(false),[loaded,setLoaded]=useState(false),[loading,setLoading]=useState(true),[err,setErr]=useState(""),[modal,setModal]=useState<"words"|"topics"|"attachments"|"reset"|null>(null);
  const [blockPhotos,setBlockPhotos]=useState(cached?.photos??false),[blockFiles,setBlockFiles]=useState(cached?.files??false);
  // Last known lists show at once (cardCache); every change still waits for the fresh read (loaded) — fail-strict.
@@ -37,7 +37,13 @@ export function BlockingLists({ lang, conv, session }: { lang: Lang; conv: strin
  useEffect(()=>{if(loaded)putCard(cacheKey,{words,topics,photos:blockPhotos,files:blockFiles});},[loaded,words,topics,blockPhotos,blockFiles,cacheKey]);
  const [wordHint,setWordHint]=useState<""|"short"|"ack">(""),[topicHint,setTopicHint]=useState<""|"short"|"ack">("");
  const generation=useRef(0),inflight=useRef(false),wordRef=useRef<HTMLInputElement>(null),topicRef=useRef<HTMLInputElement>(null),ackRef=useRef<HTMLInputElement>(null),topicAckRef=useRef<HTMLInputElement>(null);
- const api=blockingApi(import.meta.env.VITE_SUPABASE_URL,import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,session.access_token);
+ useEffect(()=>{
+  if(!shown||!focus)return;
+  const heading=document.getElementById(focus==="topics"?"blocked-topics-title":"blocked-words-title");
+  heading?.closest("section")?.scrollIntoView({block:"nearest"});
+  (focus==="topics"?topicRef.current:wordRef.current)?.focus({preventScroll:true});
+ },[shown,focus]);
+ const api=blockingApi(import.meta.env?.VITE_SUPABASE_URL ?? "",import.meta.env?.VITE_SUPABASE_PUBLISHABLE_KEY ?? "",session.access_token);
  const query=(table:string)=>`${table}?select=id,word,created_at&conversation_id=eq.${encodeURIComponent(conv)}&user_id=eq.${session.user.id}&order=created_at.asc,id.asc`;
  const error=da?"Ændringen kunne ikke bekræftes. Listen og din tekst er bevaret. Prøv igen.":"The change could not be confirmed. Your list and draft are preserved. Please retry.";
  useEffect(()=>{

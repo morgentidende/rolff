@@ -763,3 +763,7 @@ dialog[open]::backdrop{animation:rolff-fade-in var(--card-in-ms) ease-out both}
 /* The sticky card header (title + X) never covers what is scrolled into view (focus, an opened FAQ question). */
 .sheet,.contact-alias-dialog{scroll-padding-top:64px}
 .faq-item{scroll-margin-top:64px}
+
+/* Long-press "Blokér ord eller emne" chooser: two equal destinations, not a primary/secondary pair. */
+.block-pick{display:flex;flex-direction:column;gap:8px;margin:4px 0 8px}
+.block-pick button{width:100%;min-height:48px;border-radius:10px;font-weight:600;justify-content:center}
