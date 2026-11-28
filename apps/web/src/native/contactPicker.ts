@@ -91,8 +91,8 @@ function isCancel(e: unknown): boolean {
 
 function releaseLater(release: () => void): void {
   // The system sheet can fire popstate just after select() resolves.
-  const t = setTimeout(release, 500);
-  if (typeof t === "object" && t && "unref" in t) (t as NodeJS.Timeout).unref();
+  const t = setTimeout(release, 500) as unknown as { unref?: () => void };
+  t.unref?.();
 }
 
 function webPicker(): ContactEmailPicker {
