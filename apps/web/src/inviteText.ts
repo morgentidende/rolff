@@ -63,7 +63,7 @@ const T = {
 } as const;
 export const invText = (lang: InvLang) => T[lang === "en" ? "en" : "da"];
 
-/** Short, scannable info points on the "Invite to Rolff" sheet (most important first). Same facts as the sign-up notes, but split into bullets. */
+/** Facts that used to sit as bullets on the invite card. They now live in the FAQ (and still match the sign-up notes). Kept so tests can check the wording. */
 export type InvitePoint = { lead?: string; text: string };
 export function invitePoints(lang: InvLang): InvitePoint[] {
   return lang === "en"

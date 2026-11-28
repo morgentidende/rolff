@@ -85,3 +85,34 @@ test('a picker failure is explained and the field is left alone', async () => {
     assert.equal(d.getElementById('ie').value, 'allerede@example.invalid');
   } finally { await f.close(); }
 });
+
+
+test('uniqueEmails and the Web Contact Picker API fill the field from a Mor-like result', async () => {
+  const f = await env(); const { d, w } = f; try {
+    const ue = w.QA.uniqueEmails;
+    assert.equal(JSON.stringify(ue([{ email: ['mor@example.invalid', 'mor@example.invalid'] }])), JSON.stringify(['mor@example.invalid']));
+    assert.equal(JSON.stringify(ue([{ name: ['Mor'], email: [{ address: 'mor@example.invalid' }, { address: 'mor@example.invalid' }] }])), JSON.stringify(['mor@example.invalid']));
+    assert.equal(JSON.stringify(ue([{ email: 'mailto:mor@example.invalid' }])), JSON.stringify(['mor@example.invalid']));
+    assert.equal(JSON.stringify(ue([{ email: 'Mor <mor@example.invalid>' }])), JSON.stringify(['mor@example.invalid']));
+    assert.equal(JSON.stringify(ue({ email: 'one@example.invalid' })), JSON.stringify(['one@example.invalid']));
+
+    w.QA.setContactEmailPicker(null);
+    w.QA.clearInviteEmailDrafts();
+    Object.defineProperty(w.navigator, 'contacts', {
+      configurable: true,
+      value: {
+        select: async (props, opts) => {
+          w.__pickedProps = { props: [...props], multiple: !!(opts && opts.multiple) };
+          return [{ name: ['Mor'], email: [{ address: 'mor@example.invalid' }, { address: 'mor@example.invalid' }] }];
+        },
+      },
+    });
+    await openFrontInvite(d);
+    const b = btn(d, 'Vælg fra kontakter'); assert.ok(b, 'button shown when navigator.contacts.select exists');
+    await click(b); await delay(40);
+    assert.equal(d.getElementById('ie').value, 'mor@example.invalid');
+    assert.deepEqual(w.__pickedProps.props, ['name', 'email']);
+    assert.equal(w.__pickedProps.multiple, false);
+    assert.equal(w.QA.calls.filter(c => c.function === 'invite-email').length, 0);
+  } finally { await f.close(); }
+});

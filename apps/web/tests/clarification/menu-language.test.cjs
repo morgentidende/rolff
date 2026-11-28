@@ -128,8 +128,8 @@ test('front page: visible "Invitér til Rolff" button above the list opens the s
     assert.equal(btn.querySelector('svg').getAttribute('aria-hidden'), 'true');
     await click(btn); await delay(60);
     const s = d.querySelector('.sheet'); assert.equal(s.getAttribute('aria-label'), 'Invitér til Rolff'); assert.ok(s.classList.contains('anchored-card'));
-    assert.match(s.textContent, /De andre i samtalen ser din e-mail\. Du logger altid ind med din e-mail\./);
-    assert.equal(s.querySelectorAll('ul.invite-points li').length, 4); assert.ok(!/hun eller han/.test(s.textContent)); assert.match(s.textContent, /efter, vedkommende er kommet med/);
+    assert.ok(!/De andre i samtalen ser din e-mail/.test(s.textContent), 'email fact is no longer on the invite card');
+    assert.equal(s.querySelectorAll('ul.invite-points').length, 0, 'invite facts moved to FAQ');
     assert.equal(s.querySelector('#ie').getAttribute('placeholder'), 'navn@eksempel.dk');
     assert.ok(!/Mit visningsnavn|indtil du vælger/.test(s.textContent));
     await closeSheet(d);

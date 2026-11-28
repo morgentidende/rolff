@@ -188,3 +188,32 @@ test('delete-account transcript checkbox is on by default; export failure aborts
         assert.ok(!/\?deleted=1/.test(w.location.href), 'account was not deleted');
     } finally { await fx.close(); }
 });
+
+test('Slet konto: wrong password appears under the password field, and Glemt adgangskode? opens the existing recover card', { timeout: 8000 }, async () => {
+  const fx = await env(false); const { w, d } = fx;
+  try {
+    await click(label(d, 'Menu'));
+    await click([...d.querySelectorAll('[role=menuitem]')].find((b) => /Konto/.test(b.textContent))); await delay(60);
+    const form = d.getElementById('delpw').closest('form');
+    const forgot = [...form.querySelectorAll('button.linkish')].find((b) => b.textContent.trim() === 'Glemt adgangskode?');
+    assert.ok(forgot, 'forgot link under the delete password field');
+    const put = (el, v) => { Object.getOwnPropertyDescriptor(w.HTMLInputElement.prototype, 'value').set.call(el, v); el.dispatchEvent(new w.Event('input', { bubbles: true })); };
+    put(d.getElementById('delpw'), 'forkert');
+    await click(d.getElementById('delack'));
+    w.QA.setDeleteResult({ status: 403, data: { error: 'wrong_password' } });
+    form.requestSubmit(); await delay(40);
+    const err = d.getElementById('delpw-err');
+    assert.ok(err, 'error sits with the password field');
+    assert.match(err.textContent, /Forkert adgangskode/);
+    const fieldBlock = d.getElementById('delpw').closest('.pw') || d.getElementById('delpw');
+    assert.equal(fieldBlock.nextElementSibling, err, 'directly under the password field');
+    const btn = form.querySelector('button.danger');
+    assert.ok(err.compareDocumentPosition(btn) & 4, 'error comes before the delete button');
+    assert.equal(d.getElementById('delpw').getAttribute('aria-describedby'), 'delpw-err');
+    const recoverCallsBefore = w.QA.calls.filter((c) => c.function === 'account-mail').length;
+    await click(forgot); await delay(40);
+    const dlg = d.querySelector('[role=dialog][aria-label="Glemt adgangskode"]');
+    assert.ok(dlg);
+    assert.equal(w.QA.calls.filter((c) => c.function === 'account-mail').length, recoverCallsBefore, 'no reset email until the user sends the link');
+  } finally { await fx.close(); }
+});
