@@ -122,6 +122,8 @@ let recoverResult: { status: number; data: any } | 'throw' | null = null;
 export function setRecoverResult(r: typeof recoverResult) { recoverResult = r; }
 let deleteResult: { status: number; data: any } | 'throw' | null = null;
 export function setDeleteResult(r: typeof deleteResult) { deleteResult = r; }
+let exportResult: { status: number; data: any } | 'throw' | null = null;
+export function setExportResult(r: typeof exportResult) { exportResult = r; }
 export async function callFn(name: string, args: any) {
     calls.push({ function: name, args });
     if (name === 'account-mail' && args?.action === 'recover') {
@@ -133,6 +135,11 @@ export async function callFn(name: string, args: any) {
         if (deleteResult === 'throw') { deleteResult = null; throw new Error('synthetic delete failure'); }
         if (deleteResult) { const r = deleteResult; deleteResult = null; return r; }
         return { status: 200, data: { data: { deleted: true, transcript_sent: !!args?.email_transcript } } };
+    }
+    if (name === 'export-data') {
+        if (exportResult === 'throw') { exportResult = null; throw new Error('synthetic export failure'); }
+        if (exportResult) { const r = exportResult; exportResult = null; return r; }
+        return { status: 200, data: { data: { account: {}, conversations: [] } } };
     }
     if (nextSend && name.startsWith('send-')) { const data = nextSend; nextSend = null; return { status: nextSendStatus, data }; }
     if (holdSend && name.startsWith('send-')) {

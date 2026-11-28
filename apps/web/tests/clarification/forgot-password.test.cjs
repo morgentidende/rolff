@@ -217,3 +217,47 @@ test('Slet konto: wrong password appears under the password field, and Glemt adg
     assert.equal(w.QA.calls.filter((c) => c.function === 'account-mail').length, recoverCallsBefore, 'no reset email until the user sends the link');
   } finally { await fx.close(); }
 });
+
+test('Download mine data: wrong password appears under the field with Glemt adgangskode?, which opens recover', { timeout: 8000 }, async () => {
+  const fx = await env(false);
+  const { d, w } = fx;
+  try {
+    await click(label(d, 'Menu'));
+    await click(button(d, 'Privatliv og sletning'));
+    await delay(80);
+    const sheet = d.querySelector('[role=dialog][aria-label="Privatliv og sletning"]');
+    assert.ok(sheet);
+    const form = d.getElementById('xpw').closest('form');
+    const forgot = [...form.querySelectorAll('button.linkish')].find((b) => b.textContent.trim() === 'Glemt adgangskode?');
+    assert.ok(forgot, 'forgot link is on the download form');
+    assert.ok(d.getElementById('xpw').compareDocumentPosition(forgot) & 4, 'link is after the password field');
+    fill(w, d.getElementById('xpw'), 'forkert');
+    w.QA.setExportResult({ status: 403, data: { error: 'wrong_password' } });
+    await click(form.querySelector('button[type=submit]'));
+    await delay(80);
+    const err = d.getElementById('xpw-err');
+    assert.ok(err, 'inline error');
+    assert.match(err.textContent, /Forkert adgangskode/);
+    assert.ok(d.getElementById('xpw').compareDocumentPosition(err) & 4, 'error is under the field');
+    assert.ok(err.compareDocumentPosition(forgot) & 4, 'Glemt link is under the error');
+    const recoverCallsBefore = w.QA.calls.filter((c) => c.function === 'account-mail').length;
+    await click(forgot);
+    await delay(40);
+    const dlg = d.querySelector('[role=dialog][aria-label="Glemt adgangskode"]');
+    assert.ok(dlg, 'existing recover card');
+    assert.equal(dlg.querySelector('#re').value, 'tester@example.invalid');
+    assert.equal(w.QA.calls.filter((c) => c.function === 'account-mail').length, recoverCallsBefore, 'no reset email until the user sends the link');
+  } finally { await fx.close(); }
+});
+
+test('every current-password field in the app uses the shared CurrentPasswordField (with Glemt adgangskode?)', () => {
+  const src = fs.readFileSync(path.join(__dirname, '../../src/App.tsx'), 'utf8');
+  assert.match(src, /function CurrentPasswordField/);
+  assert.match(src, /function ForgotPasswordLink/);
+  // Call sites that confirm the current password go through CurrentPasswordField.
+  for (const id of ['xpw', 'delpw', 'cp', 'ep']) {
+    assert.match(src, new RegExp(`<CurrentPasswordField id="${id}"`));
+  }
+  // Login (id="p" when mode is login) also uses the shared field.
+  assert.match(src, /mode === "login"\s*\n\s*\? <CurrentPasswordField id="p"/);
+});

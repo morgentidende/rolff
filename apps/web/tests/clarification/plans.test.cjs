@@ -6,6 +6,35 @@ async function openPlans(f) {
   const item = [...d.querySelectorAll('button,[role=menuitem]')].find(b => b.textContent.trim() === 'Abonnement'); assert.ok(item, 'Abonnement menu item');
   await click(item); await delay(60); const sheet = d.querySelector('.plans'); assert.ok(sheet, 'plans rendered'); return sheet;
 }
+
+function downgradeCard(d) {
+  return d.querySelector('.confirm-card');
+}
+async function expectDowngradeCard(d, { immediate = false } = {}) {
+  const card = downgradeCard(d);
+  assert.ok(card, 'downgrade confirm card');
+  assert.equal(card.querySelector('#confirm-title')?.textContent, 'Nedgradér til Standard?');
+  const text = card.textContent;
+  if (immediate) assert.match(text, /Ændringen gælder med det samme/);
+  else assert.match(text, /Fra 9\. december 2026 gælder Standard/);
+  assert.match(text, /Sky-synk slås fra/);
+  assert.match(text, /Beskeder, der allerede ligger på serveren, bliver/);
+  assert.match(text, /160 tegn pr\. besked/);
+  assert.match(text, /ikke længere sende screenshots, billeder eller PDF/);
+  assert.match(text, /stadig se vedhæftninger, du modtager/);
+  assert.match(text, /ikke tilføje ekstra personer/);
+  assert.match(text, /allerede er med, bliver/);
+  assert.ok(!/synk-kopi|sync.copy|nøglen på serveren|key on the server|slettes/.test(text), 'do not claim a sync copy/key is deleted');
+  assert.ok(card.querySelector('[aria-label="Luk"]'), 'X-only close');
+  assert.ok(![...card.querySelectorAll('button')].some(b => /Annuller/.test(b.textContent)));
+  const keep = [...card.querySelectorAll('button')].find(b => b.textContent.trim() === 'Behold Premium');
+  const ok = [...card.querySelectorAll('button')].find(b => b.textContent.trim() === 'Nedgradér');
+  assert.ok(keep && ok);
+  assert.ok(ok.closest('.confirm-actions.end'), 'primary on the right');
+  const actions = card.querySelector('.confirm-actions.end');
+  assert.ok(actions.lastElementChild === ok);
+  return { card, keep, ok };
+}
 test('current plan has a quiet label (not a button); other plan keeps its action in the bottom area', async () => {
   const f = await env(); const { d } = f; try {
     const plans = await openPlans(f);
@@ -40,6 +69,9 @@ test('plan change confirms with the app-wide success toast, not an orange notice
   const f = await env(); const { w, d } = f; try {
     const plans = await openPlans(f);
     await click(plans.querySelector('.plan:not(.current) .plan-foot > button')); await delay(80);
+    assert.equal(w.QA.calls.filter(c => c.name === 'set_my_plan_test').length, 0, 'no plan change until confirmed');
+    const { ok } = await expectDowngradeCard(d);
+    await click(ok); await delay(80);
     const calls = w.QA.calls.filter(c => c.name === 'set_my_plan_test'); assert.equal(calls.length, 1); assert.equal(JSON.stringify(calls[0].args), JSON.stringify({ p_plan: 'text', p_now: false }));
     const region = d.querySelector('.toast-region'); assert.ok(region); assert.equal(region.getAttribute('aria-live'), 'polite'); assert.equal(region.getAttribute('role'), 'status');
     const pill = region.querySelector('.toast-pill'); assert.equal(pill.textContent, 'Planen er skiftet.'); assert.ok(pill.classList.contains('is-success'));
@@ -110,9 +142,46 @@ test('Skift til Standard i stedet schedules Standard and does not cancel', async
     const card = d.querySelector('.confirm-card');
     const alt = [...card.querySelectorAll('button')].find(b => b.textContent.trim() === 'Skift til Standard i stedet');
     await click(alt); await delay(80);
+    assert.ok(!w.QA.calls.some(c => c.name === 'set_my_plan_test'), 'downgrade confirm comes first');
+    const { ok } = await expectDowngradeCard(d);
+    await click(ok); await delay(80);
     assert.ok(w.QA.calls.some(c => c.name === 'set_my_plan_test' && c.args && c.args.p_plan === 'text'));
     assert.ok(!w.QA.calls.some(c => c.name === 'cancel_my_subscription'));
     assert.equal(d.querySelector('.confirm-card'), null);
     assert.equal(d.querySelector('.plan.current h3').textContent, 'Standard');
   } finally { await f.close(); }
 });
+
+test('Behold Premium and the X close the downgrade card without changing the plan', async () => {
+  const f = await env(); const { d, w } = f; try {
+    const plans = await openPlans(f);
+    await click(plans.querySelector('.plan:not(.current) .plan-foot > button')); await delay(80);
+    const first = await expectDowngradeCard(d);
+    await click(first.keep); await delay(60);
+    assert.equal(d.querySelector('.confirm-card'), null);
+    assert.equal(w.QA.calls.filter(c => c.name === 'set_my_plan_test').length, 0);
+    assert.equal(d.querySelector('.plan.current h3').textContent, 'Premium');
+    await click(plans.querySelector('.plan:not(.current) .plan-foot > button')); await delay(80);
+    const again = await expectDowngradeCard(d);
+    await click(again.card.querySelector('[aria-label="Luk"]')); await delay(60);
+    assert.equal(d.querySelector('.confirm-card'), null);
+    assert.equal(w.QA.calls.filter(c => c.name === 'set_my_plan_test').length, 0);
+  } finally { await f.close(); }
+});
+
+test('Skift straks (kun test) on a pending downgrade also asks before applying immediately', async () => {
+  const f = await env(); const { d, w } = f; try {
+    w.QA.setPendingPlan('text');
+    await openPlans(f);
+    const now = [...d.querySelectorAll('button')].find(b => b.textContent.trim() === 'Skift straks (kun test)');
+    assert.ok(now, 'immediate test switch');
+    await click(now); await delay(80);
+    assert.equal(w.QA.calls.filter(c => c.name === 'set_my_plan_test').length, 0);
+    const { ok } = await expectDowngradeCard(d, { immediate: true });
+    await click(ok); await delay(80);
+    const calls = w.QA.calls.filter(c => c.name === 'set_my_plan_test');
+    assert.equal(calls.length, 1);
+    assert.equal(JSON.stringify(calls[0].args), JSON.stringify({ p_plan: 'text', p_now: true }));
+  } finally { await f.close(); }
+});
+
